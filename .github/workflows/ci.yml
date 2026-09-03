@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests scripts
+      - name: Pytest
+        run: pytest
+      - name: Mypy
+        run: mypy src/groktrading
+      - name: Custom secret scan
+        run: python scripts/scan_secrets.py
+      - name: detect-secrets
+        run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files)

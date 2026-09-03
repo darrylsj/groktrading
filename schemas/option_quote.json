@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/option_quote.json",
+  "title": "OptionQuote",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["option_symbol", "bid", "ask", "quote_ts", "source", "delayed"],
+  "properties": {
+    "option_symbol": { "type": "string" },
+    "bid": { "type": "string" },
+    "ask": { "type": "string" },
+    "quote_ts": { "type": "string", "format": "date-time" },
+    "source": {
+      "enum": ["tradier_production", "tradier_sandbox", "synthetic"]
+    },
+    "delayed": { "type": "boolean" }
+  }
+}
