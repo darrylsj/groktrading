@@ -18,6 +18,17 @@ A typed Python package under `src/groktrading` with:
 - 12:30 PT cancel/flatten policy interface
 - systemd/env **examples**, JSON Schema, CI, tests
 
+## Persistent logs
+
+Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
+
+| Path | Role |
+| --- | --- |
+| [CHANGELOG.md](CHANGELOG.md) | Development log (Keep a Changelog; America/Los_Angeles dates) |
+| [logs/trades.jsonl](logs/trades.jsonl) | Live trade journal (one JSON object per round-trip; open lot allowed) |
+
+`thinking.jsonl` is the mixed decision tape on the host. It is **not** committed and is **not** a substitute for either file above. n=3 is not an edge. Never commit secrets.
+
 ## What this is not
 
 - A claim that Helsinki already runs **this** commit
