@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/gate_result.json",
+  "title": "GateResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["allowed", "reasons", "signal_id", "mode"],
+  "properties": {
+    "allowed": { "type": "boolean" },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "signal_id": { "type": "string" },
+    "mode": { "enum": ["signals_only", "paper", "live"] },
+    "note": { "type": "string" }
+  }
+}

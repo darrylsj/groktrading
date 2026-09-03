@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/paper_fill_artifact.json",
+  "title": "PaperFillArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "signal_id",
+    "option_symbol",
+    "production_nbbo_ask",
+    "production_nbbo_bid",
+    "previewed",
+    "recorded_ts"
+  ],
+  "properties": {
+    "signal_id": { "type": "string" },
+    "option_symbol": { "type": "string" },
+    "sandbox_fill_price": { "type": ["string", "null"] },
+    "production_nbbo_ask": { "type": "string" },
+    "production_nbbo_bid": { "type": "string" },
+    "previewed": { "type": "boolean" },
+    "recorded_ts": { "type": "string", "format": "date-time" },
+    "terminal": { "type": "boolean" },
+    "notes": { "type": "string" }
+  }
+}
