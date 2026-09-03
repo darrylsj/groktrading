@@ -50,9 +50,9 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [2026-08-26]
 
-- NVDA 8/28 225c 2.06→1.75 realized −$31.
+- NVDA 8/28 225c 2.06→1.75 realized -$31.
 
 ## [2026-08-25]
 
-- AMZN 8/26 265c 1.12→0.84 −$28.
-- DRAM 8/28 57c 0.98→0.95 −$3.
+- AMZN 8/26 265c 1.12→0.84 -$28.
+- DRAM 8/28 57c 0.98→0.95 -$3.
