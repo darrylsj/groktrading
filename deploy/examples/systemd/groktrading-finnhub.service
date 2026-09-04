@@ -1,4 +1,7 @@
 # Example Finnhub tape writer (signals only). Copy to /etc/systemd/system/.
+# Installed by default as groktrading-finnhub.service.
+# This is NOT trading-desk-finnhub.service (observed Helsinki legacy name).
+# Finnhub ≠ option NBBO. WebSocket never places orders.
 # Do not enable live trading from this unit. Do not embed tokens in the unit file.
 
 [Unit]

@@ -76,7 +76,7 @@ A typed Python package under `src/groktrading` with:
 - Signals-only executor stub and explicit live gating (WebSocket cannot submit live)
 - Paper recorder/reconciler (production NBBO truth vs sandbox delayed fills, `signal_id`, preview-before-order, same-day terminal persistence)
 - 12:30 PT new-entry cutoff policy interface (not a forced flatten; overnight long options allowed)
-- systemd/env **examples**, JSON Schema, CI, tests
+- systemd/env **examples**, portable host installer (`scripts/install_helsinki.sh`), JSON Schema, CI, tests
 
 ## Persistent logs
 
@@ -152,6 +152,18 @@ pytest
 mypy src/groktrading
 python scripts/scan_secrets.py
 ```
+
+## Rebuild / new host
+
+Portable, secret-free host install (new VPS or parallel rebuild next to live Helsinki): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+```bash
+# files only — no enable, no start, no secrets, no live trading
+sudo ./scripts/install_helsinki.sh --dry-run
+sudo ./scripts/install_helsinki.sh
+```
+
+Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), package-named units `groktrading-*.service` (not `trading-desk-*.service`), `signals_only`. Merging this repo still does **not** mean Helsinki runs this commit.
 
 ## Deployment examples vs observed host
 
