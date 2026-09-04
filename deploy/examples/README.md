@@ -5,7 +5,8 @@ legacy Helsinki. They are not a live deployment and must not contain tokens.
 
 | Path | Role |
 | --- | --- |
-| `env/*.env.example` | Placeholder env files. Install as root-owned **0600** under `/etc/trading-desk/`. |
+| `env/*.env.example` | Placeholder env files. Most install as root-owned **0600** under `/etc/trading-desk/`. |
+| `env/trading-desk.env.example` | Observed `/opt/trading-desk/.env` **key names** (`TRADIER_*`, `UW_API_KEY`, `TAPE_OUT`, `FLOW_SEC`). `YOUR_*` only. See [REBUILD_NEW_PROVIDER.md](../../docs/REBUILD_NEW_PROVIDER.md). |
 | `systemd/groktrading-finnhub.service` | Package Finnhub tape unit (`groktrading-finnhub-tape`). |
 | `systemd/groktrading-tape.service` | Package tape **skeleton** (`groktrading-tape`). **Not** `ws_tape.py`. |
 | `systemd/webhook.env.conf` | Drop-in that loads `/etc/trading-desk/grok-webhook.env`. |
