@@ -12,7 +12,7 @@
 
 - Credentials in git, unit files, tape JSON, or README examples beyond `YOUR_*` placeholders
 - First-class live orders from Finnhub/UW/Tradier WS ticks
-- Overnight positions
+- Cash/equity below **50%**
 - Multi-lot options in this policy
 - Invented quotes, fills, or P&L
 - GPL/AGPL runtime dependencies (Backtrader, Lumibot, Optopsy). See README research notes.
@@ -26,7 +26,7 @@
 5. Quantity exactly 1
 6. No duplicate / working order on the OCC symbol
 7. Market clock open
-8. Before 12:30 PT cash-up
+8. Before 12:30 PT new-entry cutoff (not a forced flatten; overnight long options allowed)
 9. Sit-2, not already-run, not first-red
 10. Preview-before-order for paper/live paths
 11. Not a WebSocket-direct live submit

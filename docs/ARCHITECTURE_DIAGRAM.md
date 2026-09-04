@@ -14,7 +14,7 @@ Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). API surfaces: [API_MATRIX.md](
 | Dashed arrow | Paper / verification only |
 | Outside World APIs | Unusual Whales flow, Finnhub stock WS/REST, Tradier production, Tradier sandbox |
 | Helsinki | Always-on ingest, filters, signed webhook, nightly scorer — **no LLM** |
-| Grok Bot computer | Thesis / approve-skip on **frozen facts**, then a deterministic final gate |
+| Grok Bot computer | **LLM** thesis / approve-skip on **frozen facts only** (must not call Tradier). **Gate / executor** uses Tradier production for fresh OCC quotes and live orders |
 | Passive Trade Reviewer | Reads the audit pack after the fact; **no** control or order permissions |
 
 **Hard rules:** Finnhub is not option NBBO. WebSocket never places orders. Matching ask uses a Tradier **production** quote. Maintain **≥50% cash**. **12:30 PT** new-entry cutoff. Sandbox is **not** live fill evidence.

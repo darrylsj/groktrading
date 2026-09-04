@@ -20,9 +20,9 @@ This package supports a small discretionary options workflow with a live Tradier
 4. Skip already-run names/contracts for the session.
 5. No first-red.
 6. No spray (Helsinki filter; not a WS fan-out to the broker).
-7. Flatten / cancel by 12:30 PT. No overnight positions.
+7. Cash/equity **≥50%** at all times. Overnight long options are allowed. **12:30 PT is a new-entry cutoff only** (not a forced flatten).
 8. WebSocket events must never directly trigger live orders.
-9. Final gate rechecks: fresh Tradier option quote, TTL, matching ask, buying power/cash, quantity 1, duplicate/working orders, market hours, 12:30 cash-up.
+9. Final gate rechecks: fresh Tradier option quote, TTL, matching ask, buying power/cash, quantity 1, duplicate/working orders, market hours, 12:30 new-entry cutoff.
 
 ## Paper vs production pricing
 
@@ -30,7 +30,7 @@ Sandbox market data is delayed. Paper fills are **artifacts**. **Tradier product
 
 ## LLM
 
-Grok is not in the broker path. Helsinki does not poll the model; it **pushes** signed facts. A skip is always valid. An approve still cannot bypass the gate.
+The LLM thesis / approve-skip path is not in the broker path and must not call Tradier. Helsinki does not poll the model; it **pushes** signed facts. A skip is always valid. An approve still cannot bypass the gate. The deterministic gate / executor **does** use Tradier production for fresh OCC quotes and live orders.
 
 ## Reviewer
 

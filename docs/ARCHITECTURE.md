@@ -77,12 +77,12 @@ Finnhub tape integration into an existing Tradier/UW tape is an **explicit opera
 
 ## Grok role
 
-Grok consumes **assembled facts only**. It returns `approve` or `skip` plus a thesis. It must not invent prices, P&L, or fills, and it must not hold a broker client. After an `approve`, the **deterministic gate** rechecks a **fresh Tradier option quote**.
+The **LLM thesis / approve-skip** path consumes **assembled facts only**. It returns `approve` or `skip` plus a thesis. It must not invent prices, P&L, or fills, and it must not call Tradier or hold a broker client. After an `approve`, the **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for a **fresh OCC quote** and, when explicitly enabled, live orders.
 
 ## Safety invariants
 
 - WebSocket events never directly trigger live orders.
 - Quantity on options is exactly **1** contract.
-- Flatten / cancel by **12:30 America/Los_Angeles**. No overnight positions.
+- Cash/equity **≥50%** at all times. **Overnight long options are allowed.** **12:30 America/Los_Angeles** is a **new-entry cutoff only**, not a forced flatten.
 - Matching ask; skip already-run; no first-red; sit-2.
 - Timeouts and stale quotes fail closed.

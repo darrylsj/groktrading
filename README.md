@@ -62,7 +62,7 @@ flowchart LR
   AUDIT --> REV
 ```
 
-Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, **pushes a signed webhook**, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM polling**. Grok writes a thesis from **facts only** and never calls Tradier. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)).
+Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, **pushes a signed webhook**, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM polling**. The **LLM thesis / approve-skip** path works on **frozen facts only** and must not call Tradier. The **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for fresh OCC quotes and live orders. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)).
 
 ## What this is
 
@@ -75,7 +75,7 @@ A typed Python package under `src/groktrading` with:
 - LLM interface: **approve/skip + thesis** from assembled facts only; **no broker access**
 - Signals-only executor stub and explicit live gating (WebSocket cannot submit live)
 - Paper recorder/reconciler (production NBBO truth vs sandbox delayed fills, `signal_id`, preview-before-order, same-day terminal persistence)
-- 12:30 PT cancel/flatten policy interface
+- 12:30 PT new-entry cutoff policy interface (not a forced flatten; overnight long options allowed)
 - systemd/env **examples**, JSON Schema, CI, tests
 
 ## Persistent logs
@@ -103,7 +103,7 @@ Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
 | `paper` | No | Tradier sandbox after preview + gate |
 | `live` | No | Requires explicit enablement; **still blocked** from WebSocket callbacks |
 
-Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, **flatten by 12:30 PT**, **no overnight**. The final gate rechecks a **fresh Tradier option quote**, TTL, matching ask, buying power/cash, quantity **exactly 1**, duplicate/working orders, market hours, and 12:30 cash-up.
+Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥50%** at all times, **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). The final gate rechecks a **fresh Tradier option quote**, TTL, matching ask, buying power/cash, quantity **exactly 1**, duplicate/working orders, market hours, and the 12:30 new-entry cutoff.
 
 ## API roles and limitations
 
@@ -139,7 +139,7 @@ Docs: https://docs.tradier.com/docs/endpoints
 
 ### Grok
 
-Thesis and **approve/skip** from assembled facts. Never invent market data. Never hold broker credentials.
+Thesis and **approve/skip** from assembled facts only. Never invent market data. The LLM must not hold broker credentials or call Tradier. Fresh OCC quotes and live orders go through the **deterministic gate / executor**, which **does** call Tradier production.
 
 ## Install and test
 
@@ -172,7 +172,7 @@ python scripts/scan_secrets.py
 | `src/groktrading/llm.py` | Decision protocol |
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
-| `src/groktrading/policy.py` | 12:30 PT flatten |
+| `src/groktrading/policy.py` | 12:30 PT new-entry cutoff |
 | `schemas/` | JSON Schema for tape/gate/LLM artifacts |
 
 ## Optional research references (not dependencies)

@@ -19,6 +19,7 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Changed
 
+- README / architecture docs: live card is ≥50% cash, overnight longs allowed, 12:30 PT new-entry cutoff only; LLM must not call Tradier, gate/executor does.
 - 2026-09-02: spend sit-2 on matching-ask skip-passers; print is thesis.
 
 ### Fixed
