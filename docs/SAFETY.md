@@ -33,7 +33,7 @@
 
 ## Secrets handling
 
-Env files on a host: **root-owned, mode 0600**. Examples under `deploy/examples/env/`. Never copy real env files into this repo.
+Env files on a host: **root-owned, mode 0600**. Examples under `deploy/examples/env/`. Never copy real env files into this repo. `scripts/install_helsinki.sh` creates `/etc/trading-desk` (0700) if missing and **does not** overwrite existing `*.env`, print tokens, `--enable`/`--start` unless asked, or set live mode. See [DEPLOY.md](DEPLOY.md).
 
 ## This cloud agent
 

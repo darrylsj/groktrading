@@ -82,5 +82,31 @@ def finnhub_tape_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def tape_skeleton_main(argv: list[str] | None = None) -> int:
+    """Write a signals-only tape skeleton. Not the legacy UW+Tradier ws_tape.py."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Write a signals-only package tape skeleton. "
+            "Not a port of /opt/trading-desk/ws_tape.py. Never places orders."
+        )
+    )
+    parser.add_argument("--output", default="package_tape_skeleton.json")
+    args = parser.parse_args(argv)
+    doc = {
+        "kind": "package_tape_skeleton",
+        "mode": "signals_only",
+        "live_explicitly_enabled": False,
+        "generated_ts": datetime.now(tz=UTC).isoformat(),
+        "note": (
+            "Not the legacy /opt/trading-desk/ws_tape.py UW+Tradier tape. "
+            "Migration is an operator step. This process never places orders. "
+            "WebSocket never places orders. Finnhub is not option NBBO. "
+            "Sandbox is not live fill evidence."
+        ),
+    }
+    write_json_atomic(Path(args.output), doc)
+    return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(finnhub_probe_main())

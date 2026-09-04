@@ -73,7 +73,7 @@ flowchart LR
 | Paper vs live | Separate env files and account IDs; production NBBO is pricing truth |
 | systemd | Units load root-only `0600` env files; examples live under `deploy/examples/` |
 
-Finnhub tape integration into an existing Tradier/UW tape is an **explicit operator deployment step**. This repo does not perform that merge and does not claim to be deployed. See `docs/OBSERVED_DEPLOYMENT.md`.
+Finnhub tape integration into an existing Tradier/UW tape is an **explicit operator deployment step**. This repo does not perform that merge and does not claim to be deployed. See `docs/OBSERVED_DEPLOYMENT.md`. Rebuild-anywhere steps (new VPS / parallel `/opt/groktrading` / cutover): [DEPLOY.md](DEPLOY.md).
 
 ## Grok role
 

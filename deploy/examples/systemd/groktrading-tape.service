@@ -1,0 +1,32 @@
+# Example package tape unit (signals only). Copy to /etc/systemd/system/.
+# Installed by default as groktrading-tape.service.
+# This is NOT trading-desk-tape.service (observed Helsinki legacy name).
+# This is NOT a port of /opt/trading-desk/ws_tape.py or tape_poller.py.
+# groktrading-tape writes a signals-only skeleton JSON and never places orders.
+# Migrating the live UW+Tradier tape is a separate operator step (docs/DEPLOY.md).
+# Do not enable live trading from this unit. Do not embed tokens in this file.
+# WebSocket never places orders. Default mode remains signals_only.
+
+[Unit]
+Description=GrokTrading package tape skeleton (signals only; not legacy ws_tape.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+# Optional mode flags. Install as /etc/trading-desk/groktrading.env mode 0600.
+# Unusual Whales token file is optional for this skeleton writer.
+EnvironmentFile=-/etc/trading-desk/groktrading.env
+EnvironmentFile=-/etc/trading-desk/unusual-whales.env
+# Webhook HMAC is loaded via drop-in webhook.conf — not embedded here.
+ExecStart=/opt/groktrading/.venv/bin/groktrading-tape --output /var/lib/trading-desk/package_tape_skeleton.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

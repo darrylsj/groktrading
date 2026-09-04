@@ -35,3 +35,7 @@ The LLM thesis / approve-skip path is not in the broker path and must not call T
 ## Reviewer
 
 The passive reviewer inspects git and audit files **after** the fact. The reviewer is not a runtime dependency and must not be placed inside the webhook or gate loop.
+
+## Rebuild / new host
+
+Operator install path (new VPS, parallel `/opt/groktrading`, cutover checklist): [DEPLOY.md](DEPLOY.md). The installer never enables live trading and never claims this commit is deployed.
