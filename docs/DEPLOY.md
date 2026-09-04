@@ -9,6 +9,19 @@ commit. Observed live facts stay in [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT
 Do **not** SSH, deploy, or restart services from a cloud agent. An operator
 runs these steps on the machine they control.
 
+## Different provider full rebuild
+
+This page is the **package installer** path (`/opt/groktrading`,
+`groktrading-*.service`, skeleton tape). It does **not** copy live secrets,
+legacy `ws_tape.py`, or the two trading-desk crons.
+
+To clone **today’s observed Helsinki trading-desk** onto a **different cloud
+provider** (secret copy matrix by key name and dest path, legacy scripts,
+systemd + webhook drop-in, `CRON_TZ=America/Los_Angeles` crons, Grok
+routine webhook, validation, cutover): follow
+[REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md). Merging that runbook
+is still not a deployment.
+
 ## Hard rules
 
 These are also comments in `scripts/install_helsinki.sh`. Do not weaken them.
@@ -203,6 +216,7 @@ cutover flags above.
 
 ## Related
 
+- Different-provider full rebuild: [REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md)
 - Examples: [deploy/examples](../deploy/examples)
 - Permissions: [deploy/examples/PERMISSIONS.md](../deploy/examples/PERMISSIONS.md)
 - Operating model: [OPERATING_MODEL.md](OPERATING_MODEL.md)

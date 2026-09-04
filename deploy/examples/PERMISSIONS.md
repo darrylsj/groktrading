@@ -7,6 +7,7 @@
 #   install -o root -g root -m 0600 unusual-whales.env.example /etc/trading-desk/unusual-whales.env
 #   install -o root -g root -m 0600 tradier-sandbox.env.example /etc/trading-desk/tradier-sandbox.env
 #   install -o root -g root -m 0600 tradier-live.env.example /etc/trading-desk/tradier-live.env
+#   install -o root -g root -m 0600 trading-desk.env.example /opt/trading-desk/.env
 # Then edit the real files in place. Never chmod 0644 a token file.
 # Never put tokens in unit files, git, chat logs, or tape JSON.
 # scripts/install_helsinki.sh creates /etc/trading-desk (0700) but does not

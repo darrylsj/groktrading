@@ -2,7 +2,7 @@
 
 This file records **operator-observed** host facts. It is **not** a claim that **this git repository** is deployed, and it is not a license for the cloud agent to SSH, restart units, or ship credentials.
 
-A portable installer now lives in-repo (`scripts/install_helsinki.sh`, [DEPLOY.md](DEPLOY.md)). That is rebuild tooling only. **This commit is still not the live Helsinki tree** until an operator cutover is recorded here. The observed host remains hand-built under `/opt/trading-desk` with no `.git`, loose scripts (`ws_tape.py`, `finnhub_adapter.py`, `tape_poller.py`, `nightly_print_bt.py`), and `trading-desk-*.service` names. Running the installer with defaults must not overwrite that tree or those units.
+A portable installer now lives in-repo (`scripts/install_helsinki.sh`, [DEPLOY.md](DEPLOY.md)). Different-provider full rebuild (secrets by key name, legacy scripts, two crons, cutover): [REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md). That is rebuild tooling only. **This commit is still not the live Helsinki tree** until an operator cutover is recorded here. The observed host remains hand-built under `/opt/trading-desk` with no `.git`, loose scripts (`ws_tape.py`, `finnhub_adapter.py`, `tape_poller.py`, `nightly_print_bt.py`), and `trading-desk-*.service` names. Running the installer with defaults must not overwrite that tree or those units.
 
 ## What was observed
 

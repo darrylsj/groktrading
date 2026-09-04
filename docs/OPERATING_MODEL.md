@@ -38,4 +38,4 @@ The passive reviewer inspects git and audit files **after** the fact. The review
 
 ## Rebuild / new host
 
-Operator install path (new VPS, parallel `/opt/groktrading`, cutover checklist): [DEPLOY.md](DEPLOY.md). The installer never enables live trading and never claims this commit is deployed.
+Operator install path (new VPS, parallel `/opt/groktrading`, cutover checklist): [DEPLOY.md](DEPLOY.md). Different-provider full rebuild: [REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md). The installer never enables live trading and never claims this commit is deployed.

@@ -155,7 +155,7 @@ python scripts/scan_secrets.py
 
 ## Rebuild / new host
 
-Portable, secret-free host install (new VPS or parallel rebuild next to live Helsinki): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Portable, secret-free host install (new VPS or parallel rebuild next to live Helsinki): **[docs/DEPLOY.md](docs/DEPLOY.md)**. Different-provider full rebuild (copy secrets by key name, recreate units/crons, cutover): **[docs/REBUILD_NEW_PROVIDER.md](docs/REBUILD_NEW_PROVIDER.md)**.
 
 ```bash
 # files only — no enable, no start, no secrets, no live trading

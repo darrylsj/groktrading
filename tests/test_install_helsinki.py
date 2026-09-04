@@ -98,6 +98,48 @@ def test_script_encodes_hard_rules() -> None:
         assert needle in text, needle
 
 
+def test_trading_desk_env_example_matches_observed_key_names() -> None:
+    path = ROOT / "deploy" / "examples" / "env" / "trading-desk.env.example"
+    text = path.read_text(encoding="utf-8")
+    for key in (
+        "TRADIER_ACCOUNT_ID",
+        "TRADIER_ACCESS_TOKEN",
+        "TRADIER_API_BASE",
+        "UW_API_KEY",
+        "TAPE_OUT",
+        "FLOW_SEC",
+    ):
+        assert f"{key}=YOUR_" in text, key
+    assert "AKIA" not in text
+    for line in text.splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            _, _, value = line.partition("=")
+            assert value.startswith("YOUR_"), line
+
+
+def test_rebuild_new_provider_runbook_covers_operator_path() -> None:
+    text = (ROOT / "docs" / "REBUILD_NEW_PROVIDER.md").read_text(encoding="utf-8")
+    for needle in (
+        "Secret copy matrix",
+        "/opt/trading-desk/.env",
+        "/etc/trading-desk/finnhub.env",
+        "/etc/trading-desk/grok-webhook.env",
+        "GROK_WEBHOOK_KEY",
+        "GROK_WEBHOOK_AUTH_HEADER",
+        "cut -d= -f1",
+        "CRON_TZ=America/Los_Angeles",
+        "tape_poller.py",
+        "nightly_print_bt.py",
+        "poly / edgar / spx / Aria",
+        "ws_tape.py",
+        "signals_only",
+        "Finnhub ≠ option NBBO",
+        "WebSocket never places orders",
+        "not a deployment",
+    ):
+        assert needle in text, needle
+
+
 def test_example_units_are_package_named_and_secret_free() -> None:
     systemd = ROOT / "deploy" / "examples" / "systemd"
     finnhub = (systemd / "groktrading-finnhub.service").read_text(encoding="utf-8")
