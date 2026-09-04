@@ -1,0 +1,23 @@
+# Example Finnhub tape writer (signals only). Copy to /etc/systemd/system/.
+# Do not enable live trading from this unit. Do not embed tokens in the unit file.
+
+[Unit]
+Description=GrokTrading Finnhub stock-trade tape (signals only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+# Root-only env file. Install as /etc/trading-desk/finnhub.env mode 0600.
+EnvironmentFile=-/etc/trading-desk/finnhub.env
+ExecStart=/opt/groktrading/.venv/bin/groktrading-finnhub-tape --output /var/lib/trading-desk/finnhub_tape.json --symbol SPY --symbol QQQ
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

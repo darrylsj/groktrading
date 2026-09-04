@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/finnhub_trade.json",
+  "title": "FinnhubTrade",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["symbol", "price", "volume", "trade_ts_ms"],
+  "properties": {
+    "symbol": { "type": "string" },
+    "price": { "type": "number" },
+    "volume": { "type": "number" },
+    "trade_ts_ms": { "type": "integer" },
+    "conditions": { "type": "array", "items": { "type": "string" } }
+  }
+}

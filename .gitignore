@@ -1,0 +1,37 @@
+# Secrets and local env — never commit
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+id_rsa*
+secrets/
+/etc/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime artifacts
+*.jsonl
+!logs/trades.jsonl
+live_tape.json
+paper_state.json
+.coverage
+htmlcov/

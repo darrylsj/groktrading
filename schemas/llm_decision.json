@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/llm_decision.json",
+  "title": "LLMDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "thesis", "facts_digest"],
+  "properties": {
+    "action": { "enum": ["approve", "skip"] },
+    "thesis": { "type": "string" },
+    "facts_digest": { "type": "string" },
+    "model_label": { "type": "string" }
+  }
+}

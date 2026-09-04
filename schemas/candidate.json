@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/candidate.json",
+  "title": "Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "signal_id",
+    "underlying",
+    "option_symbol",
+    "side",
+    "quantity",
+    "proposed_limit",
+    "sit_confirmations",
+    "is_first_red",
+    "already_run",
+    "created_ts"
+  ],
+  "properties": {
+    "signal_id": { "type": "string" },
+    "underlying": { "type": "string" },
+    "option_symbol": { "type": "string" },
+    "side": { "const": "buy_to_open" },
+    "quantity": { "type": "integer", "const": 1 },
+    "proposed_limit": { "type": "string", "description": "Decimal as string" },
+    "sit_confirmations": { "type": "integer", "minimum": 0 },
+    "is_first_red": { "type": "boolean" },
+    "already_run": { "type": "boolean" },
+    "created_ts": { "type": "string", "format": "date-time" },
+    "ttl_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "from_websocket": { "type": "boolean" }
+  }
+}
