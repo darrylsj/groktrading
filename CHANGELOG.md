@@ -9,6 +9,7 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Architecture diagram (PNG + Mermaid) for the Outside APIs / Helsinki / Grok Bot / Passive Reviewer split.
 - Dedicated `logs/trades.jsonl`.
 - FABLE 5.1 hardening recorded as research; live card frozen n=3.
 - After-hours / overnight reflection.

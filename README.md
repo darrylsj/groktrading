@@ -4,6 +4,66 @@ Secret-free **reference and deployment package** for a Helsinki-hosted, Grok-ass
 
 This software does **not** promise trading success. It must **not** invent prices or P&L. Operator context: Tradier live cash on the order of **$600**; first milestone **$1,000**, second **$10,000**.
 
+## Architecture
+
+![GrokTrading architecture](docs/groktrading-architecture.png)
+
+**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM: `trading-desk-tape` and `trading-desk-finnhub` write tape JSON, deterministic filters apply sit-2 / matching ask / skip already-run / 50% cash, a signed webhook outbox emits material events only, and a nightly cron precomputes print scores. The **Grok Bot** writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit; routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
+
+**Hard rules**
+
+- **Finnhub ≠ option NBBO.** Do not gate option limit prices on Finnhub ticks.
+- **WebSocket never places orders.**
+- Matching ask uses a **Tradier production** quote.
+- Maintain **≥50% cash**.
+- **12:30 PT** new-entry cutoff (America/Los_Angeles).
+- **Sandbox ≠ live fill evidence.** Production NBBO is pricing truth.
+
+Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+```mermaid
+flowchart LR
+  subgraph Outside["Outside World APIs"]
+    UW["Unusual Whales\nREST options flow\nask-side prints"]
+    FH["Finnhub\nWS stock trades\nREST news / earnings"]
+    TP["Tradier Production\nquotes · balances\npositions · orders\naccount events"]
+    TS["Tradier Sandbox\npaper lifecycle only\n15-min delayed data"]
+  end
+  subgraph Helsinki["Helsinki — always-on, non-LLM"]
+    TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
+    FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
+    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 50% cash"]
+    HOOK["Signed webhook outbox\nmaterial events only"]
+    NIGHT["Nightly print scorer cron"]
+  end
+  subgraph Grok["Grok Bot computer — LLM"]
+    LLM["Thesis / approve-skip\non frozen facts only"]
+    GATE["Final gate\nfresh Tradier OCC quote TTL\nqty=1 · duplicates\n12:30 new-entry cutoff"]
+    EXEC["Preview → submit\nlive orders"]
+    AUDIT["Audit pack\nLESSONS · trades.jsonl\nCHANGELOG"]
+    ROUT["Routines\nopen · 15-min · close\nafter-hours · overnight"]
+  end
+  REV["Passive Trade Reviewer\noutside active loop"]
+  UW --> TAPE
+  FH --> FHSVC
+  TP --> TAPE
+  TP --> GATE
+  TAPE --> FILT
+  FHSVC --> FILT
+  FILT --> HOOK
+  HOOK -->|"sit_match / cash_up"| LLM
+  LLM --> GATE
+  GATE --> EXEC
+  EXEC -->|"live"| TP
+  EXEC -.->|"paper verify"| TS
+  GATE --> AUDIT
+  ROUT --> AUDIT
+  NIGHT --> AUDIT
+  AUDIT --> REV
+```
+
+Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, **pushes a signed webhook**, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM polling**. Grok writes a thesis from **facts only** and never calls Tradier. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)).
+
 ## What this is
 
 A typed Python package under `src/groktrading` with:
@@ -44,41 +104,6 @@ Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
 | `live` | No | Requires explicit enablement; **still blocked** from WebSocket callbacks |
 
 Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, **flatten by 12:30 PT**, **no overnight**. The final gate rechecks a **fresh Tradier option quote**, TTL, matching ask, buying power/cash, quantity **exactly 1**, duplicate/working orders, market hours, and 12:30 cash-up.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  subgraph Feeds
-    FH[Finnhub stock WS/REST]
-    UW[Unusual Whales flow]
-    TR[Tradier quotes clock balances]
-  end
-  subgraph Helsinki
-    N[Ingest + normalize]
-    F[Freshness + filter]
-    T[Normalized tape]
-    W[Signed webhook]
-  end
-  Grok[Grok thesis approve/skip]
-  Gate[Deterministic gate]
-  Paper[Tradier paper]
-  Live[Tradier live]
-  Evt[Account events + audit]
-  Rev[Passive reviewer outside loop]
-
-  FH --> N
-  UW --> N
-  TR --> N
-  N --> F --> T --> W --> Grok --> Gate
-  TR --> Gate
-  Gate -->|default| Evt
-  Gate -->|explicit paper| Paper --> Evt
-  Gate -->|explicit live never from WS| Live --> Evt
-  Rev -.-> Evt
-```
-
-Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, **pushes a signed webhook**, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM polling**. Grok writes a thesis from **facts only** and never calls Tradier. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)).
 
 ## API roles and limitations
 

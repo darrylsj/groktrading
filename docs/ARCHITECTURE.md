@@ -1,5 +1,7 @@
 # Architecture
 
+Visual: [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) and [groktrading-architecture.png](groktrading-architecture.png).
+
 This repository is a **reference and deployment package**. It is not itself a live trading deployment. Default mode is `signals_only`. Paper is explicit. Live order placement is never the default and cannot be driven by WebSocket callbacks.
 
 ## Runtime loop vs reviewer
