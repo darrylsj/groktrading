@@ -4,19 +4,45 @@ Secret-free **reference and deployment package** for a Helsinki-hosted, Grok-ass
 
 This software does **not** promise trading success. It must **not** invent prices or P&L. Operator context: Tradier live cash on the order of **$600**; first milestone **$1,000**, second **$10,000**.
 
+## Live card (authoritative)
+
+Any older ≥50% cash floor, flatten-at-12:30, or no-overnight policy in this tree is stale. Use this card:
+
+- **Overnight long options: ALLOWED**
+- **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions
+- **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**
+- **One-lot preference (~$200)** — no hard concurrent-position caps, no daily-loser circuit breaker
+- **Live orders must NEVER be triggered by WebSocket alone**; final gates recheck fresh Tradier **production** quotes
+- **Grok/LLM is outside the broker execution boundary**: approve/skip on frozen facts only; never set OCC, qty, limit, account, or order action
+
+OpenAI P0.4 flatten-everything / no-overnight is **rejected**. Full checklist: [docs/SAFETY.md](docs/SAFETY.md).
+
+## Helsinki vs this package
+
+Verified 2026-09-05 SSH map (authoritative ops context, not a claim this commit is deployed):
+
+| | Live Helsinki | This package |
+| --- | --- | --- |
+| Tree | Hand-built `/opt/trading-desk` (no `.git`) | Git repo; installer default `/opt/groktrading` |
+| Units | `trading-desk-tape.service` (`ws_tape.py`) + `trading-desk-finnhub.service` | Example `groktrading-*.service` |
+| Orders | **No** preview→submit. Webhooks: `sit_match`, `in_position`, `cash_up` (`entry_cutoff_only_no_flatten`), `day_win_target` (`auto_flatten: false`) | Stub-safe `OrderMachine` on the Grok consumer side |
+| Webhooks | In-memory debounce ~90s (weekend same-digest spam) | SQLite WAL inbox/outbox + AH/weekend digest coalesce |
+
+GitHub `main` was `e297a0af…` at map time. Package hardening ships here first. Copy debounce/idempotency onto Helsinki only after an **operator-authorized** restart.
+
 ## Architecture
 
 ![GrokTrading architecture](docs/groktrading-architecture.png)
 
-**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM: `trading-desk-tape` and `trading-desk-finnhub` write tape JSON, deterministic filters apply sit-2 / matching ask / skip already-run / 50% cash, a signed webhook outbox emits material events only, and a nightly cron precomputes print scores. The **Grok Bot** writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit; routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
+**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM: `trading-desk-tape` and `trading-desk-finnhub` write tape JSON, deterministic filters apply sit-2 / matching ask / skip already-run / 20% cash reserve, a signed webhook outbox emits material events only, and a nightly cron precomputes print scores. The **Grok Bot** writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit; routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
 
 **Hard rules**
 
 - **Finnhub ≠ option NBBO.** Do not gate option limit prices on Finnhub ticks.
 - **WebSocket never places orders.**
 - Matching ask uses a **Tradier production** quote.
-- Maintain **≥50% cash**.
-- **12:30 PT** new-entry cutoff (America/Los_Angeles).
+- Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed.
+- **12:30 PT** new-entry cutoff only (America/Los_Angeles). Not a flatten.
 - **Sandbox ≠ live fill evidence.** Production NBBO is pricing truth.
 
 Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -32,7 +58,7 @@ flowchart LR
   subgraph Helsinki["Helsinki — always-on, non-LLM"]
     TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
     FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
-    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 50% cash"]
+    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 20% cash"]
     HOOK["Signed webhook outbox\nmaterial events only"]
     NIGHT["Nightly print scorer cron"]
   end
@@ -70,12 +96,14 @@ A typed Python package under `src/groktrading` with:
 
 - Finnhub stock-trade WebSocket helpers (reconnect/backoff, bounded watchlist, atomic redacted JSON, freshness/health, REST probe)
 - Generic Unusual Whales and Tradier clients (timeouts and stale data **fail closed**, dependency injection)
-- Candidate + deterministic gate (sit-2, matching ask, already-run, no first-red, TTL, cash, quantity 1, duplicates, clock, 12:30 PT)
-- Signed idempotent webhook sender (HMAC, cooldown, redaction)
-- LLM interface: **approve/skip + thesis** from assembled facts only; **no broker access**
+- Candidate + deterministic gate (sit-2, matching ask, already-run, no first-red, TTL, ≥20% cash reserve, quantity 1, broker-authoritative duplicates, clock, 12:30 PT entry-cutoff)
+- Production quote gate (OCC, delayed, provider bid/ask dates, spread, no-chase; sandbox/synthetic cannot pass live)
+- Preview→submit order state machine (immutable payload, no blind retry; stub-safe)
+- Signed webhook sender plus durable SQLite WAL inbox/outbox idempotency (AH/weekend digest coalesce)
+- LLM interface: **approve/skip + thesis** from assembled facts only; **no broker access**; never sets OCC/qty/limit/account/order action
 - Signals-only executor stub and explicit live gating (WebSocket cannot submit live)
-- Paper recorder/reconciler (production NBBO truth vs sandbox delayed fills, `signal_id`, preview-before-order, same-day terminal persistence)
-- 12:30 PT new-entry cutoff policy interface (not a forced flatten; overnight long options allowed)
+- Paper recorder/reconciler (production NBBO truth vs sandbox delayed fills, `signal_id`, preview-before-order, same-session paper file)
+- 12:30 PT new-entry cutoff policy (not a forced flatten; overnight long options allowed; alert if cutoff cancel fails)
 - systemd/env **examples**, portable host installer (`scripts/install_helsinki.sh`), JSON Schema, CI, tests
 
 ## Persistent logs
@@ -103,7 +131,7 @@ Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
 | `paper` | No | Tradier sandbox after preview + gate |
 | `live` | No | Requires explicit enablement; **still blocked** from WebSocket callbacks |
 
-Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥50%** at all times, **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). The final gate rechecks a **fresh Tradier option quote**, TTL, matching ask, buying power/cash, quantity **exactly 1**, duplicate/working orders, market hours, and the 12:30 new-entry cutoff.
+Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥20%** at all times (max deploy 80%), **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). The final gate rechecks a **fresh Tradier production option quote** (provider timestamps, OCC, delayed flag), TTL, matching ask, buying power/cash/reserve, quantity **exactly 1**, duplicate/working/in-position from the broker snapshot, market hours, and the 12:30 new-entry cutoff. Candidate booleans cannot pass live alone.
 
 ## API roles and limitations
 
@@ -179,23 +207,41 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/feeds/finnhub.py` | WS parse, backoff, watchlist, health, REST probe |
 | `src/groktrading/feeds/unusual_whales.py` | Generic UW GET |
 | `src/groktrading/feeds/tradier.py` | Generic Tradier quotes/balances/clock/preview |
-| `src/groktrading/gate.py` | Deterministic policy |
-| `src/groktrading/webhook.py` | HMAC + idempotency + cooldown |
-| `src/groktrading/llm.py` | Decision protocol |
+| `src/groktrading/gate.py` | Deterministic final gate |
+| `src/groktrading/quote_gate.py` | P0.1 production quote validation |
+| `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
+| `src/groktrading/idempotency.py` | Durable inbox/outbox (SQLite WAL) |
+| `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
+| `src/groktrading/llm.py` | Decision protocol (approve/skip only) |
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
-| `src/groktrading/policy.py` | 12:30 PT new-entry cutoff |
+| `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
 | `schemas/` | JSON Schema for tape/gate/LLM artifacts |
+
+## Hardening (package-first)
+
+Safety details: [docs/SAFETY.md](docs/SAFETY.md).
+
+- **P0.1** Quote freshness: OCC after normalize; `delayed==false`; ask>0; bid≥0; bid≤ask; provider `bid_date`/`ask_date` age; reject future timestamps; max spread; no-chase; sandbox/synthetic cannot pass live.
+- **P0.2** Final gate: sit / already-run / duplicate / position from durable session facts + fresh broker account/positions/orders/clock. Qty=1. Cash floor ≥20%. No WS-direct submit.
+- **P0.3** Order FSM: `RECEIVED → … → PREVIEW → FINAL_GATE → SUBMIT → ACK → FILLED/REJECTED → FLAT_RECONCILED`. Immutable payload; never blind-retry (query Tradier by `tag=signal_id` first). Paper/stub modes need no credentials.
+- **P0.4 rewritten** Entry-cutoff only. **Reject** flatten-everything / no-overnight.
+- **Idempotency** Durable SQLite WAL inbox/outbox; weekend/AH digest coalesce.
+
+**Measurement:** freeze strategy params except safety; keep selection / execution / risk separate; **n=3 live days ≠ edge**. Do not invent fills or claim profitability.
 
 ## Optional research references (not dependencies)
 
 Do **not** add these to `pyproject.toml`. Licensing and product fit are the operator’s problem:
 
-- **LEAN** (QuantConnect) — official Tradier plugin exists; research only.
+- **LEAN** (QuantConnect) — official Tradier plugin, **Apache-2.0**; preview/submit shape is a **design reference only**.
+- **NautilusTrader** — reconciliation / lifecycle concepts; design reference only. Not the runtime.
 - **Lumibot** — Tradier support; **GPL** — do not vendor into this tree.
 - **Optopsy** — useful options studies if isolated; **AGPL** — do not import.
 - **QuantLib / vollib** — pricing research; optional, not required here.
 - **Backtrader** — **not used** (avoid GPL entanglement and the wrong execution model).
+
+This package is **not** a LEAN/C#/Nautilus/Lumibot/Optopsy migration.
 
 ## License
 

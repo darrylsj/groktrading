@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from groktrading.gate import evaluate_gate
 from groktrading.models import AccountSnapshot, ClockSnapshot, GateReason, MarketState, OptionQuote
 from groktrading.modes import OperatingMode
-from helpers import morning_pt, passing_candidate, passing_context
+from groktrading.timeutil import PT
+from helpers import morning_pt, passing_candidate, passing_context, passing_session_facts
 
 
 def test_passing_paper_gate() -> None:
@@ -17,20 +18,26 @@ def test_passing_paper_gate() -> None:
 
 def test_stale_quote() -> None:
     now = morning_pt()
+    stale = now - timedelta(seconds=30)
     ctx = passing_context(
         now=now,
         quote=OptionQuote(
             option_symbol="SPY260903C00600000",
             bid=Decimal("1.20"),
             ask=Decimal("1.25"),
-            quote_ts=now - timedelta(seconds=30),
+            quote_ts=stale,
             source="tradier_production",
             delayed=False,
+            bid_date=stale,
+            ask_date=stale,
+            received_ts=now,
+            provider_symbol="SPY260903C00600000",
         ),
         max_quote_age_seconds=5.0,
     )
     result = evaluate_gate(passing_candidate(created_ts=now), ctx)
     assert GateReason.STALE_QUOTE in result.reasons
+    assert GateReason.QUOTE_PROVIDER_STALE in result.reasons
     assert result.allowed is False
 
 
@@ -113,3 +120,74 @@ def test_signals_only_never_allows() -> None:
     )
     assert result.allowed is False
     assert GateReason.SIGNALS_ONLY in result.reasons
+
+
+def test_entry_cutoff_blocks_new_risk_not_overnight() -> None:
+    now = datetime(2026, 9, 3, 12, 30, tzinfo=PT)
+    result = evaluate_gate(
+        passing_candidate(created_ts=now),
+        passing_context(now=now, session_facts=passing_session_facts(now)),
+    )
+    assert result.allowed is False
+    assert GateReason.ENTRY_CUTOFF in result.reasons
+    assert GateReason.OVERNIGHT_FORBIDDEN not in result.reasons
+
+
+def test_live_requires_session_facts() -> None:
+    result = evaluate_gate(
+        passing_candidate(),
+        passing_context(
+            mode=OperatingMode.LIVE,
+            live_explicitly_enabled=True,
+            session_facts=None,
+        ),
+    )
+    assert GateReason.SESSION_FACTS_REQUIRED in result.reasons
+    assert result.allowed is False
+
+
+def test_session_facts_already_run_overrides_candidate() -> None:
+    result = evaluate_gate(
+        passing_candidate(already_run=False),
+        passing_context(
+            session_facts=passing_session_facts(already_run_underlyings=["SPY"])
+        ),
+    )
+    assert GateReason.ALREADY_RUN in result.reasons
+
+
+def test_broker_position_is_authoritative() -> None:
+    now = morning_pt()
+    account = AccountSnapshot(
+        cash=Decimal("600"),
+        buying_power=Decimal("600"),
+        working_option_symbols=[],
+        open_position_symbols=["SPY260903C00600000"],
+        as_of=now,
+        equity=Decimal("600"),
+    )
+    result = evaluate_gate(passing_candidate(), passing_context(account=account))
+    assert GateReason.IN_POSITION in result.reasons
+    assert GateReason.DUPLICATE_OR_WORKING in result.reasons
+
+
+def test_cash_equity_floor_twenty_percent() -> None:
+    now = morning_pt()
+    account = AccountSnapshot(
+        cash=Decimal("150"),
+        buying_power=Decimal("150"),
+        as_of=now,
+        equity=Decimal("150"),
+    )
+    result = evaluate_gate(passing_candidate(), passing_context(account=account))
+    assert result.allowed is False
+    assert GateReason.CASH_RESERVE in result.reasons
+
+
+def test_ws_direct_live_forbidden() -> None:
+    result = evaluate_gate(
+        passing_candidate(from_websocket=True),
+        passing_context(mode=OperatingMode.LIVE, live_explicitly_enabled=True),
+    )
+    assert GateReason.WS_DIRECT_LIVE_FORBIDDEN in result.reasons
+

@@ -31,7 +31,7 @@ These are also comments in `scripts/install_helsinki.sh`. Do not weaken them.
 | No secrets in git | Tokens live only as operator-placed **0600** files under `/etc/trading-desk/` (and, on the observed host, `/opt/trading-desk/.env`). Never commit them. The installer never prints or requires tokens. |
 | WebSocket never places orders | Finnhub/UW/Tradier WS ticks are not an order path. |
 | Finnhub ≠ option NBBO | Do not gate option limit prices on Finnhub ticks. |
-| ≥50% cash | Overnight long options are allowed. **12:30 PT** is a **new-entry cutoff only**, not a forced flatten. |
+| ≥20% cash / max deploy 80% | Overnight long options are allowed. **12:30 PT** is a **new-entry cutoff only**, not a forced flatten. |
 | Sandbox ≠ live fill evidence | Tradier production NBBO is pricing truth. |
 | Default remains `signals_only` | The installer never sets `GROKTRADING_LIVE_EXPLICITLY_ENABLED`. `--start` still does not place orders. |
 

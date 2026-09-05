@@ -20,9 +20,9 @@ This package supports a small discretionary options workflow with a live Tradier
 4. Skip already-run names/contracts for the session.
 5. No first-red.
 6. No spray (Helsinki filter; not a WS fan-out to the broker).
-7. Cash/equity **≥50%** at all times. Overnight long options are allowed. **12:30 PT is a new-entry cutoff only** (not a forced flatten).
+7. Cash/equity **≥20%** at all times (max deploy 80%). Overnight long options are allowed. **12:30 PT is a new-entry cutoff only** (not a forced flatten). Flatten-everything / no-overnight is rejected.
 8. WebSocket events must never directly trigger live orders.
-9. Final gate rechecks: fresh Tradier option quote, TTL, matching ask, buying power/cash, quantity 1, duplicate/working orders, market hours, 12:30 new-entry cutoff.
+9. Final gate rechecks: fresh Tradier **production** option quote (provider timestamps, OCC, delayed flag), TTL, matching ask, buying power/cash/20% reserve, quantity 1, duplicate/working/in-position from the broker snapshot, durable session facts, market hours, 12:30 new-entry cutoff. The LLM must not set OCC, qty, limit, account, or order action.
 
 ## Paper vs production pricing
 

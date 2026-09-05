@@ -17,7 +17,7 @@ Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). API surfaces: [API_MATRIX.md](
 | Grok Bot computer | **LLM** thesis / approve-skip on **frozen facts only** (must not call Tradier). **Gate / executor** uses Tradier production for fresh OCC quotes and live orders |
 | Passive Trade Reviewer | Reads the audit pack after the fact; **no** control or order permissions |
 
-**Hard rules:** Finnhub is not option NBBO. WebSocket never places orders. Matching ask uses a Tradier **production** quote. Maintain **≥50% cash**. **12:30 PT** new-entry cutoff. Sandbox is **not** live fill evidence.
+**Hard rules:** Finnhub is not option NBBO. WebSocket never places orders. Matching ask uses a Tradier **production** quote. Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed. **12:30 PT** new-entry cutoff only (not a flatten). Sandbox is **not** live fill evidence.
 
 ## Mermaid (GitHub-native)
 
@@ -32,7 +32,7 @@ flowchart LR
   subgraph Helsinki["Helsinki — always-on, non-LLM"]
     TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
     FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
-    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 50% cash"]
+    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 20% cash"]
     HOOK["Signed webhook outbox\nmaterial events only"]
     NIGHT["Nightly print scorer cron"]
   end

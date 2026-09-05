@@ -10,7 +10,7 @@
 #   - No secrets in git. This script never prints, reads, or requires tokens.
 #   - WebSocket never places orders.
 #   - Finnhub ≠ option NBBO. Do not gate option limits on Finnhub ticks.
-#   - ≥50% cash; overnight longs OK; 12:30 PT = new-entry cutoff only.
+#   - ≥20% cash / max deploy 80%; overnight longs OK; 12:30 PT = new-entry cutoff only.
 #   - Sandbox ≠ live fill evidence. Production NBBO is pricing truth.
 #   - Default mode remains signals_only. The installer never enables live.
 #   - Default = install files only. --enable and --start are explicit.
@@ -514,7 +514,7 @@ Hard rules still in force
   - No secrets in git
   - WebSocket never places orders
   - Finnhub ≠ option NBBO
-  - ≥50% cash; overnight longs OK; 12:30 PT = new-entry cutoff only
+  - ≥20% cash / max deploy 80%; overnight longs OK; 12:30 PT = new-entry cutoff only
   - Sandbox ≠ live fill evidence
   - Default mode remains signals_only / no live enablement by installer
 
