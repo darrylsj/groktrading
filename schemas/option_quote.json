@@ -13,6 +13,10 @@
     "source": {
       "enum": ["tradier_production", "tradier_sandbox", "synthetic"]
     },
-    "delayed": { "type": "boolean" }
+    "delayed": { "type": "boolean" },
+    "bid_date": { "type": ["string", "null"], "format": "date-time" },
+    "ask_date": { "type": ["string", "null"], "format": "date-time" },
+    "received_ts": { "type": ["string", "null"], "format": "date-time" },
+    "provider_symbol": { "type": ["string", "null"] }
   }
 }

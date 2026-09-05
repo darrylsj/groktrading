@@ -57,6 +57,41 @@ def test_tradier_env_urls_and_timeout() -> None:
         client.quote_option("SPY260903C00600000")
 
 
+def test_tradier_quote_uses_provider_dates_not_http_time() -> None:
+    clock = FrozenClock(datetime(2026, 9, 3, 15, 0, tzinfo=UTC))
+    bid_ms = int(datetime(2026, 9, 3, 14, 59, 58, tzinfo=UTC).timestamp() * 1000)
+    ask_ms = int(datetime(2026, 9, 3, 14, 59, 59, tzinfo=UTC).timestamp() * 1000)
+    http = FakeHttp(
+        {
+            "quotes": {
+                "quote": {
+                    "symbol": "SPY260903C00600000",
+                    "bid": "1.20",
+                    "ask": "1.25",
+                    "bid_date": bid_ms,
+                    "ask_date": ask_ms,
+                    "delayed": False,
+                }
+            }
+        }
+    )
+    client = TradierClient(
+        http=http,
+        clock=clock,
+        token="unused-test-token",
+        account_id="PAPERACCOUNT",
+        env="production",
+    )
+    quote = client.quote_option("SPY260903C00600000")
+    assert quote.source == "tradier_production"
+    assert quote.delayed is False
+    assert quote.bid_date is not None
+    assert quote.ask_date is not None
+    assert quote.received_ts == clock.now()
+    assert quote.quote_ts == quote.ask_date
+    assert quote.provider_symbol == "SPY260903C00600000"
+
+
 def test_uw_stale_fail_closed() -> None:
     clock = FrozenClock(datetime(2026, 9, 3, 15, 0, tzinfo=UTC))
     client = UnusualWhalesClient(

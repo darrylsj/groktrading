@@ -9,6 +9,21 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Scoped live-desk hardening (package-first; no Helsinki deploy): P0.1 Tradier production quote gate (OCC, delayed, provider bid/ask dates, spread, no-chase); P0.2 broker-authoritative final gate (session facts + fresh account/positions/orders/clock; qty=1; cash/equity ≥20%); P0.3 stub-safe preview→submit order FSM with immutable payload and no blind retry; durable SQLite WAL inbox/outbox idempotency with AH/weekend digest coalesce; cutoff-cancel alert path.
+- Live card encoded in `policy.py`: overnight long options allowed; 12:30 PT new-entry cutoff only; max deploy 80%. OpenAI P0.4 flatten-everything / no-overnight is rejected.
+
+### Changed
+
+- README, SAFETY, architecture, operating model, deploy/rebuild docs, and installer comments: replace any ≥50% cash floor with ≥20% reserve. Helsinki vs package topology recorded from the 2026-09-05 SSH map (`/opt/trading-desk`, `trading-desk-*.service`, webhook-only, in-memory ~90s debounce).
+- `evaluate_cash_up` now delegates to entry-cutoff and never flattens.
+
+### Notes
+
+- Helsinki deploy of debounce/idempotency onto `ws_tape.py` is a **follow-up**. Operator must authorize any restart. This changelog does not invent fills or PnL.
+- n=3 live days ≠ edge. Strategy knobs (sit-2, already-run, matching-ask) are frozen except safety.
+
+### Previously added (still unreleased)
+
 - Operator runbook `docs/REBUILD_NEW_PROVIDER.md` for a full Helsinki rebuild on a different cloud provider (secret copy matrix by key name and dest path only; trading-desk crons only; package skeleton ≠ `ws_tape.py`).
 - Example `deploy/examples/env/trading-desk.env.example` matching observed `/opt/trading-desk/.env` key names (`YOUR_*` placeholders).
 - Portable Helsinki/new-VPS installer (`scripts/install_helsinki.sh`) plus `docs/DEPLOY.md`: package root `/opt/groktrading`, package-named systemd units, no enable/start/secrets/live by default.
@@ -21,9 +36,9 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 - Grok webhook first fire 2026-09-03 09:14 PT; no duplicate SPCX action.
 - GitHub groktrading PR #1 with P0 gate/quote gaps so this repo is not the live executor.
 
-### Changed
+### Previously changed (still unreleased)
 
-- README / architecture docs: live card is ≥50% cash, overnight longs allowed, 12:30 PT new-entry cutoff only; LLM must not call Tradier, gate/executor does.
+- README / architecture docs (superseded): earlier live-card text used ≥50% cash; this hardening replaces that floor with ≥20%. Overnight longs allowed; 12:30 PT new-entry cutoff only; LLM must not call Tradier, gate/executor does.
 - 2026-09-02: spend sit-2 on matching-ask skip-passers; print is thesis.
 
 ### Fixed

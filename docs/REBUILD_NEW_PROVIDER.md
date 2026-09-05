@@ -42,7 +42,7 @@ tape remains an **explicit remaining deployment step**
 | No secrets in git | Never commit token values, live webhook URLs/keys, private SSH keys, or host IPs used as credentials. Document **key names** and **dest paths** only. |
 | WebSocket never places orders | Finnhub / UW / Tradier WS ticks are not an order path. |
 | Finnhub ≠ option NBBO | Do not gate option limit prices on Finnhub ticks. |
-| ≥50% cash | Overnight long options are allowed. |
+| ≥20% cash / max deploy 80% | Overnight long options are allowed. |
 | 12:30 PT new-entry cutoff | America/Los_Angeles. **Not** a forced flatten. |
 | Sandbox ≠ live fill evidence | Tradier production NBBO is pricing truth. |
 | `signals_only` until explicit live | Default mode. Do not set live enablement as part of this rebuild. |

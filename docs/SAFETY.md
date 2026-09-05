@@ -1,5 +1,15 @@
 # Safety
 
+## Live card (authoritative)
+
+Rewrite any older ≥50% / flatten-at-12:30 / no-overnight text to this card.
+
+- **Overnight long options: ALLOWED.**
+- **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions.
+- **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**. One-lot preference (~$200). No hard concurrent-position caps. No daily-loser circuit breaker.
+- **Live orders must never be triggered by WebSocket alone.** Final gates recheck a **fresh Tradier production** option quote.
+- **Grok/LLM is outside the broker execution boundary.** Approve/skip on frozen facts only. The model must never set OCC, qty, limit, account, or order action.
+
 ## Defaults
 
 - `OperatingMode.SIGNALS_ONLY`
@@ -7,29 +17,83 @@
 - Executor WebSocket path raises `LiveGatingError` if live mode is requested
 - On-disk JSON is redacted
 - HTTP timeouts fail closed
+- `policy.CASH_EQUITY_FLOOR = 0.20` / `MAX_DEPLOY_RATIO = 0.80`
+- `policy.OVERNIGHT_LONG_OPTIONS_ALLOWED = True`
+- `policy.ENTRY_CUTOFF_FLATTENS_BOOK = False`
 
 ## Forbidden
 
 - Credentials in git, unit files, tape JSON, or README examples beyond `YOUR_*` placeholders
 - First-class live orders from Finnhub/UW/Tradier WS ticks
-- Cash/equity below **50%**
+- Cash/equity below **20%** after a contemplated entry (max deploy 80%)
 - Multi-lot options in this policy
 - Invented quotes, fills, or P&L
+- Auto-flatten of an overnight-allowed book at 12:30 PT
 - GPL/AGPL runtime dependencies (Backtrader, Lumibot, Optopsy). See README research notes.
+
+## Explicit REJECT of OpenAI P0.4 flatten-everything / no-overnight
+
+An external engineering note proposed flattening everything at 12:30 PT and forbidding overnight holds. **That is rejected.** Darryl’s live card allows overnight long options. 12:30 PT stops **new entries** and may cancel working **entry** orders. It does not liquidate the book. If the cutoff cancel path fails, emit an alert and keep new entries blocked — do not flatten as a fallback.
 
 ## Gate checklist (final)
 
-1. Fresh Tradier option quote (production for truth)
-2. Quote and candidate TTL
-3. Matching ask
-4. Buying power / cash vs ask × 100 × qty
-5. Quantity exactly 1
-6. No duplicate / working order on the OCC symbol
-7. Market clock open
-8. Before 12:30 PT new-entry cutoff (not a forced flatten; overnight long options allowed)
-9. Sit-2, not already-run, not first-red
-10. Preview-before-order for paper/live paths
-11. Not a WebSocket-direct live submit
+1. Fresh **Tradier production** option quote (sandbox/synthetic cannot pass live)
+2. OCC symbol match after normalize; `delayed==false`; ask>0; bid≥0; bid≤ask
+3. Provider `bid_date` / `ask_date` age (not HTTP receive time); reject future timestamps; max spread; no-chase
+4. Candidate TTL
+5. Matching ask
+6. Buying power / cash vs ask × 100 × qty **and** cash/equity ≥20% after premium
+7. Quantity exactly 1
+8. Duplicate / working / in-position from **fresh broker** account + positions + orders (not candidate booleans alone)
+9. Sit-2 / already-run / first-red from **durable session facts** unioned with the candidate (candidate cannot clear a block)
+10. Market clock open
+11. Before 12:30 PT new-entry cutoff (not a forced flatten; overnight long options allowed)
+12. Preview-before-order for paper/live paths
+13. Not a WebSocket-direct live submit
+
+## Hardening (P0)
+
+### P0.1 Quote freshness
+
+`quote_gate.validate_entry_quote` is the production-quote validator. Live requires `source=tradier_production`, `delayed=false`, OCC match, provider timestamps, and a non-crossed, non-stale, non-future NBBO. HTTP time alone is not freshness.
+
+### P0.2 Broker-authoritative final gate
+
+`evaluate_gate` derives sit / already-run / duplicate / position from `SessionFacts` plus a fresh `AccountSnapshot` (cash, equity, working orders, open positions) and `ClockSnapshot`. Live without session facts fails closed. WebSocket cannot submit live.
+
+### P0.3 Preview → submit state machine
+
+`order_fsm.OrderMachine` is stub-safe (no live credentials). Lifecycle as practical:
+
+`RECEIVED → VALIDATED → QUOTED → PREVIEW → FINAL_GATE → SUBMIT → ACK → FILLED|REJECTED|… → FLAT_RECONCILED`
+
+Rules: immutable payload; preview the exact payload; refresh quote and rerun the gate; submit the same payload with `preview=false`; `tag=signal_id`; persist `signal_id` / payload hash / broker id; **never blind-retry** an unknown submit — query Tradier (or the stub) by tag first.
+
+### P0.4 Entry-cutoff (rewritten)
+
+`policy.evaluate_entry_cutoff` blocks new entries after 12:30 PT and cancels working **entry** orders when the stub/API exists. It **never** calls flatten. Cancel failure raises an alert (`entry_cutoff_gate_failed`).
+
+### Durable webhook idempotency
+
+Helsinki today: in-memory debounce (~90s) only — weekend same-digest spam. Package: `idempotency.DurableIdempotency` (SQLite WAL) for **outbox** (Helsinki emitter) and **inbox** (Grok consumer). RTH: exact key + 90s debounce. After-hours / weekend: coalesce by digest so AH spam does not fan out. Copy this onto `/opt/trading-desk` only after an operator authorizes a restart.
+
+### LLM boundary
+
+`llm.LLMDecision` is approve/skip + thesis on frozen facts. `assert_no_broker_attr` / `assert_llm_decision_boundary` refuse OCC, qty, limit, account, and order action.
+
+## Open-source pattern references (not vendored)
+
+- **LEAN Tradier plugin** (QuantConnect, Apache-2.0) — preview/submit and broker adapter shape. Design reference only.
+- **NautilusTrader** — reconciliation / lifecycle concepts. Design reference only.
+- **Lumibot** (GPL) and **Optopsy** (AGPL) — **not vendored**, not imported, not a runtime.
+
+This PR does **not** migrate the desk to LEAN, C#, Nautilus, Lumibot, or Optopsy.
+
+## Measurement
+
+- Freeze strategy parameters (sit-2, already-run, matching-ask, one-lot) except **safety** defaults (quote age, cash floor, cutoff).
+- Keep **selection / execution / risk** separate: Helsinki filters select; Grok approves/skips facts; the gate/executor owns risk and orders.
+- **n=3 live days ≠ edge.** Do not invent fills or claim profitability.
 
 ## Secrets handling
 
@@ -37,4 +101,4 @@ Env files on a host: **root-owned, mode 0600**. Examples under `deploy/examples/
 
 ## This cloud agent
 
-Must not deploy to, SSH to, or restart Helsinki systemd units.
+Must not deploy to, SSH to, or restart Helsinki systemd units. Helsinki deploy of this hardening is a **follow-up**: copy `ws_tape` debounce/idempotency later; the operator must authorize any restart.

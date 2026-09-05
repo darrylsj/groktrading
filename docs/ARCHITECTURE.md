@@ -83,6 +83,6 @@ The **LLM thesis / approve-skip** path consumes **assembled facts only**. It ret
 
 - WebSocket events never directly trigger live orders.
 - Quantity on options is exactly **1** contract.
-- Cash/equity **≥50%** at all times. **Overnight long options are allowed.** **12:30 America/Los_Angeles** is a **new-entry cutoff only**, not a forced flatten.
+- Cash/equity **≥20%** at all times (max deploy 80%). **Overnight long options are allowed.** **12:30 America/Los_Angeles** is a **new-entry cutoff only**, not a forced flatten. OpenAI flatten-everything / no-overnight is rejected.
 - Matching ask; skip already-run; no first-red; sit-2.
 - Timeouts and stale quotes fail closed.

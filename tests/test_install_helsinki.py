@@ -84,7 +84,7 @@ def test_script_encodes_hard_rules() -> None:
         "No secrets in git",
         "WebSocket never places orders",
         "Finnhub ≠ option NBBO",
-        "≥50% cash",
+        "≥20% cash",
         "12:30 PT = new-entry cutoff only",
         "Sandbox ≠ live fill evidence",
         "signals_only",

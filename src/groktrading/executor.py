@@ -2,7 +2,12 @@
 
 Default mode never places orders. WebSocket callbacks cannot reach live
 placement. Paper and live paths require explicit OperatingMode and, for
-live, live_explicitly_enabled plus a passed gate.
+live, live_explicitly_enabled plus a passed gate. Live submit is never
+driven by a WebSocket tick alone; the final gate rechecks a fresh quote.
+
+P0.3 order lifecycle lives in `order_fsm.OrderMachine` (preview exact
+payload → refresh + rerun gate → submit same payload with preview=false).
+This stub still previews first and does not auto-submit live.
 """
 
 from __future__ import annotations
@@ -74,5 +79,5 @@ class Executor:
         self.sink.submit(candidate, preview=preview)
         if self.mode == OperatingMode.PAPER:
             return result
-        # Live still previews first; actual placement is out of this stub by design.
+        # Live still previews first; placement is OrderMachine.submit after a refreshed gate.
         return result

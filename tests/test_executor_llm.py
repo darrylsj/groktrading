@@ -4,7 +4,7 @@ import pytest
 
 from groktrading.errors import LiveGatingError
 from groktrading.executor import Executor, RecordingSink
-from groktrading.llm import StaticSkipLLM, assert_no_broker_attr
+from groktrading.llm import StaticSkipLLM, assert_llm_decision_boundary, assert_no_broker_attr
 from groktrading.models import AssembledFacts, GateReason
 from groktrading.modes import OperatingMode
 from helpers import morning_pt, passing_candidate, passing_context
@@ -50,3 +50,7 @@ def test_llm_skip_has_no_broker() -> None:
     decision = llm.decide(facts)
     assert decision.action == "skip"
     assert "invent" in decision.thesis.lower() or "skip" in decision.thesis.lower()
+    assert_llm_decision_boundary(decision)
+    dumped = decision.model_dump()
+    for forbidden in ("option_symbol", "quantity", "limit", "account", "order_action"):
+        assert forbidden not in dumped

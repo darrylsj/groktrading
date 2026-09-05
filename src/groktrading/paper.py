@@ -1,8 +1,10 @@
 """Paper recorder and reconciler.
 
 Production Tradier NBBO is pricing truth. Sandbox fills are delayed
-artifacts. Records are tagged with signal_id, require preview-before-order,
-and persist same-day terminal state only (no overnight positions).
+artifacts. Records are tagged with signal_id and require preview-before-order.
+The paper JSON ledger is same-session (one PT date) so a file does not mix
+two paper days. That is not a live flatten: overnight long options remain
+allowed on the live card.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ class PaperLedger:
 
     def record(self, artifact: PaperFillArtifact, now: datetime) -> None:
         if session_date_pt(now) != self.session:
-            raise ValueError("paper ledger is same-day only; overnight persistence is forbidden")
+            raise ValueError("paper ledger is same-day only; open a new ledger next session")
         if not artifact.previewed:
             raise ValueError("preview-before-order is required")
         if not artifact.signal_id:
