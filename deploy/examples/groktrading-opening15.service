@@ -1,7 +1,8 @@
 # INACTIVE TEMPLATE. Dedicated research checkout; does not replace any Helsinki unit.
-# Operator must set the user, checkout, and existing credential environment file.
+# Operator must set the user, checkout, UW/Tradier env file, and a PATH that includes
+# Codex CLI (`codex`) already logged in as ChatGPT Pro for that same user.
 [Unit]
-Description=Opening15 Astra prospective paper experiment (no orders)
+Description=Opening15 Codex CLI prospective paper experiment (no orders)
 After=network-online.target
 Wants=network-online.target
 
