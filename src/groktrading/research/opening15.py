@@ -13,6 +13,16 @@ from zoneinfo import ZoneInfo
 import httpx
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from groktrading.research.codex_cli import (
+    CodexRun,
+    loads_structured,
+    run_codex,
+)
+from groktrading.research.codex_cli import exec_argv as codex_exec_argv
+from groktrading.research.codex_cli import inspect as inspect_codex
+from groktrading.research.codex_cli import parse_events as parse_codex_events
+from groktrading.research.codex_cli import subprocess_env as codex_env
+
 NY = ZoneInfo("America/New_York")
 PROMPT_VERSION = "opening15-discretion-v1"
 PROMPT = """You are conducting a prospective, paper-only options selection experiment.
@@ -81,6 +91,7 @@ class Config(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     symbols: list[str] = Field(min_length=10, max_length=10)
     context_symbols: list[str] = Field(default_factory=lambda: ["SPY", "QQQ", "XLK", "XLY"])
+    recommend_backend: Literal["codex_cli", "openai_responses"] = "codex_cli"
     model: str = "gpt-6-astra"
     reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     max_input_bytes: int = Field(default=2_000_000, ge=1000, le=4_000_000)
@@ -290,8 +301,15 @@ def strict_schema(value: Any) -> Any:
     return value
 
 
+def decision_schema() -> dict[str, Any]:
+    schema = strict_schema(Decision.model_json_schema())
+    if not isinstance(schema, dict):
+        raise TypeError("decision schema must be an object")
+    return schema
+
+
 def request_body(packet: Packet) -> dict[str, Any]:
-    body = {
+    body: dict[str, Any] = {
         "model": packet.config.model,
         "store": False,
         "reasoning": {"effort": packet.config.reasoning_effort},
@@ -303,23 +321,58 @@ def request_body(packet: Packet) -> dict[str, Any]:
                 "type": "json_schema",
                 "name": "opening15_selection",
                 "strict": True,
-                "schema": strict_schema(Decision.model_json_schema()),
+                "schema": decision_schema(),
             }
         },
     }
+    if packet.config.recommend_backend == "codex_cli":
+        body["recommend_backend"] = "codex_cli"
+        body["codex_exec"] = {
+            "command": "codex exec",
+            "prompt": "-",
+            "sandbox": "read-only",
+            "ephemeral": True,
+            "ignore_user_config": True,
+            "search": False,
+            "yolo": False,
+            "output_schema": "opening15_selection",
+        }
     if len(canonical(body).encode()) > packet.config.max_input_bytes:
         raise ValueError("input byte budget exceeded; no silent tape truncation")
     return body
 
 
-def recommend(
-    packet: Packet, directory: Path, key: str, client: httpx.Client | None = None
-) -> dict[str, Any]:
+def _require_fresh(packet: Packet) -> datetime:
     if packet.synthetic:
         raise ValueError("synthetic packets cannot call the paid model")
     started = now_utc()
     if not packet.knowledge_cutoff <= started <= packet.knowledge_cutoff + timedelta(minutes=3):
         raise ValueError("prospective recommendation is stale; replay is not forward evidence")
+    return started
+
+
+def recommend(
+    packet: Packet,
+    directory: Path,
+    key: str | None = None,
+    client: httpx.Client | None = None,
+    runner: CodexRun | None = None,
+) -> dict[str, Any]:
+    started = _require_fresh(packet)
+    if packet.config.recommend_backend == "codex_cli":
+        return _recommend_codex_cli(packet, directory, started, runner)
+    if not key:
+        raise ValueError("OPENAI_API_KEY missing for recommend_backend=openai_responses")
+    return _recommend_openai_responses(packet, directory, started, key, client)
+
+
+def _recommend_openai_responses(
+    packet: Packet,
+    directory: Path,
+    started: datetime,
+    key: str,
+    client: httpx.Client | None,
+) -> dict[str, Any]:
     body = request_body(packet)
     manifest = {
         "packet_hash": digest(packet.model_dump(mode="json")),
@@ -327,6 +380,7 @@ def recommend(
         "prompt_version": PROMPT_VERSION,
         "started_at": started.isoformat(),
         "requested_model": packet.config.model,
+        "recommend_backend": "openai_responses",
     }
     write_once(directory / "request.json", {**manifest, "body": body})
     owned = client is None
@@ -370,10 +424,118 @@ def recommend(
             client.close()
 
 
-def probe_model(
-    config: Config, directory: Path, key: str, client: httpx.Client | None = None
+def _codex_prompt(instructions: str, payload: str) -> str:
+    return (
+        f"{instructions}\n\n"
+        "Return only JSON matching the supplied schema. "
+        "No invented prices, contracts, evidence, tools, or later knowledge.\n\n"
+        f"FROZEN_PACKET_JSON:\n{payload}\n"
+    )
+
+
+def _recommend_codex_cli(
+    packet: Packet,
+    directory: Path,
+    started: datetime,
+    runner: CodexRun | None,
 ) -> dict[str, Any]:
-    """Explicit small paid capability probe; never a trade or performance observation."""
+    runner = runner or run_codex
+    cli = inspect_codex(runner)
+    body = request_body(packet)
+    work = directory / "codex-work"
+    work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    schema_path = directory / "opening15-schema.json"
+    message_path = directory / "codex-last-message.json"
+    argv = codex_exec_argv(
+        model=packet.config.model,
+        reasoning_effort=packet.config.reasoning_effort,
+        schema_path=schema_path,
+        message_path=message_path,
+        work_dir=work,
+    )
+    manifest = {
+        "packet_hash": digest(packet.model_dump(mode="json")),
+        "request_hash": digest(body),
+        "prompt_version": PROMPT_VERSION,
+        "started_at": started.isoformat(),
+        "requested_model": packet.config.model,
+        "recommend_backend": "codex_cli",
+        "codex_version": cli["version"],
+        "codex_auth": cli["auth"],
+        "codex_argv": argv,
+    }
+    write_once(directory / "request.json", {**manifest, "body": body})
+    write_once(schema_path, decision_schema())
+    prompt = _codex_prompt(PROMPT, canonical(packet.compact()))
+    completed = runner(
+        argv,
+        cwd=work,
+        input_text=prompt,
+        timeout=600,
+        env=codex_env(),
+    )
+    received = now_utc()
+    events, extracted = parse_codex_events(completed.stdout or "")
+    last_message = message_path.read_text() if message_path.exists() else ""
+    raw = {
+        "backend": "codex_cli",
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "events": events,
+        "last_message": last_message,
+        "store": False,
+    }
+    write_once(directory / "response.json", {"received_at": received.isoformat(), "body": raw})
+    if completed.returncode != 0:
+        raise ValueError("Codex CLI recommend failed; inspect response.json (no retry)")
+    if not last_message.strip():
+        raise ValueError("Codex CLI returned no structured last message")
+    try:
+        decision = Decision.model_validate(loads_structured(last_message))
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("model response incomplete/refused") from exc
+    decision.validate_evidence(packet)
+    result = {
+        **manifest,
+        "received_at": received.isoformat(),
+        "returned_model": extracted.get("returned_model") or packet.config.model,
+        "response_id": None,
+        "usage": extracted.get("usage") or {},
+        "synthetic": False,
+        "decision": decision.model_dump(mode="json"),
+    }
+    write_once(directory / "decision.json", result)
+    return result
+
+
+def probe_model(
+    config: Config,
+    directory: Path,
+    key: str | None = None,
+    client: httpx.Client | None = None,
+    runner: CodexRun | None = None,
+) -> dict[str, Any]:
+    """Explicit small paid/plan capability probe; never a trade or performance observation."""
+    if config.recommend_backend == "codex_cli":
+        return _probe_codex_cli(config, directory, runner)
+    if not key:
+        raise ValueError("OPENAI_API_KEY missing for recommend_backend=openai_responses")
+    return _probe_openai_responses(config, directory, key, client)
+
+
+def _probe_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {"status": {"type": "string", "enum": ["ok"]}},
+        "required": ["status"],
+        "additionalProperties": False,
+    }
+
+
+def _probe_openai_responses(
+    config: Config, directory: Path, key: str, client: httpx.Client | None
+) -> dict[str, Any]:
     body = {
         "model": config.model,
         "store": False,
@@ -385,12 +547,7 @@ def probe_model(
                 "type": "json_schema",
                 "name": "capability_check",
                 "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {"status": {"type": "string", "enum": ["ok"]}},
-                    "required": ["status"],
-                    "additionalProperties": False,
-                },
+                "schema": _probe_schema(),
             }
         },
     }
@@ -419,6 +576,7 @@ def probe_model(
         return {
             "requested_model": config.model,
             "returned_model": raw.get("model"),
+            "recommend_backend": "openai_responses",
             "structured_outputs": True,
             "usage": raw.get("usage"),
             "orders": False,
@@ -426,3 +584,77 @@ def probe_model(
     finally:
         if owned:
             client.close()
+
+
+def _probe_codex_cli(
+    config: Config, directory: Path, runner: CodexRun | None
+) -> dict[str, Any]:
+    runner = runner or run_codex
+    cli = inspect_codex(runner)
+    work = directory / "codex-work"
+    work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    schema_path = directory / "probe-schema.json"
+    message_path = directory / "probe-last-message.json"
+    argv = codex_exec_argv(
+        model=config.model,
+        reasoning_effort=config.reasoning_effort,
+        schema_path=schema_path,
+        message_path=message_path,
+        work_dir=work,
+    )
+    body = {
+        "model": config.model,
+        "store": False,
+        "reasoning": {"effort": config.reasoning_effort},
+        "max_output_tokens": 2000,
+        "input": "This is a Codex CLI capability check, not trading research. Return status ok.",
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "capability_check",
+                "strict": True,
+                "schema": _probe_schema(),
+            }
+        },
+        "recommend_backend": "codex_cli",
+        "codex_version": cli["version"],
+        "codex_argv": argv,
+    }
+    write_once(directory / "probe-request.json", body)
+    write_once(schema_path, _probe_schema())
+    completed = runner(
+        argv,
+        cwd=work,
+        input_text=str(body["input"]),
+        timeout=300,
+        env=codex_env(),
+    )
+    last_message = message_path.read_text() if message_path.exists() else ""
+    events, extracted = parse_codex_events(completed.stdout or "")
+    raw = {
+        "backend": "codex_cli",
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "events": events,
+        "last_message": last_message,
+    }
+    write_once(directory / "probe-response.json", raw)
+    if completed.returncode != 0:
+        raise ValueError("model probe incomplete/refused")
+    try:
+        parsed = loads_structured(last_message)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("model probe incomplete/refused") from exc
+    if parsed != {"status": "ok"}:
+        raise ValueError("model probe incomplete/refused")
+    return {
+        "requested_model": config.model,
+        "returned_model": extracted.get("returned_model") or config.model,
+        "recommend_backend": "codex_cli",
+        "codex_version": cli["version"],
+        "structured_outputs": True,
+        "usage": extracted.get("usage"),
+        "orders": False,
+    }
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -12,12 +13,19 @@ from pydantic import ValidationError
 from groktrading.research import opening15
 from groktrading.research.capture import FlowCapture, ReadFeed, session_open
 from groktrading.research.cli import demo
+from groktrading.research.codex_cli import (
+    exec_argv,
+    loads_structured,
+    parse_version,
+    subprocess_env,
+)
 from groktrading.research.evaluation import evaluate, usable_quote
 from groktrading.research.opening15 import (
     Config,
     Decision,
     Packet,
     canonical,
+    probe_model,
     recommend,
     request_body,
     stamp,
@@ -203,13 +211,22 @@ def test_packet_hash_and_duplicate_output(sample: Any) -> None:
         write_once(folder / "packet.json", {})
 
 
-def test_responses_api_boundary_and_no_retry(sample: Any, monkeypatch: Any) -> None:
-    packet, record, folder = sample
+def _prospective(packet: Packet, backend: str = "openai_responses") -> Packet:
     body = packet.model_dump(mode="json")
     body["synthetic"] = False
+    body["config"]["recommend_backend"] = backend
     for event in body["events"]:
         event["source"] = "tradier_production" if event["kind"] == "stock_quote" else "uw"
-    packet = Packet.model_validate(body)
+    return Packet.model_validate(body)
+
+
+def test_default_recommend_backend_is_codex_cli(config: Config) -> None:
+    assert config.recommend_backend == "codex_cli"
+
+
+def test_responses_api_boundary_and_no_retry(sample: Any, monkeypatch: Any) -> None:
+    packet, record, folder = sample
+    packet = _prospective(packet, "openai_responses")
     at = stamp(record["received_at"])
     monkeypatch.setattr(opening15, "now_utc", lambda: at)
     calls = []
@@ -249,11 +266,7 @@ def test_responses_api_boundary_and_no_retry(sample: Any, monkeypatch: Any) -> N
 
 def test_refusal_persisted_without_decision(sample: Any, monkeypatch: Any) -> None:
     packet, record, folder = sample
-    data = packet.model_dump(mode="json")
-    data["synthetic"] = False
-    for event in data["events"]:
-        event["source"] = "tradier_production" if event["kind"] == "stock_quote" else "uw"
-    packet = Packet.model_validate(data)
+    packet = _prospective(packet, "openai_responses")
     monkeypatch.setattr(opening15, "now_utc", lambda: stamp(record["received_at"]))
     with httpx.Client(
         transport=httpx.MockTransport(
@@ -356,7 +369,7 @@ def test_calendar_blocks_holiday_and_early_close() -> None:
 
 
 def test_paid_probe_is_explicit_and_has_no_market_data(tmp_path: Path, config: Config) -> None:
-    from groktrading.research.opening15 import probe_model
+    config = config.model_copy(update={"recommend_backend": "openai_responses"})
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -382,3 +395,148 @@ def test_paid_probe_is_explicit_and_has_no_market_data(tmp_path: Path, config: C
         result = probe_model(config, tmp_path, "test-only", client)
     assert result["structured_outputs"] and result["orders"] is False
     assert (tmp_path / "probe-response.json").exists()
+
+
+def _ok(stdout: str = "", code: int = 0) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=[], returncode=code, stdout=stdout, stderr="")
+
+
+def _codex_runner(
+    decision_text: str,
+    *,
+    version: str = "codex-cli 0.153.0",
+    login_code: int = 0,
+    exec_code: int = 0,
+    events: str | None = None,
+) -> Any:
+    calls: list[list[str]] = []
+
+    def runner(
+        argv: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+        timeout: float = 30,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(list(argv))
+        if argv[1:] == ["--version"]:
+            return _ok(version)
+        if argv[1:3] == ["login", "status"]:
+            return _ok("logged in", login_code)
+        assert argv[1] == "exec"
+        assert argv[-1] == "-"
+        assert "--sandbox" in argv and argv[argv.index("--sandbox") + 1] == "read-only"
+        assert "--ephemeral" in argv
+        assert "--ignore-user-config" in argv
+        assert "--yolo" not in argv and "--search" not in argv
+        assert "--output-schema" in argv and "--output-last-message" in argv
+        assert env is not None and "OPENAI_API_KEY" not in env
+        assert input_text and (
+            "FROZEN_PACKET_JSON" in input_text or "capability check" in input_text
+        )
+        message = Path(argv[argv.index("--output-last-message") + 1])
+        message.write_text(decision_text)
+        payload = events or canonical(
+            {
+                "type": "turn.completed",
+                "model": "gpt-6-astra",
+                "usage": {"input_tokens": 1, "output_tokens": 2},
+            }
+        )
+        return _ok(payload + "\n", exec_code)
+
+    runner.calls = calls  # type: ignore[attr-defined]
+    return runner
+
+
+def test_codex_cli_recommend_mocked_subprocess(sample: Any, monkeypatch: Any) -> None:
+    packet, record, folder = sample
+    packet = _prospective(packet, "codex_cli")
+    monkeypatch.setattr(opening15, "now_utc", lambda: stamp(record["received_at"]))
+    runner = _codex_runner(canonical(record["decision"]))
+    directory = folder / "codex-ok"
+    result = recommend(packet, directory, runner=runner)
+    assert result["recommend_backend"] == "codex_cli"
+    assert result["codex_version"] == "codex-cli 0.153.0"
+    assert result["returned_model"] == "gpt-6-astra"
+    assert result["usage"]["output_tokens"] == 2
+    request = json.loads((directory / "request.json").read_text())
+    assert request["codex_version"] == "codex-cli 0.153.0"
+    assert request["body"]["store"] is False
+    assert "Authorization" not in canonical(request)
+    assert "OPENAI_API_KEY" not in canonical(request)
+    assert (directory / "response.json").exists()
+    assert (directory / "decision.json").exists()
+    execs = [c for c in runner.calls if c[1] == "exec"]
+    assert len(execs) == 1
+    with pytest.raises(FileExistsError):
+        recommend(packet, directory, runner=runner)
+    assert len([c for c in runner.calls if c[1] == "exec"]) == 1
+
+
+def test_codex_cli_refusal_persisted_without_decision(sample: Any, monkeypatch: Any) -> None:
+    packet, record, folder = sample
+    packet = _prospective(packet, "codex_cli")
+    monkeypatch.setattr(opening15, "now_utc", lambda: stamp(record["received_at"]))
+    directory = folder / "codex-refusal"
+    runner = _codex_runner("not-json", exec_code=0)
+    with pytest.raises(ValueError, match="incomplete/refused"):
+        recommend(packet, directory, runner=runner)
+    assert (directory / "response.json").exists()
+    assert not (directory / "decision.json").exists()
+
+
+def test_codex_cli_requires_login_and_min_version(sample: Any, monkeypatch: Any) -> None:
+    packet, record, folder = sample
+    packet = _prospective(packet, "codex_cli")
+    monkeypatch.setattr(opening15, "now_utc", lambda: stamp(record["received_at"]))
+    old = _codex_runner(canonical(record["decision"]), version="codex-cli 0.140.0")
+    with pytest.raises(ValueError, match="0.153.0"):
+        recommend(packet, folder / "old-cli", runner=old)
+    logged_out = _codex_runner(canonical(record["decision"]), login_code=1)
+    with pytest.raises(ValueError, match="not logged in"):
+        recommend(packet, folder / "logged-out", runner=logged_out)
+
+
+def test_codex_cli_probe_mocked(tmp_path: Path, config: Config) -> None:
+    runner = _codex_runner(canonical({"status": "ok"}))
+    result = probe_model(config, tmp_path, runner=runner)
+    assert result["recommend_backend"] == "codex_cli"
+    assert result["structured_outputs"] is True
+    assert result["orders"] is False
+    assert result["codex_version"] == "codex-cli 0.153.0"
+    assert (tmp_path / "probe-response.json").exists()
+
+
+def test_codex_helpers_and_secret_env_filter() -> None:
+    assert parse_version("codex-cli 0.153.0") == (0, 153, 0)
+    assert loads_structured('```json\n{"status":"ok"}\n```') == {"status": "ok"}
+    argv = exec_argv(
+        model="gpt-6-astra",
+        reasoning_effort="high",
+        schema_path=Path("/tmp/schema.json"),
+        message_path=Path("/tmp/out.json"),
+        work_dir=Path("/tmp/work"),
+    )
+    assert argv[:2] == ["codex", "exec"]
+    names = ("OPENAI" + "_API_KEY", "TRADIER" + "_ACCESS_TOKEN", "UW" + "_API_TOKEN")
+    raw_env = {"PATH": "/usr/bin", "HOME": "/home/op", "CODEX_HOME": "/home/op/.codex"}
+    raw_env[names[0]] = "placeholder-openai"
+    raw_env[names[1]] = "placeholder-tradier"
+    raw_env[names[2]] = "placeholder-uw"
+    env = subprocess_env(raw_env)
+    assert env["CODEX_HOME"].endswith(".codex")
+    assert "OPENAI_API_KEY" not in env
+    assert "TRADIER_ACCESS_TOKEN" not in env
+
+
+def test_market_credentials_do_not_require_openai_key(monkeypatch: Any) -> None:
+    from groktrading.research.capture import market_credentials, openai_api_key
+
+    monkeypatch.setenv("UW_API_TOKEN", "uw-test")
+    monkeypatch.setenv("TRADIER_ACCESS_TOKEN", "tradier-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert market_credentials() == ("uw-test", "tradier-test")
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        openai_api_key()
