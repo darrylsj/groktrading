@@ -44,8 +44,9 @@ The installer default remains `/opt/groktrading` + `groktrading-*.service`. Runn
 
 ## Accounts (non-secret identifiers only)
 
-- Tradier live cash is on the order of **$600** (operator context; not a live feed).
-- Tradier sandbox paper account id **VA75691022** (identifier, not a token).
-- Milestones: **$1,000** then **$10,000** — goals only.
+- **Planning capital:** **$25,000** desk frame for selection / multi-lift sizing. Goal is **capital expansion** (YOLO), not preservation.
+- **Live funded balance:** may still be **smaller / cash-constrained** until the $25k is deposited. Do not treat planning capital as current broker equity. This file does **not** publish a live cash figure or invent P&L.
+- **Historical note:** the live funded book started small (early operator notes used on the order of hundreds of dollars; first milestone $1,000 then $10,000). Not the primary frame.
+- Tradier live and sandbox **account IDs** are **not** committed. Use `YOUR_PRODUCTION_ACCOUNT_ID` / `YOUR_SANDBOX_ACCOUNT_ID` / `ACCOUNT_ID_REDACTED` in public docs. Identifiers are not tokens; tokens never belong in git.
 
 Examples that **are** in git live under `deploy/examples/` and use placeholders only.

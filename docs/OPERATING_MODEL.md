@@ -2,7 +2,11 @@
 
 ## Purpose and non-promises
 
-This package supports a small discretionary options workflow with a live Tradier account on the order of **hundreds of dollars of cash** and a Tradier sandbox paper account. Stated milestones are **$1,000** then **$10,000**. Those are operator goals, not forecasts. This software **does not promise profitability** and **must not invent prices or P&L**.
+This package supports a discretionary **YOLO options** workflow. **Planning / selection / multi-lift sizing is framed as $25,000 desk capital.** The goal is **capital expansion**, not capital preservation. Live Tradier fills may still be **cash-constrained on a smaller funded balance** until the $25k is deposited — do not confuse planning capital with current broker equity.
+
+Historical note only: the live funded book started small (early operator notes used hundreds of dollars; milestones $1,000 then $10,000). That is not the primary planning frame.
+
+There is also a Tradier sandbox paper account. Operator goals are not forecasts. This software **does not promise profitability** and **must not invent prices or P&L**. Encoded gate math remains **one-lot** (`quantity == 1`) unless the operator changes policy in code.
 
 ## Modes
 

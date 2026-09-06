@@ -34,6 +34,7 @@ These are also comments in `scripts/install_helsinki.sh`. Do not weaken them.
 | ≥20% cash / max deploy 80% | Overnight long options are allowed. **12:30 PT** is a **new-entry cutoff only**, not a forced flatten. |
 | Sandbox ≠ live fill evidence | Tradier production NBBO is pricing truth. |
 | Default remains `signals_only` | The installer never sets `GROKTRADING_LIVE_EXPLICITLY_ENABLED`. `--start` still does not place orders. |
+| Planning capital is $25k | YOLO expansion frame. Live fills may still be cash-constrained on a smaller funded balance. Do not treat planning capital as current broker equity. |
 
 ## What the installer does and does not do
 

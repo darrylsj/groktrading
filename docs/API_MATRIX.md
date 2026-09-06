@@ -1,6 +1,6 @@
 # API matrix
 
-Plan entitlements vary. Absence of data is a fail-closed event, not a reason to guess.
+Plan entitlements vary. Absence of data is a fail-closed event, not a reason to guess. WebSocket safety and Helsinki vs package `feeds/`: [WEBSOCKETS.md](WEBSOCKETS.md).
 
 ## Finnhub
 

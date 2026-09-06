@@ -1,8 +1,26 @@
 # GrokTrading
 
-Secret-free **reference and deployment package** for a Helsinki-hosted, Grok-assisted options desk. Default mode is **signals-only**. Paper is explicit. **Live orders are never placed by default.** This git repository is **not deployed** by being merged; see [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md) for host observations kept separate from [deploy/examples](deploy/examples).
+**Public reference package** intended for **external audit** (including OpenAI review under `darrylsj`). This is **not financial advice**. Secret-free **reference and deployment package** for a Helsinki-hosted, Grok-assisted options desk. Default mode is **signals-only**. Paper is explicit. **Live orders are never placed by default.** Live trading is **operator-gated**.
 
-This software does **not** promise trading success. It must **not** invent prices or P&L. Operator context: Tradier live cash on the order of **$600**; first milestone **$1,000**, second **$10,000**.
+This git repository is **not deployed** by being merged; see [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md) for host observations kept separate from [deploy/examples](deploy/examples).
+
+This software does **not** promise trading success. It must **not** invent prices or P&L.
+
+**Auditor pack:** [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md) · **Safety:** [docs/SAFETY.md](docs/SAFETY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## Operator mandate (YOLO — capital expansion)
+
+This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capital preservation. Do **not** frame the desk as a “don’t lose” or preservation book.
+
+| Frame | Meaning |
+| --- | --- |
+| **Planning / selection / multi-lift sizing** | **$25,000** desk capital |
+| **Live Tradier fills** | May still be **cash-constrained** on a **smaller funded balance** until the $25k is deposited |
+| **Do not confuse** | Planning capital ≠ current broker equity. Auditors must not assume the live book already holds $25k. |
+
+**Milestone spirit:** grow aggressively within the live-card risk rails (cash/equity ≥20% / max deploy 80%, overnight OK, 12:30 PT = new-entry cutoff only). Encoded gate math stays **one-lot** (`qty == 1`); $25k is the planning frame, not a claim that the funded account is already $25k.
+
+**Historical note (not the primary frame):** the live funded book started small (early operator notes used on the order of hundreds of dollars; first milestone $1,000, then $10,000). Planning capital is **$25k**.
 
 ## Live card (authoritative)
 
@@ -45,7 +63,7 @@ GitHub `main` was `e297a0af…` at map time. Package hardening ships here first.
 - **12:30 PT** new-entry cutoff only (America/Los_Angeles). Not a flatten.
 - **Sandbox ≠ live fill evidence.** Production NBBO is pricing truth.
 
-Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). WebSocket / webhook sequence (print → filter → webhook → Grok → gate → preview→submit): [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md).
 
 ```mermaid
 flowchart LR
@@ -212,6 +230,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
 | `src/groktrading/idempotency.py` | Durable inbox/outbox (SQLite WAL) |
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
+| `docs/WEBSOCKETS.md` | Auditor WS/webhook map (Finnhub ≠ option NBBO; WS never orders) |
+| `docs/OPENAI_AUDIT_BRIEF.md` | What to review / what not to change / $25k YOLO ask |
 | `src/groktrading/llm.py` | Decision protocol (approve/skip only) |
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
@@ -245,4 +265,4 @@ This package is **not** a LEAN/C#/Nautilus/Lumibot/Optopsy migration.
 
 ## License
 
-MIT. Still: no warranty, no performance claims, no live trading by default.
+MIT — appropriate for a **public** GitHub reference package. Still: no warranty, no performance claims, no financial advice, no live trading by default.

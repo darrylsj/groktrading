@@ -1,5 +1,9 @@
 # Safety
 
+Public-audit context: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md).
+
+This is Darryl’s **YOLO** desk. Goal is **capital expansion** on a **$25,000 planning** frame, not capital preservation. Live fills may still be cash-constrained on a smaller funded balance until the $25k is deposited — planning capital ≠ current broker equity. Do **not** restore flatten-everything, no-overnight, daily-loser breakers, hard concurrent caps, or a ≥50% cash floor as “safer defaults.”
+
 ## Live card (authoritative)
 
 Rewrite any older ≥50% / flatten-at-12:30 / no-overnight text to this card.
@@ -23,7 +27,7 @@ Rewrite any older ≥50% / flatten-at-12:30 / no-overnight text to this card.
 
 ## Forbidden
 
-- Credentials in git, unit files, tape JSON, or README examples beyond `YOUR_*` placeholders
+- Credentials in git, unit files, tape JSON, or README examples beyond `YOUR_*` / `changeme` / `ACCOUNT_ID_REDACTED` placeholders. No live Tradier account numbers, `/home/box` audit-pack secrets, or host tokens.
 - First-class live orders from Finnhub/UW/Tradier WS ticks
 - Cash/equity below **20%** after a contemplated entry (max deploy 80%)
 - Multi-lot options in this policy
