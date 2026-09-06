@@ -1,6 +1,7 @@
 {
   "symbols": ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD", "AVGO", "PLTR"],
   "context_symbols": ["SPY", "QQQ", "XLK", "XLY"],
+  "recommend_backend": "codex_cli",
   "model": "gpt-6-astra",
   "reasoning_effort": "high",
   "max_input_bytes": 4000000,

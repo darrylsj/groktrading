@@ -56,20 +56,34 @@ class ReadFeed:
         self.client.close()
 
 
-def credentials() -> tuple[str, str, str]:
-    names = {
-        "UW_API_TOKEN/UW_API_KEY": os.getenv("UW_API_TOKEN") or os.getenv("UW_API_KEY"),
-        "TRADIER_ACCESS_TOKEN": os.getenv("TRADIER_ACCESS_TOKEN"),
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-    }
+def _required_env(names: dict[str, str | None]) -> tuple[str, ...]:
     missing = [name for name, value in names.items() if not value or value.startswith("YOUR_")]
     if missing:
         raise ValueError("missing environment variables: " + ", ".join(missing))
-    return tuple(str(v) for v in names.values())  # type: ignore[return-value]
+    return tuple(str(value) for value in names.values())
+
+
+def market_credentials() -> tuple[str, str]:
+    values = _required_env(
+        {
+            "UW_API_TOKEN/UW_API_KEY": os.getenv("UW_API_TOKEN") or os.getenv("UW_API_KEY"),
+            "TRADIER_ACCESS_TOKEN": os.getenv("TRADIER_ACCESS_TOKEN"),
+        }
+    )
+    return values[0], values[1]
+
+
+def openai_api_key() -> str:
+    return _required_env({"OPENAI_API_KEY": os.getenv("OPENAI_API_KEY")})[0]
+
+
+def credentials() -> tuple[str, str, str]:
+    uw, tradier = market_credentials()
+    return uw, tradier, openai_api_key()
 
 
 def feeds(config: Config) -> tuple[ReadFeed, ReadFeed]:
-    uw, tradier, _ = credentials()
+    uw, tradier = market_credentials()
     if os.getenv("TRADIER_ENV", "production") != "production":
         raise ValueError("production market data required (read-only)")
     return (

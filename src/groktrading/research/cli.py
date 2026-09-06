@@ -13,11 +13,12 @@ import httpx
 
 from groktrading.research.capture import (
     collect,
-    credentials,
     feeds,
+    openai_api_key,
     quotes,
     session_open,
 )
+from groktrading.research.codex_cli import inspect as inspect_codex
 from groktrading.research.evaluation import evaluate, monitor
 from groktrading.research.opening15 import (
     Config,
@@ -168,10 +169,10 @@ def main() -> None:
             print("Synthetic offline demo passed; no model/API/order calls.")
             return
         if args.command == "model-probe":
-            key = os.environ.get("OPENAI_API_KEY")
-            if not key:
-                raise ValueError("OPENAI_API_KEY missing")
-            print(json.dumps(probe_model(config, args.output, key), indent=2))
+            if config.recommend_backend == "codex_cli":
+                print(json.dumps(probe_model(config, args.output), indent=2))
+            else:
+                print(json.dumps(probe_model(config, args.output, openai_api_key()), indent=2))
             return
         if args.command == "report":
             packet = Packet.model_validate(load(args.output / "packet.json"))
@@ -184,10 +185,10 @@ def main() -> None:
             return
         if args.command == "recommend":
             packet = Packet.model_validate(load(args.output / "packet.json"))
-            key = os.environ.get("OPENAI_API_KEY")
-            if not key:
-                raise ValueError("OPENAI_API_KEY missing")
-            recommend(packet, args.output, key)
+            if packet.config.recommend_backend == "codex_cli":
+                recommend(packet, args.output)
+            else:
+                recommend(packet, args.output, openai_api_key())
             print("Recommendation recorded; no orders.")
             return
         uw, tradier = feeds(config)
@@ -199,27 +200,47 @@ def main() -> None:
                     "/api/option-trades", {"ticker_symbol": config.symbols[0], "limit": 1}
                 )
                 news = uw.get("/api/news/headlines", {"ticker": config.symbols[0], "limit": 1})
-                _, _, key = credentials()
-                with httpx.Client(timeout=20, follow_redirects=False) as client:
-                    response = client.get(
-                        "https://api.openai.com/v1/models/" + config.model,
-                        headers={"Authorization": f"Bearer {key}"},
-                    )
-                if response.status_code != 200 or not calendar:
+                if config.recommend_backend == "codex_cli":
+                    cli = inspect_codex()
+                    model_ok = True
+                    model_check = {
+                        "recommend_backend": "codex_cli",
+                        "codex_version": cli["version"],
+                        "codex_logged_in": True,
+                        "codex_auth": cli["auth"],
+                    }
+                    limitations = [
+                        "Does not prove real-time UW/option quote entitlement",
+                        "Does not test a paid Codex CLI recommend or ChatGPT plan headroom",
+                    ]
+                else:
+                    key = openai_api_key()
+                    with httpx.Client(timeout=20, follow_redirects=False) as client:
+                        response = client.get(
+                            "https://api.openai.com/v1/models/" + config.model,
+                            headers={"Authorization": f"Bearer {key}"},
+                        )
+                    model_ok = response.status_code == 200
+                    model_check = {
+                        "recommend_backend": "openai_responses",
+                        "model_catalog_access": model_ok,
+                    }
+                    limitations = [
+                        "Does not prove real-time UW/option quote entitlement",
+                        "Does not test a paid Responses request or rate headroom",
+                    ]
+                if not calendar or not model_ok:
                     raise ValueError("model access or regular trading session not verified")
                 result = {
                     "checked_at": now_utc().isoformat(),
                     "session": str(args.session),
                     "regular_session": calendar,
                     "model": config.model,
-                    "model_catalog_access": True,
+                    **model_check,
                     "stock_rows": len(stock_rows),
                     "uw_rows": len(flow.get("data", [])),
                     "news_rows": len(news.get("data", [])),
-                    "limitations": [
-                        "Does not prove real-time UW/option quote entitlement",
-                        "Does not test a paid Responses request or rate headroom",
-                    ],
+                    "limitations": limitations,
                 }
                 write_once(args.output / "preflight.json", result)
                 print(json.dumps(result, indent=2))
@@ -232,8 +253,10 @@ def main() -> None:
             packet = collect(config, args.session, args.output, uw, tradier)
             print("Opening packet frozen; no orders.", flush=True)
             if args.command == "run":
-                _, _, key = credentials()
-                record = recommend(packet, args.output, key)
+                if packet.config.recommend_backend == "codex_cli":
+                    record = recommend(packet, args.output)
+                else:
+                    record = recommend(packet, args.output, openai_api_key())
                 print("Model decision frozen; starting quote-only paper monitoring.", flush=True)
                 monitor(packet, record, args.output, tradier)
         finally:

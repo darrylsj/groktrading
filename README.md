@@ -8,13 +8,15 @@ This software does **not** promise trading success. It must **not** invent price
 
 **Auditor pack:** [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md) · **Safety:** [docs/SAFETY.md](docs/SAFETY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## Opening15 Astra experiment (paper research)
+## Opening15 experiment (paper research, Codex CLI)
 
 A separate, discretionary **first-15-minute / ten-stock** experiment is available for Tuesday,
-September 8, 2026. Astra assesses the full captured tape, ranks up to three contracts, may
-choose zero entries, and is evaluated using post-response production quotes. It has **no
-broker order path** and does not change the live desk. Setup, model probe, coverage limits,
-preopen launch and paper evaluation: **[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
+September 8, 2026. The recommend step runs through **OpenAI Codex CLI** using the operator's
+**ChatGPT Pro** login (not `OPENAI_API_KEY` / Responses API). Codex may select **GPT-6 Astra**
+as the underlying model when that model is requested; naming in the runbook keeps that
+distinction. Capture/monitor/report stay quote-only. There is **no broker order path** and
+the live desk is unchanged. Setup, Codex login, model probe, and Tuesday launch:
+**[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
 
 ## Operator mandate (YOLO — capital expansion)
 
