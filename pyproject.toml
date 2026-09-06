@@ -36,6 +36,7 @@ ws = [
 ]
 
 [project.scripts]
+groktrading-opening15 = "groktrading.research.cli:main"
 groktrading-finnhub-probe = "groktrading.cli:finnhub_probe_main"
 groktrading-finnhub-tape = "groktrading.cli:finnhub_tape_main"
 groktrading-tape = "groktrading.cli:tape_skeleton_main"
