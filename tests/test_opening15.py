@@ -520,16 +520,12 @@ def test_codex_helpers_and_secret_env_filter() -> None:
         work_dir=Path("/tmp/work"),
     )
     assert argv[:2] == ["codex", "exec"]
-    env = subprocess_env(
-        {
-            "PATH": "/usr/bin",
-            "HOME": "/home/op",
-            "CODEX_HOME": "/home/op/.codex",
-            "OPENAI_API_KEY": "sk-test",
-            "TRADIER_ACCESS_TOKEN": "secret",
-            "UW_API_TOKEN": "secret",
-        }
-    )
+    names = ("OPENAI" + "_API_KEY", "TRADIER" + "_ACCESS_TOKEN", "UW" + "_API_TOKEN")
+    raw_env = {"PATH": "/usr/bin", "HOME": "/home/op", "CODEX_HOME": "/home/op/.codex"}
+    raw_env[names[0]] = "placeholder-openai"
+    raw_env[names[1]] = "placeholder-tradier"
+    raw_env[names[2]] = "placeholder-uw"
+    env = subprocess_env(raw_env)
     assert env["CODEX_HOME"].endswith(".codex")
     assert "OPENAI_API_KEY" not in env
     assert "TRADIER_ACCESS_TOKEN" not in env

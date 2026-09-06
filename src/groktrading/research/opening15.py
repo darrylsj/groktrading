@@ -302,7 +302,10 @@ def strict_schema(value: Any) -> Any:
 
 
 def decision_schema() -> dict[str, Any]:
-    return strict_schema(Decision.model_json_schema())
+    schema = strict_schema(Decision.model_json_schema())
+    if not isinstance(schema, dict):
+        raise TypeError("decision schema must be an object")
+    return schema
 
 
 def request_body(packet: Packet) -> dict[str, Any]:
