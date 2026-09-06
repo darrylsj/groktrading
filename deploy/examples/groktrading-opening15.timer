@@ -1,0 +1,12 @@
+# INACTIVE TEMPLATE. One explicit date, no catch-up after a missed open.
+[Unit]
+Description=Opening15 paper experiment Tuesday 2026-09-08
+
+[Timer]
+OnCalendar=2026-09-08 09:25:00 America/New_York
+AccuracySec=1s
+Persistent=false
+Unit=groktrading-opening15.service
+
+[Install]
+WantedBy=timers.target

@@ -35,3 +35,6 @@ live_tape.json
 paper_state.json
 .coverage
 htmlcov/
+
+# Private research evidence and provider-licensed data
+research-runs/
