@@ -1,0 +1,18 @@
+{
+  "symbols": ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD", "AVGO", "PLTR"],
+  "context_symbols": ["SPY", "QQQ", "XLK", "XLY"],
+  "recommend_backend": "codex_cli",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "max_input_bytes": 4000000,
+  "max_output_tokens": 16000,
+  "poll_seconds": 30,
+  "max_quote_age_seconds": 30,
+  "commission_per_contract_side": 0.65,
+  "slippage_per_share": 0.01,
+  "uw_requests_per_minute": 90,
+  "tradier_requests_per_minute": 90,
+  "max_flow_requests": 1500,
+  "api_input_usd_per_million": 0,
+  "api_output_usd_per_million": 0
+}
