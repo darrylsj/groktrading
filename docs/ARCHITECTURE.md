@@ -1,8 +1,10 @@
 # Architecture
 
-Visual: [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) and [groktrading-architecture.png](groktrading-architecture.png).
+Visual: [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) and [groktrading-architecture.png](groktrading-architecture.png). WebSockets, Helsinki tape vs package `feeds/`, webhook events, and the print→submit sequence: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md).
 
-This repository is a **reference and deployment package**. It is not itself a live trading deployment. Default mode is `signals_only`. Paper is explicit. Live order placement is never the default and cannot be driven by WebSocket callbacks.
+This repository is a **public reference and deployment package** intended for external audit. It is not itself a live trading deployment. Default mode is `signals_only`. Paper is explicit. Live order placement is never the default and cannot be driven by WebSocket callbacks. Live trading is operator-gated.
+
+**Capital frame:** planning / selection / multi-lift sizing is **$25,000** (YOLO expansion, not preservation). Live Tradier fills may still be cash-constrained on a smaller funded balance until that deposit lands. Do not treat planning capital as current broker equity. Encoded gate math remains one-lot (`qty == 1`).
 
 ## Runtime loop vs reviewer
 
@@ -83,6 +85,6 @@ The **LLM thesis / approve-skip** path consumes **assembled facts only**. It ret
 
 - WebSocket events never directly trigger live orders.
 - Quantity on options is exactly **1** contract.
-- Cash/equity **≥20%** at all times (max deploy 80%). **Overnight long options are allowed.** **12:30 America/Los_Angeles** is a **new-entry cutoff only**, not a forced flatten. OpenAI flatten-everything / no-overnight is rejected.
-- Matching ask; skip already-run; no first-red; sit-2.
-- Timeouts and stale quotes fail closed.
+- Cash/equity **≥20%** at all times (max deploy 80%). **Overnight long options are allowed.** **12:30 America/Los_Angeles** is a **new-entry cutoff only**, not a forced flatten. OpenAI flatten-everything / no-overnight is rejected. Grok/LLM is **outside** the broker execution boundary.
+- Matching ask; skip already-run; no first-red; sit-2. No hard concurrent-position caps. No daily-loser circuit breaker.
+- Timeouts and stale quotes fail closed. Webhook events: `sit_match`, `in_position`, `cash_up` (`entry_cutoff_only_no_flatten`), `day_win_target` (`auto_flatten: false`). Details: [WEBSOCKETS.md](WEBSOCKETS.md).

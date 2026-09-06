@@ -1,6 +1,6 @@
 # Passive reviewer
 
-The reviewer is **outside the active runtime loop**.
+The reviewer is **outside the active runtime loop**. External OpenAI / public-audit reviewers should start at [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md) and [WEBSOCKETS.md](WEBSOCKETS.md). Do not invent prices or P&L. Do not reframe the desk as a preservation book.
 
 ## In the loop (Helsinki)
 

@@ -9,6 +9,17 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Public OpenAI audit pack: `docs/OPENAI_AUDIT_BRIEF.md` (what to review / what not to change / $25k YOLO expansion ask) and `docs/WEBSOCKETS.md` (Finnhub stock-trade WS vs option NBBO, Helsinki `trading-desk-tape` vs package `feeds/`, WS-never-orders, webhook events, reconnect/TTL/HMAC/AH-weekend coalesce, print→filter→webhook→Grok→gate→preview→submit sequence).
+- README / operating-model / safety / architecture lead: **public reference package** for external audit; not financial advice; live is operator-gated; **$25,000 planning capital** + YOLO **capital expansion** mandate; live fills may still be cash-constrained on a smaller funded balance.
+
+### Changed
+
+- Softened outdated “~$600 / first milestone $1000 / $10,000” as the **primary** capital frame. Those remain a historical note only. Planning / selection / multi-lift is **$25k**.
+- Redacted previously committed sandbox account identifier from public docs (`ACCOUNT_ID_REDACTED` / `YOUR_*` placeholders). Live production account IDs are not published.
+- Extended `scripts/scan_secrets.py` (known live-account-id block, common token shapes, working-tree walk excluding `.git`) so CI still fails closed on credentials.
+
+### Previously added (still unreleased)
+
 - Scoped live-desk hardening (package-first; no Helsinki deploy): P0.1 Tradier production quote gate (OCC, delayed, provider bid/ask dates, spread, no-chase); P0.2 broker-authoritative final gate (session facts + fresh account/positions/orders/clock; qty=1; cash/equity ≥20%); P0.3 stub-safe preview→submit order FSM with immutable payload and no blind retry; durable SQLite WAL inbox/outbox idempotency with AH/weekend digest coalesce; cutoff-cancel alert path.
 - Live card encoded in `policy.py`: overnight long options allowed; 12:30 PT new-entry cutoff only; max deploy 80%. OpenAI P0.4 flatten-everything / no-overnight is rejected.
 

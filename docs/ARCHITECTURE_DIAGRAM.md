@@ -4,7 +4,7 @@ Runtime split for GrokTrading: outside APIs, Helsinki (always-on, non-LLM), the 
 
 ![GrokTrading architecture](groktrading-architecture.png)
 
-Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). API surfaces: [API_MATRIX.md](API_MATRIX.md). Reviewer: [REVIEWER.md](REVIEWER.md).
+Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). API surfaces: [API_MATRIX.md](API_MATRIX.md). Reviewer: [REVIEWER.md](REVIEWER.md).
 
 ## Legend
 
@@ -17,7 +17,7 @@ Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). API surfaces: [API_MATRIX.md](
 | Grok Bot computer | **LLM** thesis / approve-skip on **frozen facts only** (must not call Tradier). **Gate / executor** uses Tradier production for fresh OCC quotes and live orders |
 | Passive Trade Reviewer | Reads the audit pack after the fact; **no** control or order permissions |
 
-**Hard rules:** Finnhub is not option NBBO. WebSocket never places orders. Matching ask uses a Tradier **production** quote. Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed. **12:30 PT** new-entry cutoff only (not a flatten). Sandbox is **not** live fill evidence.
+**Hard rules:** Finnhub is not option NBBO. WebSocket never places orders; the final gate rechecks a fresh Tradier **production** quote. Matching ask uses production NBBO. Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed. **12:30 PT** new-entry cutoff only (not a flatten). Grok is outside the broker boundary. Sandbox is **not** live fill evidence. Planning capital is **$25k** (YOLO expansion); do not confuse that with current broker equity.
 
 ## Mermaid (GitHub-native)
 

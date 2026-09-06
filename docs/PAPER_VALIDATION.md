@@ -20,4 +20,4 @@ Paper is for **path validation**, not performance claims.
 
 ## Operator sandbox account
 
-The operator’s known sandbox account identifier may be recorded in host config, not in this repository. See `OBSERVED_DEPLOYMENT.md` for non-secret operational notes.
+Sandbox and live account identifiers stay in host config, not in this public tree. Public docs use `YOUR_SANDBOX_ACCOUNT_ID` / `ACCOUNT_ID_REDACTED` only. See `OBSERVED_DEPLOYMENT.md`.
