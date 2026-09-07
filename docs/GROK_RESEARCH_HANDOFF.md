@@ -1,6 +1,6 @@
 # Grok implementation handoff: opening-window discretion and daily feedback
 
-Status: expanded Context collectors are wired to documented UW + Tradier production APIs, with an entitlement-gated Finnhub world-news path. Portfolio is **Tradier read-only** until Schwab OAuth lands. Depth is explicitly missing. No live orders or Helsinki restart. Tuesday 2026-09-08 is an operational paper pilot only if host preflight passes; it is not a promised profitability demonstration.
+Status: expanded Context collectors are wired to documented UW + Tradier production APIs, with an entitlement-gated Finnhub world-news path. Portfolio is **Tradier read-only** until Schwab OAuth lands. Depth is explicitly missing. No live orders or Helsinki restart. Tuesday 2026-09-08 is a clean-baseline paper pilot (`research.cli run`) only if host preflight passes. Post-Tue paper days (session 2+ / Wed 2026-09-09 onward) **default to expanded select**. Neither day is a promised profitability demonstration.
 
 See [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md) for the exact current APIs, command sequences, and host launch checks.
 
@@ -37,19 +37,26 @@ Existing capture, quote monitoring and deterministic paper evaluation remain in 
 
 Collectors redact credential-shaped keys. The payload key filter is defense in depth, not a universal secret detector.
 
-## Daily lifecycle and Tuesday commands
+## Daily lifecycle: Tuesday baseline vs post-Tue expanded default
+
+`day-plan` note: Tue 2026-09-08 = clean baseline; post-Tue default = expanded select
+(fall back to baseline or explicit `--allow-degraded` only if required coverage is
+incomplete).
 
 ```bash
 python -m groktrading.research.cycle_cli day-plan --session 2026-09-08 --out /private/research/2026-09-08/day-plan.json
 ```
 
-Baseline (use when expanded coverage is incomplete):
+Baseline — **Tuesday default**, and the post-Tue fallback when required coverage is incomplete:
 
 ```bash
 python -m groktrading.research.cli run --session 2026-09-08 --output /private/research/2026-09-08
 ```
 
-Expanded (only if coverage is available, else add `--allow-degraded` and label gaps):
+Expanded — **default after Tuesday** (session 2+ / Wed 2026-09-09 onward) so the LLM
+gets UW economic calendar, dark pool (per 10 names), option screener, market tide,
+and political slices via `context.json` + `cycle_cli select`. If required coverage is
+incomplete, fall back to baseline or add `--allow-degraded` and label gaps:
 
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-08 --out /private/research/2026-09-08/memory.json
@@ -69,7 +76,7 @@ Schema errors, missing required categories and time guards fail closed. Commands
 
 `cycle_cli memory --records` accepts both `daily-resolution.json` and `failure-record.json`. Failed sessions appear in the next-day memory brief.
 
-Tuesday 2026-09-08 remains the clean baseline (`research.cli run`), not this expanded sequence. See [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
+Tuesday 2026-09-08 remains the clean baseline (`research.cli run`), not this expanded sequence. From Wednesday 2026-09-09 the expanded sequence above is the default. See [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
 
 ## Remaining production work
 

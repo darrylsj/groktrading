@@ -42,21 +42,40 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
+_TUESDAY_PILOT = date(2026, 9, 8)
+
+
+def _day_plan_note(session: date) -> str:
+    """Tue = baseline; post-Tue paper days default to expanded select."""
+    policy = (
+        "Tue 2026-09-08 = clean baseline (research.cli run only). "
+        "Do not launch with --allow-degraded on Tuesday and do not claim expanded "
+        "readiness. Post-Tue paper days (session 2+ / Wed 2026-09-09 onward) default "
+        "to expanded select (context.json + cycle_cli select) so the LLM gets UW "
+        "economic calendar, dark pool (per 10 names), option screener, market tide, "
+        "and political slices. Fall back to baseline or explicit --allow-degraded "
+        "only if required coverage is incomplete. Do not present a degraded run as "
+        "the full-context experiment. Passing unit tests is not live entitlement. "
+        "No systemd/timers, no Helsinki restart, no live orders."
+    )
+    if session <= _TUESDAY_PILOT:
+        return (
+            "Tuesday 2026-09-08 is an operational paper pilot on the clean baseline "
+            "(research.cli run). Do not launch with --allow-degraded. " + policy
+        )
+    return (
+        f"{session.isoformat()} is a post-Tue paper day: default is expanded select. "
+        + policy
+    )
+
+
 def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> dict[str, Any]:
     """Exact baseline vs expanded command sequence. Does not enable timers."""
     root = output.as_posix()
     degraded = " --allow-degraded" if allow_degraded else ""
     return {
         "session": session.isoformat(),
-        "note": (
-            "Tuesday 2026-09-08 is an operational paper pilot on the clean baseline "
-            "(research.cli run). Do not launch with --allow-degraded. Expanded select "
-            "requires context coverage available (except optional depth / UW dark pool / "
-            "screener / tide / political) or an explicit "
-            "--allow-degraded label on a later paper day. Do not present a degraded run "
-            "as the full-context experiment. Passing unit tests is not live entitlement. "
-            "No systemd/timers, no Helsinki restart, no live orders."
-        ),
+        "note": _day_plan_note(session),
         "baseline": [
             (
                 "python -m groktrading.research.cli preflight "

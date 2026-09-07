@@ -121,5 +121,7 @@ That command is **not** `--allow-degraded` and is **not** a claim of full expand
 readiness. Passing unit tests is not live entitlement proof. Schwab is still unconnected.
 The dedicated earnings calendar is still print-fields only. UW economic calendar,
 dark pool, screener, and market tide are expanded Opening15 LLM context only
-(Finnhub `/calendar/economic` still 403 on this plan). See
+(Finnhub `/calendar/economic` still 403 on this plan). **Post-Tue paper days**
+(session 2+ / Wed 2026-09-09 onward) **default to expanded select**; fall back to
+baseline or explicit `--allow-degraded` only if required coverage is incomplete. See
 [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md).
