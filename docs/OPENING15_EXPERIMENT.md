@@ -127,6 +127,13 @@ No credentials were accessible in the build environment. Only mocked API and syn
 end-to-end tests have been run there. These host checks remain necessary before calling the
 experiment ready for unattended use.
 
+### Day-1 vs day-2+ default
+
+| Session | Default | Fallback |
+| --- | --- | --- |
+| **Tue 2026-09-08** (session 1) | Clean baseline `research.cli run` (packet recommend) | Do **not** use `--allow-degraded`. Do **not** claim expanded readiness. |
+| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) so the LLM gets UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices | Baseline `research.cli run`, or explicit `--allow-degraded`, only if required coverage is incomplete |
+
 ### Tuesday launch
 
 Tuesday 2026-09-08 is an **operational paper pilot on the clean baseline**. It is **not**
@@ -155,6 +162,27 @@ those observations; missing exits produce null, not a fabricated zero or a win.
 ```bash
 python -m groktrading.research.cli report --output research-runs/2026-09-08
 ```
+
+### Post-Tuesday default (session 2+ / Wed 2026-09-09 onward)
+
+After Tuesday, **default to expanded select**. `research.cli capture` still writes the
+baseline packet (and may write preopen `context.json`); selection then goes through
+`cycle_cli select` so the model sees UW economic calendar, dark pool (per 10 names),
+option screener, market tide, and political slices. Inspect `context.json` coverage
+first. Fall back to baseline `research.cli run` or add `--allow-degraded` only if a
+**required** category is not `available`.
+
+```bash
+python -m groktrading.research.cycle_cli memory --session 2026-09-09 --out research-runs/2026-09-09/memory.json
+python -m groktrading.research.cli capture --session 2026-09-09 --output research-runs/2026-09-09
+python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-09/packet.json --context research-runs/2026-09-09/context.json --memory research-runs/2026-09-09/memory.json --out research-runs/2026-09-09/selection
+python -m groktrading.research.cli monitor --session 2026-09-09 --output research-runs/2026-09-09/selection
+python -m groktrading.research.cli report --session 2026-09-09 --output research-runs/2026-09-09/selection
+```
+
+Exact sequences (baseline vs expanded) also come from
+`python -m groktrading.research.cycle_cli day-plan --session 2026-09-09 --out research-runs/2026-09-09/day-plan.json`.
+See [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md).
 
 ## Evidence and coverage
 

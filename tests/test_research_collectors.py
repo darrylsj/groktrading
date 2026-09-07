@@ -944,6 +944,8 @@ def test_day_plan_creates_outcome_context_step(tmp_path: Path) -> None:
     assert "--allow-degraded" not in " ".join(plan["baseline"])
     assert "research.cli run" in plan["baseline"][-1]
     assert "clean baseline" in plan["note"]
+    assert "Post-Tue paper days" in plan["note"]
+    assert "default to expanded select" in plan["note"]
 
 
 def test_day_plan_and_fail_cli(tmp_path: Path, monkeypatch: Any) -> None:

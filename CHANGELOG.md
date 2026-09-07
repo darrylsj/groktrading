@@ -25,6 +25,7 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Changed
 
+- Opening15 day-plan / runbook default: **Tue 2026-09-08** stays clean baseline `research.cli run` (no `--allow-degraded`, no expanded-readiness claim). **Post-Tue paper days** (session 2+ / Wed 2026-09-09 onward) **default to expanded select** (`context.json` + `cycle_cli select`) so the LLM gets UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices. Fall back to baseline or explicit `--allow-degraded` only if required coverage is incomplete. Baseline `research.cli run` behavior is unchanged. Unit tests ≠ live entitlement.
 - Tuesday 2026-09-08 posture: operational paper pilot on clean baseline (`research.cli run`), not `--allow-degraded`, not expanded-strategy readiness. Unit tests ≠ live entitlement. Schwab still unconnected. UW economic calendar / dark pool / screener / tide are expanded LLM context only; Finnhub `/calendar/economic` still 403 on this plan.
 
 ### Fixed

@@ -229,3 +229,19 @@ def test_tuesday_launch_command_is_clean_baseline() -> None:
     )
     assert "--allow-degraded" not in " ".join(plan["baseline"])
     assert "Do not launch with --allow-degraded" in plan["note"]
+    assert "clean baseline" in plan["note"]
+    assert "Post-Tue paper days" in plan["note"]
+    assert "default to expanded select" in plan["note"]
+
+
+def test_post_tuesday_day_plan_defaults_to_expanded_select() -> None:
+    plan = cycle_cli.tuesday_commands(
+        date(2026, 9, 9), Path("research-runs/2026-09-09"), allow_degraded=False
+    )
+    assert plan["note"].startswith(
+        "2026-09-09 is a post-Tue paper day: default is expanded select."
+    )
+    assert "cycle_cli select" in " ".join(plan["expanded"])
+    assert "--allow-degraded" not in " ".join(plan["expanded"])
+    assert "research.cli run" in plan["baseline"][-1]
+    assert "Fall back to baseline or explicit --allow-degraded" in plan["note"]
