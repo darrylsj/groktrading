@@ -150,6 +150,7 @@ def test_selection_and_resolver_roundtrip(sample: Any, tmp_path: Path, monkeypat
     selected = cycle.select(packet, context(packet), memory, tmp_path / "select")
     assert calls == ["retrieval_v1.md", "retrieval_v1.md", "selector_v2.md"]
     assert (tmp_path / "select/packet.json").exists()
+    assert (tmp_path / "select/candidates.json").exists()
     monkeypatch.setattr(cycle, "now_utc", lambda: end + timedelta(hours=7))
     evaluation["decision_hash"] = digest(selected)
     daily = cycle.resolve(packet, selected, evaluation, context(packet), tmp_path / "resolve")

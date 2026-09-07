@@ -122,6 +122,8 @@ readiness. Passing unit tests is not live entitlement proof. Schwab is still unc
 The dedicated earnings calendar is still print-fields only. UW economic calendar,
 dark pool, screener, and market tide are expanded Opening15 LLM context only
 (Finnhub `/calendar/economic` still 403 on this plan). **Post-Tue paper days**
-(session 2+ / Wed 2026-09-09 onward) **default to expanded select**; fall back to
-baseline or explicit `--allow-degraded` only if required coverage is incomplete. See
+(session 2+ / Wed 2026-09-09 onward) **default to expanded select** after a
+logged pre-LLM hygiene shortlist (`candidates.json`; gates then judgment). Fall
+back to baseline or explicit `--allow-degraded` only if required coverage is
+incomplete. Tuesday stays packet baseline (`research.cli run`). See
 [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md).

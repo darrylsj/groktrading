@@ -22,6 +22,7 @@ from groktrading.research.codex_cli import (
     run_codex,
     subprocess_env,
 )
+from groktrading.research.hygiene import build_shortlist, shortlist_contracts
 from groktrading.research.opening15 import (
     Decision,
     Packet,
@@ -508,6 +509,8 @@ def select(
     if memory.target_session != packet.session:
         raise ValueError("wrong memory session")
     selector_prompt, prompt_version = active_selector_prompt(registry, session=packet.session)
+    shortlist = build_shortlist(packet, context.records)
+    write_once(directory / "candidates.json", shortlist)
     write_once(
         directory / "cycle-input.json",
         {
@@ -515,6 +518,13 @@ def select(
             "context": context.model_dump(mode="json"),
             "memory": memory.model_dump(mode="json"),
             "degraded": allow_degraded,
+            "hygiene": {
+                "architecture": "gates_then_judgment",
+                "candidates_file": "candidates.json",
+                "candidate_count": shortlist["stats"]["kept"],
+                "reject_count": shortlist["stats"]["dropped"],
+                "budget": shortlist["budget"],
+            },
         },
     )
     write_once(directory / "packet.json", packet.model_dump(mode="json"))
@@ -522,6 +532,14 @@ def select(
     payload: dict[str, Any] = {
         "opening_packet": packet.compact(),
         "context_index": context.index(),
+        "candidates": shortlist["candidates"],
+        "hygiene": {
+            "architecture": "gates_then_judgment",
+            "budget": shortlist["budget"],
+            "dte_window": shortlist["dte_window"],
+            "candidate_count": shortlist["stats"]["kept"],
+            "reject_count": shortlist["stats"]["dropped"],
+        },
         "memory": memory.brief(),
         "retrieved": [],
     }
@@ -558,7 +576,11 @@ def select(
     )
     if now_utc() > deadline:
         raise ValueError("overall selection deadline exceeded")
-    selection.decision.validate_evidence(packet)
+    selection.decision.validate_evidence(
+        packet,
+        allowed_contracts=shortlist_contracts(shortlist),
+        extra_evidence_ids={r.evidence_id for r in context.records},
+    )
     context.retrieve(selection.context_citations)
     record = {
         "packet_hash": digest(packet.model_dump(mode="json")),
