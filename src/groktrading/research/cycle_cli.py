@@ -56,8 +56,11 @@ def _day_plan_note(session: date) -> str:
         "pool (per 10 names), option screener, market tide, and political slices. "
         "Fall back to baseline or explicit --allow-degraded only if required "
         "coverage is incomplete. Do not present a degraded run as the full-context "
-        "experiment. Passing unit tests is not live entitlement. No systemd/timers, "
-        "no Helsinki restart, no live orders."
+        "experiment. Expanded select defaults to active selector_v2 plus the "
+        "hygiene shortlist. selector_v3 is a shadow prompt only "
+        "(--shadow-v3 + --registry); it is not the Tuesday baseline and is not "
+        "the active registry version. Passing unit tests is not live entitlement. "
+        "No systemd/timers, no Helsinki restart, no live orders."
     )
     if session <= _TUESDAY_PILOT:
         return (
@@ -140,6 +143,23 @@ def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> di
             f"python -m groktrading.research.cycle_cli fail --session {session} "
             f"--stage <stage> --detail '<ValueError>' --out {root}/failed-<attempt>"
         ),
+        "shadow_compare": [
+            (
+                f"python -m groktrading.research.cycle_cli select --packet {root}/packet.json "
+                f"--context {root}/context.json --memory {root}/memory.json "
+                f"--registry {root}/prompt-registry.json "
+                f"--out {root}/selection --shadow-v3"
+            )
+        ],
+        "shadow_compare_note": (
+            "Optional paper comparison only. Seed the registry first "
+            "(selector_v2 stays accepted/active; selector_v3 is seeded as shadow). "
+            "Writes selection-shadow-v3.json and selection-shadow-compare.json "
+            "alongside decision.json without swapping the active selector. Later "
+            "score both artifacts on the same packet vs evaluation.json "
+            "baselines.abstain (always-flat, net 0). Do not promote v3. Tuesday "
+            "clean baseline remains research.cli run."
+        ),
     }
 
 
@@ -159,6 +179,15 @@ def main() -> None:
             command.add_argument("--memory", required=True, type=Path)
             command.add_argument("--allow-degraded", action="store_true")
             command.add_argument("--registry", type=Path)
+            command.add_argument(
+                "--shadow-v3",
+                action="store_true",
+                help=(
+                    "Also run seeded selector_v3 as a shadow Decision "
+                    "(selection-shadow-v3.json). Active remains the registry "
+                    "default (selector_v2). Requires --registry. Paper only."
+                ),
+            )
         else:
             command.add_argument("--decision", required=True, type=Path)
             command.add_argument("--evaluation", required=True, type=Path)
@@ -336,6 +365,7 @@ def main() -> None:
                     args.out,
                     args.allow_degraded,
                     registry=active_registry,
+                    shadow_version_id="selector_v3" if args.shadow_v3 else None,
                 )
             else:
                 resolve(

@@ -91,6 +91,30 @@ def seed_registry(built_at: datetime | None = None) -> PromptRegistry:
             frozen_at=at,
         ),
         PromptVersion(
+            version_id="selector_v3",
+            prompt_name="selector_v3.md",
+            prompt_hash=prompt_hash("selector_v3.md"),
+            parent_version="selector_v2",
+            supporting_sessions=[],
+            hypothesis=(
+                "Judgment-only selector: thesis coherence and cite-or-abstain; "
+                "deterministic refuses stay in hygiene pre-gates"
+            ),
+            proposed_difference=(
+                "Shadow arm only. LLM judges whether cited packet/context/shortlist "
+                "facts support a pick and must cite evidence IDs or abstain. No "
+                "computable refuse rules and no invented quotes."
+            ),
+            forward_test=(
+                "Compare selector_v3 shadow decisions to selector_v2 on the same "
+                "packets and hygiene shortlist, and to the always-flat abstain "
+                "baseline in evaluation.json. Do not promote v3 from in-sample reruns"
+            ),
+            status="shadow",
+            created_at=at,
+            frozen_at=at,
+        ),
+        PromptVersion(
             version_id="retrieval_v1",
             prompt_name="retrieval_v1.md",
             prompt_hash=prompt_hash("retrieval_v1.md"),

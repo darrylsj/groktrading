@@ -116,6 +116,33 @@ def test_day_plan_sequence_creates_outcome_context_and_loads_failures(
     assert calls[-1] == "selector_v2.md"
     selected = json.loads((root / "selection/decision.json").read_text())
     assert selected["prompt_version"] == "selector_v2"
+    assert not (root / "selection" / cycle.SHADOW_V3_ARTIFACT).exists()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "cycle_cli",
+            "select",
+            "--packet",
+            str(root / "packet.json"),
+            "--context",
+            str(root / "context.json"),
+            "--memory",
+            str(root / "memory.json"),
+            "--registry",
+            str(root / "prompt-registry.json"),
+            "--out",
+            str(root / "selection-shadow"),
+            "--shadow-v3",
+        ],
+    )
+    cycle_cli.main()
+    assert "selector_v3.md" in calls
+    shadow_selected = json.loads((root / "selection-shadow/decision.json").read_text())
+    assert shadow_selected["prompt_version"] == "selector_v2"
+    shadow_art = json.loads((root / "selection-shadow" / cycle.SHADOW_V3_ARTIFACT).read_text())
+    assert shadow_art["prompt_version"] == "selector_v3"
+    assert shadow_art["role"] == "shadow"
 
     contract = selected["decision"]["picks"][0]["option_symbol"]
     observations = []
@@ -228,10 +255,15 @@ def test_tuesday_launch_command_is_clean_baseline() -> None:
         "--output research-runs/2026-09-08"
     )
     assert "--allow-degraded" not in " ".join(plan["baseline"])
+    assert "--shadow-v3" not in " ".join(plan["baseline"])
+    assert "--shadow-v3" not in " ".join(plan["expanded"])
     assert "Do not launch with --allow-degraded" in plan["note"]
     assert "clean baseline" in plan["note"]
     assert "Post-Tue paper days" in plan["note"]
     assert "default to expanded select" in plan["note"]
+    assert "selector_v3 is a shadow prompt only" in plan["note"]
+    assert "--shadow-v3" in " ".join(plan["shadow_compare"])
+    assert "Do not promote v3" in plan["shadow_compare_note"]
 
 
 def test_post_tuesday_day_plan_defaults_to_expanded_select() -> None:
@@ -243,5 +275,8 @@ def test_post_tuesday_day_plan_defaults_to_expanded_select() -> None:
     )
     assert "cycle_cli select" in " ".join(plan["expanded"])
     assert "--allow-degraded" not in " ".join(plan["expanded"])
+    assert "--shadow-v3" not in " ".join(plan["expanded"])
     assert "research.cli run" in plan["baseline"][-1]
     assert "Fall back to baseline or explicit --allow-degraded" in plan["note"]
+    assert "selector_v2" in plan["note"]
+    assert "shadow prompt only" in plan["note"]

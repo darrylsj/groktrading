@@ -26,7 +26,13 @@ duplicate/synthetic copies are `rejected`; `continue` means more paper only):
 [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
 Registry prompts used for selection must match the recorded hash, be
 `accepted` or `shadow`, and be frozen before session open — rejected or
-wrong-hash versions do not run.
+wrong-hash versions do not run. Seeded **selector_v3** is **shadow only**;
+it is not the active version and is not Tuesday's selector. Post-Tue
+expanded `cycle_cli select` still defaults to active **selector_v2** plus
+the hygiene shortlist. Optional `--shadow-v3 --registry` writes
+`selection-shadow-v3.json` alongside `decision.json` for later comparison
+to v2 and to `evaluation.json` `baselines.abstain` (always-flat). Do not
+promote v3.
 
 Tuesday should ship from **main**. Do not enable systemd timers. No Helsinki restart. No live orders.
 
@@ -65,7 +71,7 @@ Source of truth: `src/groktrading/research/capture.py`, `collectors.py`, `codex_
 | Path | Code status | When to run |
 | --- | --- | --- |
 | Baseline 15-minute selection + fixed-exit paper evaluation | Implemented | **Tuesday 2026-09-08 launch path** and the fallback if post-Tue required coverage is incomplete. Host preflight, real CLI model probe, UW/quote entitlement check, dedicated process launch. Clean `research.cli run` only. `--allow-degraded` is not Tuesday's command. |
-| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry + **pre-LLM hygiene shortlist** implemented | **Default after Tuesday** (session 2+ / Wed 2026-09-09 onward). `cycle_cli select` writes `candidates.json` (logged gates, budget-derived premium, DTE on every row) and feeds that shortlist to Codex with UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices via `context.json`. Required categories must be `available` (depth / dark pool / screener / tide / political may be `missing`). Fall back to baseline or explicit `--allow-degraded` only if required coverage is incomplete. Do not present a degraded run as expanded readiness. Tuesday `research.cli run` is still the packet baseline and does not shortlist. |
+| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry + **pre-LLM hygiene shortlist** + **selector_v3 shadow** implemented | **Default after Tuesday** (session 2+ / Wed 2026-09-09 onward). `cycle_cli select` writes `candidates.json` (logged gates, budget-derived premium, DTE on every row) and feeds that shortlist to Codex with UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices via `context.json`. Active selector remains **v2**. Optional `--shadow-v3 --registry` also records a v3 Decision (`selection-shadow-v3.json`) on the same packet/shortlist; it does not replace v2. Required categories must be `available` (depth / dark pool / screener / tide / political may be `missing`). Fall back to baseline or explicit `--allow-degraded` only if required coverage is incomplete. Do not present a degraded run as expanded readiness. Tuesday `research.cli run` is still the packet baseline and does not shortlist. |
 | Existing systemd Tuesday template | Present, inactive; runs baseline `research.cli run` | Do **not** enable the timer. It does not invoke `cycle_cli`. |
 | Schwab-backed or actual broker order execution | Not part of this path | Paper selections do not become orders. |
 
@@ -141,6 +147,17 @@ python -m groktrading.research.cli capture --session 2026-09-09 --output researc
 python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-09/packet.json --context research-runs/2026-09-09/context.json --memory research-runs/2026-09-09/memory.json --out research-runs/2026-09-09/selection
 python -m groktrading.research.cli monitor --session 2026-09-09 --output research-runs/2026-09-09/selection
 python -m groktrading.research.cli report --session 2026-09-09 --output research-runs/2026-09-09/selection
+```
+
+Optional shadow compare (does **not** change the active selector or Tuesday
+baseline). Seed `prompt-registry.json` first; v2 stays accepted/active, v3 is
+shadow. Then score `decision.json` and `selection-shadow-v3.json` on the same
+packet and 15:55 ET marks against `evaluation.json` `baselines.abstain`
+(always-flat, net 0). Do not promote v3.
+
+```bash
+python -m groktrading.research.cycle_cli registry --path research-runs/2026-09-09/prompt-registry.json --seed
+python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-09/packet.json --context research-runs/2026-09-09/context.json --memory research-runs/2026-09-09/memory.json --registry research-runs/2026-09-09/prompt-registry.json --out research-runs/2026-09-09/selection --shadow-v3
 ```
 
 Typical gaps that force baseline or `--allow-degraded`: unused Finnhub (`world_news` missing), unused `TRADIER_ACCOUNT_ID` (`portfolio` missing), missing `$VIX.X` (macro `partial`). Depth, dark pool, option screener, market tide, and political slices are **optional** and may stay `missing` without `--allow-degraded`.

@@ -715,7 +715,10 @@ def test_write_context_and_failure_record(tmp_path: Path) -> None:
 def test_prompt_registry_is_immutable_file_based(tmp_path: Path) -> None:
     registry = seed_registry()
     assert registry.active_version_id == "selector_v2"
-    assert all(item.status == "accepted" for item in registry.versions)
+    assert registry.get("selector_v3").status == "shadow"
+    assert all(
+        item.status == "accepted" for item in registry.versions if item.version_id != "selector_v3"
+    )
     proposed = propose(
         registry,
         version_id="selector_v2_shadow",

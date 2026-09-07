@@ -132,7 +132,7 @@ experiment ready for unattended use.
 | Session | Default | Fallback |
 | --- | --- | --- |
 | **Tue 2026-09-08** (session 1) | Clean baseline `research.cli run` (packet recommend) | Do **not** use `--allow-degraded`. Do **not** claim expanded readiness. |
-| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) so the LLM gets a **hygiene shortlist** (deterministic gates, then judgment) plus UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices | Baseline `research.cli run`, or explicit `--allow-degraded`, only if required coverage is incomplete |
+| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) so the LLM gets a **hygiene shortlist** (deterministic gates, then judgment) plus UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices. Active selector remains **v2**. Optional `--shadow-v3` records selector_v3 alongside for later comparison; it does not replace v2 or Tuesday `research.cli run`. | Baseline `research.cli run`, or explicit `--allow-degraded`, only if required coverage is incomplete |
 
 ### Tuesday launch
 
@@ -175,6 +175,10 @@ calendar, dark pool (per 10 names), option screener, market tide, and political 
 Inspect `context.json` coverage first. Fall back to baseline `research.cli run` or add
 `--allow-degraded` only if a **required** category is not `available`.
 Tuesday itself stays on clean `research.cli run` (packet baseline; no shortlist).
+**selector_v3** is shadow-only: optional `--shadow-v3 --registry` writes
+`selection-shadow-v3.json` on the same packet and shortlist without swapping
+active v2. Later compare both Decisions to `evaluation.json` `baselines.abstain`
+(always-flat, net 0). Do not promote v3.
 
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-09 --out research-runs/2026-09-09/memory.json
@@ -226,7 +230,9 @@ invented contracts, unknown evidence, duplicate picks and missing stock assessme
 (which gate fired). The LLM only makes judgment calls (thesis coherence, cite-or-abstain).
 Computable refuse rules are not put into the selector prompt. Tuesday `research.cli run`
 stays the packet baseline. Post-Tue expanded `cycle_cli select` feeds Codex the hygiene
-shortlist in `candidates.json` after those gates.
+shortlist in `candidates.json` after those gates. **selector_v3** is the
+judgment-focused shadow prompt (cite evidence IDs or abstain). It is not the
+active registry version and is not used by Tuesday `research.cli run`.
 
 The strategy prompt is versioned. Packet, request and response timestamps/hashes are recorded.
 Codex CLI `exec` is invoked once per run directory: prompt on stdin (`-`),
@@ -265,6 +271,8 @@ independent experiments. This first Tuesday is an operational trial, not proof o
 | `raw/flow-*.json`, `raw/stocks-*.json` | Provider response pages, stock snapshots and receive times |
 | `packet.json` | Frozen validated evidence, coverage and limitations |
 | `candidates.json` | Expanded/select only: pre-LLM hygiene shortlist + structured rejects (not written by Tuesday `research.cli run`) |
+| `selection-shadow-v3.json` | Optional expanded/select `--shadow-v3`: v3 Decision on the same packet/shortlist. Not active. Not Tuesday. |
+| `selection-shadow-compare.json` | Optional: both verdicts plus how to score vs `baselines.abstain` later. Do not promote v3. |
 | `request.json` | Exact prompt/config/input plus hashes, start time, backend, and `codex --version` |
 | `opening15-schema.json` | Decision JSON Schema passed to `codex exec --output-schema` |
 | `response.json` | Raw Codex JSONL/stderr or Responses body, plus receipt time |

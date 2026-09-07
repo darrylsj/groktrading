@@ -166,7 +166,7 @@ def test_schema_uses_typed_stock_reflections() -> None:
     assert schema["properties"]["skipped_stocks"]["type"] == "array"
     assert all(
         (cycle.PROMPTS / name).is_file()
-        for name in ("selector_v2.md", "retrieval_v1.md", "resolver_v1.md")
+        for name in ("selector_v2.md", "selector_v3.md", "retrieval_v1.md", "resolver_v1.md")
     )
 
 
@@ -473,4 +473,273 @@ def test_failure_record_has_no_decision_or_pnl(sample: Any, tmp_path: Path) -> N
             source_hash="fixture",
             attempt_dir=str(tmp_path),
             decision_hash="not-a-real-decision",
+        )
+
+
+def _seeded_before_open(packet: Packet):
+    from groktrading.research.registry import seed_registry
+
+    start, _ = window(packet.session)
+    return seed_registry(built_at=start - timedelta(hours=1))
+
+
+def _abstain_decision(decision: dict[str, Any]) -> Decision:
+    body = dict(decision["decision"])
+    body["picks"] = []
+    body["data_limitations"] = ["fixture shadow abstain; cite-or-abstain"]
+    return Decision.model_validate(body)
+
+
+def test_seeded_registry_keeps_v2_active_and_v3_shadow(sample: Any) -> None:
+    from groktrading.research.registry import seed_registry
+
+    packet = sample[0]
+    registry = _seeded_before_open(packet)
+    assert registry.active_version_id == "selector_v2"
+    assert registry.get("selector_v2").status == "accepted"
+    assert registry.get("selector_v3").status == "shadow"
+    assert registry.get("selector_v3").prompt_name == "selector_v3.md"
+    assert (cycle.PROMPTS / "selector_v3.md").is_file()
+    name, version = cycle.active_selector_prompt(registry, session=packet.session)
+    assert (name, version) == ("selector_v2.md", "selector_v2")
+    default_name, default_version = cycle.active_selector_prompt(None)
+    assert (default_name, default_version) == ("selector_v2.md", "selector_v2")
+    late = seed_registry(built_at=window(packet.session)[0] + timedelta(minutes=1))
+    with pytest.raises(ValueError, match="frozen_at"):
+        cycle.active_selector_prompt(late, session=packet.session)
+
+
+def test_selector_v3_prompt_is_judgment_not_gates() -> None:
+    text = (cycle.PROMPTS / "selector_v3.md").read_text()
+    lowered = text.lower()
+    assert "cite" in lowered and "abstain" in lowered
+    assert "candidates" in lowered or "shortlist" in lowered
+    assert "paper-only" in lowered or "paper only" in lowered
+    assert "selection json" in lowered
+    for banned in (
+        "skip ≥",
+        "skip >=",
+        "first-print-only",
+        "first print only",
+        "within n min",
+        "gex",
+    ):
+        assert banned not in lowered
+
+
+def test_select_without_shadow_flag_does_not_write_v3(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    packet, decision, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    calls: list[str] = []
+
+    def fake(name: str, payload: Any, schema: Any, *args: Any) -> Any:
+        calls.append(name)
+        if schema is cycle.RetrievalRequest:
+            return schema(evidence_ids=[], rationale="none")
+        if schema is cycle.Selection:
+            return schema(
+                decision=Decision.model_validate(decision["decision"]),
+                context_citations=["macro"],
+                portfolio_assessment="fixture",
+                memory_use="No prior days",
+            )
+        raise AssertionError(schema)
+
+    monkeypatch.setattr(cycle, "cli_json", fake)
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+    selected = cycle.select(
+        packet,
+        context(packet),
+        memory,
+        tmp_path / "no-shadow",
+        registry=_seeded_before_open(packet),
+    )
+    assert calls[-1] == "selector_v2.md"
+    assert "selector_v3.md" not in calls
+    assert selected["prompt_version"] == "selector_v2"
+    assert (tmp_path / "no-shadow/decision.json").is_file()
+    assert not (tmp_path / "no-shadow" / cycle.SHADOW_V3_ARTIFACT).exists()
+
+
+def test_select_shadow_v3_writes_artifact_without_swapping_active(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    packet, decision, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    calls: list[str] = []
+
+    def fake(name: str, payload: Any, schema: Any, *args: Any) -> Any:
+        calls.append(name)
+        if schema is cycle.RetrievalRequest:
+            return schema(evidence_ids=[], rationale="none")
+        if schema is cycle.Selection:
+            assert payload["candidates"]
+            assert payload["hygiene"]["architecture"] == "gates_then_judgment"
+            body = (
+                _abstain_decision(decision)
+                if name == "selector_v3.md"
+                else Decision.model_validate(decision["decision"])
+            )
+            return schema(
+                decision=body,
+                context_citations=["macro"],
+                portfolio_assessment="fixture",
+                memory_use="No prior days",
+            )
+        raise AssertionError(schema)
+
+    registry = _seeded_before_open(packet)
+    monkeypatch.setattr(cycle, "cli_json", fake)
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+    selected = cycle.select(
+        packet,
+        context(packet),
+        memory,
+        tmp_path / "shadow",
+        registry=registry,
+        shadow_version_id="selector_v3",
+    )
+    assert calls.count("selector_v2.md") == 1
+    assert calls.count("selector_v3.md") == 1
+    assert selected["prompt_version"] == "selector_v2"
+    assert registry.active_version_id == "selector_v2"
+    active = json.loads((tmp_path / "shadow/decision.json").read_text())
+    shadow = json.loads((tmp_path / "shadow" / cycle.SHADOW_V3_ARTIFACT).read_text())
+    compare = json.loads((tmp_path / "shadow" / cycle.SHADOW_V3_COMPARE).read_text())
+    assert active["prompt_version"] == "selector_v2"
+    assert "role" not in active
+    assert shadow["prompt_version"] == "selector_v3"
+    assert shadow["role"] == "shadow"
+    assert shadow["status"] == "recorded"
+    assert shadow["active_prompt_version"] == "selector_v2"
+    assert shadow["decision"]["picks"] == []
+    assert compare["active_prompt_version"] == "selector_v2"
+    assert compare["shadow_prompt_version"] == "selector_v3"
+    assert compare["shadow_abstain"] is True
+    assert compare["abstain_baseline"]["net_usd"] == 0.0
+    assert "Do not promote" in compare["abstain_baseline"]["note"]
+
+
+def test_select_shadow_v3_still_requires_hygiene_shortlist(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    packet, decision, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    bad = json.loads(json.dumps(decision))
+    bad["decision"]["picks"][0]["option_symbol"] = "AAPL260911C00999000"
+    bad["decision"]["picks"][0]["max_entry_price"] = 1.0
+
+    def fake(name: str, payload: Any, schema: Any, *args: Any) -> Any:
+        if schema is cycle.RetrievalRequest:
+            return schema(evidence_ids=[], rationale="none")
+        if schema is cycle.Selection:
+            body = (
+                Decision.model_validate(bad["decision"])
+                if name == "selector_v3.md"
+                else Decision.model_validate(decision["decision"])
+            )
+            return schema(
+                decision=body,
+                context_citations=["macro"],
+                portfolio_assessment="fixture",
+                memory_use="No prior days",
+            )
+        raise AssertionError(schema)
+
+    monkeypatch.setattr(cycle, "cli_json", fake)
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+    selected = cycle.select(
+        packet,
+        context(packet),
+        memory,
+        tmp_path / "shadow-hygiene",
+        registry=_seeded_before_open(packet),
+        shadow_version_id="selector_v3",
+    )
+    assert selected["prompt_version"] == "selector_v2"
+    assert (tmp_path / "shadow-hygiene/decision.json").is_file()
+    shadow = json.loads((tmp_path / "shadow-hygiene" / cycle.SHADOW_V3_ARTIFACT).read_text())
+    assert shadow["status"] == "failed"
+    assert "contract" in shadow["detail"]
+    compare = json.loads((tmp_path / "shadow-hygiene" / cycle.SHADOW_V3_COMPARE).read_text())
+    assert compare["shadow_status"] == "failed"
+    assert compare["shadow_abstain"] is None
+
+
+def test_select_shadow_v3_enforces_hash_and_requires_registry(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    from groktrading.research.registry import PromptRegistry, PromptVersion
+
+    packet, _, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    seeded = _seeded_before_open(packet)
+    frozen_at = start - timedelta(hours=1)
+    bad = PromptVersion(
+        version_id="selector_v3",
+        prompt_name="selector_v3.md",
+        prompt_hash="0" * 64,
+        parent_version="selector_v2",
+        supporting_sessions=[],
+        hypothesis="Incorrect recorded hash must not be used for shadow inference",
+        proposed_difference="Hash does not match selector_v3.md",
+        forward_test="Must raise; no fallback",
+        status="shadow",
+        created_at=frozen_at,
+        frozen_at=frozen_at,
+    )
+    versions = [item for item in seeded.versions if item.version_id != "selector_v3"]
+    registry = PromptRegistry(versions=[*versions, bad], active_version_id="selector_v2")
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+
+    def fail_cli(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("inference must not run on a hash mismatch")
+
+    monkeypatch.setattr(cycle, "cli_json", fail_cli)
+    with pytest.raises(ValueError, match="hash mismatch"):
+        cycle.select(
+            packet,
+            context(packet),
+            memory,
+            tmp_path / "shadow-hash",
+            registry=registry,
+            shadow_version_id="selector_v3",
+        )
+    assert not (tmp_path / "shadow-hash/decision.json").exists()
+    with pytest.raises(ValueError, match="prompt registry"):
+        cycle.select(
+            packet,
+            context(packet),
+            memory,
+            tmp_path / "shadow-noreg",
+            shadow_version_id="selector_v3",
+        )
+    unfrozen = PromptVersion(
+        version_id="selector_v3",
+        prompt_name="selector_v3.md",
+        prompt_hash=seeded.get("selector_v3").prompt_hash,
+        parent_version="selector_v2",
+        supporting_sessions=[],
+        hypothesis="Unfrozen shadow must not be used for inference",
+        proposed_difference="frozen_at missing",
+        forward_test="Must raise; no fallback",
+        status="shadow",
+        created_at=frozen_at,
+        frozen_at=None,
+    )
+    thawed = PromptRegistry(versions=[*versions, unfrozen], active_version_id="selector_v2")
+    with pytest.raises(ValueError, match="not frozen"):
+        cycle.select(
+            packet,
+            context(packet),
+            memory,
+            tmp_path / "shadow-unfrozen",
+            registry=thawed,
+            shadow_version_id="selector_v3",
         )
