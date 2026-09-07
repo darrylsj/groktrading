@@ -26,7 +26,19 @@ from groktrading.research.opening15 import (
 )
 
 # Documented UW + Tradier production GET paths only. No invented aliases, no POST.
-_UW_READ_PREFIXES = ("/api/option-trades", "/api/news/headlines")
+# Extra UW market paths are expanded-context only (isolate_optional_collectors);
+# baseline tape still uses option-trades + headlines.
+_UW_READ_PREFIXES = (
+    "/api/option-trades",
+    "/api/news/headlines",
+    "/api/market/economic-calendar",
+    "/api/market/market-tide",
+    "/api/screener/option-contracts",
+    "/api/congress/recent-trades",
+    "/api/insider/transactions",
+    "/api/darkpool/recent",
+)
+_UW_DARKPOOL_TICKER = re.compile(r"^/api/darkpool/[A-Z][A-Z.]{0,9}$")
 _TRADIER_MARKET_PATHS = {
     "/markets/quotes",
     "/markets/calendar",
@@ -40,8 +52,10 @@ _TRADIER_ACCOUNT_READ = re.compile(r"^/accounts/[A-Za-z0-9]+/(balances|positions
 
 
 def allowed_read_path(path: str) -> bool:
-    """Allow only documented UW tape/news and Tradier market/account GET paths."""
+    """Allow only documented UW tape/news/expanded-context and Tradier GET paths."""
     if any(path == prefix or path.startswith(prefix) for prefix in _UW_READ_PREFIXES):
+        return True
+    if _UW_DARKPOOL_TICKER.fullmatch(path):
         return True
     if path in _TRADIER_MARKET_PATHS:
         return True
@@ -257,9 +271,9 @@ def _record_optional_context_failure(directory: Path, detail: str) -> None:
             "at": now_utc().isoformat(),
             "detail": detail,
             "note": (
-                "baseline packet still captured; optional Finnhub/world news/chains "
-                "collectors are isolated from opening-tape capture. "
-                "expanded select needs a valid context.json"
+                "baseline packet still captured; optional Finnhub/world news/chains/"
+                "UW economic-calendar collectors are isolated from opening-tape "
+                "capture. expanded select needs a valid context.json"
             ),
         },
     )

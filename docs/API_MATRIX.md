@@ -28,7 +28,7 @@ Live options flow / option-trades and ask-side, premium, volume, and open-intere
 | Docs home | https://api.unusualwhales.com/ |
 | Agent/endpoint skill | https://unusualwhales.com/skill.md |
 
-This package uses a **generic GET** of a caller-supplied path. Do **not** add unofficial aliases. Documented examples from UW (for operators to pass in) include `/api/option-trades` — confirm against current official docs before use.
+This package uses a **generic GET** of a caller-supplied path. Do **not** add unofficial aliases. Opening15 **expanded** collectors (not the baseline tape) also call documented `/api/market/economic-calendar`, `/api/darkpool/{ticker}`, `/api/darkpool/recent`, `/api/screener/option-contracts`, `/api/market/market-tide`, and `/api/congress/recent-trades`. Confirm against current official docs before use.
 
 ## Tradier
 

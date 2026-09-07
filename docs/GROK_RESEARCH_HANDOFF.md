@@ -17,7 +17,7 @@ Existing capture, quote monitoring and deterministic paper evaluation remain in 
 
 ## Data contract — connected vs still missing
 
-`Context.model_json_schema()` is the input schema. Every category has a coverage row. Selection fails closed unless every required category (all except `depth`) is `available`, or `--allow-degraded` is set.
+`Context.model_json_schema()` is the input schema. Every category has a coverage row. Selection fails closed unless every required category (all except optional `depth`, `dark_pool`, `option_screener`, `market_tide`, `political`) is `available`, or `--allow-degraded` is set.
 
 | Category | Required content | Implementation now | Remaining gap |
 | --- | --- | --- | --- |
@@ -25,7 +25,11 @@ Existing capture, quote monitoring and deterministic paper evaluation remain in 
 | Company news | Timestamped headlines + archive detail | UW `/api/news/headlines`; revisions kept (`story:vN`); `archived_news_detail()` is a local payload lookup | Official UW skill has no article-body endpoint. |
 | World news | Broad geopolitical/policy/commodity feed | Finnhub `GET /news?category=general` when `FINNHUB_API_KEY` is set and HTTP 200 | Unused key, 401/403, or empty list → **missing, not fabricated**. UW has ticker headlines only. |
 | Macro | SPY/QQQ/sector/VIX-like tape | Tradier `/markets/quotes` for config context symbols plus `IWM` and `$VIX.X` | Missing/delayed tickers listed (`$VIX.X` often absent). No rates/USD/commodities beyond those symbols. |
-| Calendar | Session schedule versioned separately from occurrence | Tradier `/markets/calendar` with `schedule_version` + `occurrence_time`; earnings **fields already on prints** when present | No dedicated earnings/FOMC calendar provider. |
+| Calendar | Session schedule versioned separately from occurrence | Tradier `/markets/calendar` with `schedule_version` + `occurrence_time`; UW `GET /api/market/economic-calendar` (empty `data` = available, 0 events); earnings **fields already on prints** when present | Dedicated earnings calendar still print-fields only. Finnhub `/calendar/economic` unused (403 on this plan). |
+| Dark pool (optional) | Recent off-exchange prints for the 10 names | UW `GET /api/darkpool/{ticker}` (capped) + small `/api/darkpool/recent` summary | Optional. HTTP failure is `missing`/`partial` and cannot abort baseline tape. |
+| Option screener (optional) | Hottest-contract slice for the 10 names | UW `GET /api/screener/option-contracts` then local filter; per-name cap | Optional. Payload kept small for Codex budget. |
+| Market tide (optional) | Session-level options breadth | UW `GET /api/market/market-tide` once | Optional. Not per-symbol. |
+| Political (optional) | Congress/insider rows touching the 10 names | UW `GET /api/congress/recent-trades`; official `/api/insider/transactions` skipped quietly if 0 universe rows | Optional. No invented fills. |
 | Option chain | Bid/ask/sizes, expirations, prior-day OI, provider Greeks | Tradier `/markets/options/expirations` + `/markets/options/chains` (3 near expirations); OI labeled prior-day; observation timestamps | Greeks only if Tradier/ORATS returned them. Not a full all-expiry dump. |
 | History | Prior-session bars / as-of features | Tradier `/markets/history` through the prior open session; target-day bars excluded | Opening-print volume seasonality is a **daily volume proxy**, labeled as such. |
 | Portfolio | Cash, positions, working orders | **Tradier** `/accounts/{id}/balances|positions|orders` read-only; account numbers → opaque `acct-` aliases | **Schwab OAuth is not ready.** This is an interim Tradier-backed portfolio. Missing `TRADIER_ACCOUNT_ID` → coverage missing. |
@@ -74,5 +78,5 @@ Host isolation and real model entitlement probe; exchange-calendar scheduling (t
 ## Acceptance gates
 
 - Local unit checks cover collectors (mocked HTTP), chronology, archive identity, memory cutoff/cap, selector/resolver shape, failure records and registry transitions.
-- Expanded mode requires fresh `available` coverage for all required categories. If incomplete, run baseline or a declared degraded pilot and report exactly what was absent.
+- Expanded mode requires fresh `available` coverage for all required categories (optional: `depth`, `dark_pool`, `option_screener`, `market_tide`, `political`). If incomplete, run baseline or a declared degraded pilot and report exactly what was absent.
 - End-to-end operator signoff still requires one archived decision, post-response quotes, deterministic evaluation, daily resolution and next-day memory, with no broker order call and no exposed credentials.

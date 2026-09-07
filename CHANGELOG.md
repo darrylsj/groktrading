@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Opening15 expanded/optional collectors now archive Unusual Whales economic calendar (`GET /api/market/economic-calendar`), per-symbol dark pool (`GET /api/darkpool/{ticker}` plus a small `/api/darkpool/recent` summary), one options-screener slice (`GET /api/screener/option-contracts` filtered to the 10 configured names), session-level market tide (`GET /api/market/market-tide` once), and congress trades touching those names (`GET /api/congress/recent-trades`). Insider uses official `GET /api/insider/transactions` and is skipped quietly when it returns no universe rows. Empty UW `data` is coverage `available` (0 events), not missing; HTTP/auth failure is `missing`/`partial` and cannot abort the baseline tape (`isolate_optional_collectors`). Finnhub `/calendar/economic` is unused (403 on this plan). Paper research path only.
+
 ### Fixed
 
 - Opening15 capture: `isolate_optional_collectors` no longer blocks past its pre-open budget. The previous `with ThreadPoolExecutor` form called `shutdown(wait=True)` on exit, so a hung expanded collector (slow Finnhub/UW call) held the process until it finished, delaying stock capture past 09:30 and failing the 90 s coverage-gap check (lost session). Now `shutdown(wait=False)`; budget overrun is detected via `future.done()` (on 3.11+ `concurrent.futures.TimeoutError` is the builtin `TimeoutError`, so type alone cannot distinguish a slow collector from one that raised). Regression test with a real hang asserts return at the budget. Paper research path only; no Helsinki/live change.
@@ -21,7 +25,7 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Changed
 
-- Tuesday 2026-09-08 posture: operational paper pilot on clean baseline (`research.cli run`), not `--allow-degraded`, not expanded-strategy readiness. Unit tests ≠ live entitlement. Schwab still unconnected; economic calendar incomplete.
+- Tuesday 2026-09-08 posture: operational paper pilot on clean baseline (`research.cli run`), not `--allow-degraded`, not expanded-strategy readiness. Unit tests ≠ live entitlement. Schwab still unconnected. UW economic calendar / dark pool / screener / tide are expanded LLM context only; Finnhub `/calendar/economic` still 403 on this plan.
 
 ### Fixed
 

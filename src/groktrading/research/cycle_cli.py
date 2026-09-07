@@ -51,7 +51,8 @@ def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> di
         "note": (
             "Tuesday 2026-09-08 is an operational paper pilot on the clean baseline "
             "(research.cli run). Do not launch with --allow-degraded. Expanded select "
-            "requires context coverage available (except optional depth) or an explicit "
+            "requires context coverage available (except optional depth / UW dark pool / "
+            "screener / tide / political) or an explicit "
             "--allow-degraded label on a later paper day. Do not present a degraded run "
             "as the full-context experiment. Passing unit tests is not live entitlement. "
             "No systemd/timers, no Helsinki restart, no live orders."
@@ -296,6 +297,7 @@ def main() -> None:
                         tradier=tradier,
                         finnhub=optional_finnhub(),
                         account_id=optional_account_id(),
+                        directory=directory,
                     )
                     if not target.exists():
                         write_once(target, context.model_dump(mode="json"))

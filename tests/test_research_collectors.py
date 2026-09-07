@@ -10,6 +10,7 @@ import pytest
 
 from groktrading.research.capture import (
     ReadFeed,
+    allowed_read_path,
     classify_uw_revision,
     provider_aggressor,
 )
@@ -19,10 +20,13 @@ from groktrading.research.collectors import (
     account_alias,
     archived_news_detail,
     collect_context,
+    collect_economic_calendar,
     collect_portfolio,
     write_expanded_context,
 )
 from groktrading.research.cycle import (
+    CATEGORIES,
+    OPTIONAL_CATEGORIES,
     Context,
     FailureRecord,
     failure_from_exception,
@@ -38,6 +42,23 @@ def _config() -> Config:
 
 def _clock(at: datetime) -> Any:
     return lambda: at
+
+
+def _uw_economic_body(*, empty: bool = False) -> dict[str, Any]:
+    if empty:
+        return {"data": []}
+    return {
+        "data": [
+            {
+                "event": "CPI",
+                "forecast": "0.2%",
+                "prev": "0.1%",
+                "reported_period": "Aug 2026",
+                "time": "2026-09-08T12:30:00Z",
+                "type": "economic",
+            }
+        ]
+    }
 
 
 def _calendar_body() -> dict[str, Any]:
@@ -100,6 +121,100 @@ def _handler(request: httpx.Request) -> httpx.Response:
                 ]
             },
         )
+    if path.endswith("/api/market/economic-calendar"):
+        return httpx.Response(200, json=_uw_economic_body())
+    if "/api/darkpool/recent" in path:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "ticker": "AAPL",
+                        "price": 190.5,
+                        "size": 10000,
+                        "executed_at": "2026-09-08T12:00:00Z",
+                    },
+                    {
+                        "ticker": "ZZZZ",
+                        "price": 1.0,
+                        "size": 50,
+                        "executed_at": "2026-09-08T12:01:00Z",
+                    },
+                ]
+            },
+        )
+    if "/api/darkpool/" in path:
+        ticker = path.rstrip("/").split("/")[-1]
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "ticker": ticker,
+                        "price": 100.25,
+                        "size": 2500,
+                        "executed_at": "2026-09-08T11:55:00Z",
+                    }
+                ]
+            },
+        )
+    if path.endswith("/api/screener/option-contracts"):
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "ticker_symbol": "AAPL",
+                        "option_symbol": "AAPL260911C00100000",
+                        "type": "call",
+                        "strike": 100,
+                        "avg_price": 1.05,
+                        "volume": 500,
+                    },
+                    {
+                        "ticker_symbol": "OTHER",
+                        "option_symbol": "OTHER260911C00100000",
+                        "type": "call",
+                        "avg_price": 2.0,
+                    },
+                ]
+            },
+        )
+    if path.endswith("/api/market/market-tide"):
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "timestamp": "2026-09-08T13:00:00Z",
+                        "net_call_premium": 1000,
+                        "net_put_premium": 800,
+                    }
+                ]
+            },
+        )
+    if path.endswith("/api/congress/recent-trades"):
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "ticker": "MSFT",
+                        "txn_type": "Buy",
+                        "amounts": "$1,000 - $15,000",
+                        "filed_at_date": "2026-09-04",
+                        "name": "Fixture Member",
+                    },
+                    {
+                        "ticker": "NOTINUNIVERSE",
+                        "txn_type": "Sell",
+                        "amounts": "$15,001 - $50,000",
+                    },
+                ]
+            },
+        )
+    if path.endswith("/api/insider/transactions"):
+        return httpx.Response(200, json={"data": []})
     if path.endswith("/markets/quotes"):
         rows = []
         for item in symbol.split(","):
@@ -283,6 +398,11 @@ def test_collectors_fill_context_with_mocked_http(tmp_path: Path) -> None:
     assert by_cat["history"] == "available"
     assert by_cat["portfolio"] == "available"
     assert by_cat["depth"] == "missing"
+    assert by_cat["dark_pool"] == "available"
+    assert by_cat["option_screener"] == "available"
+    assert by_cat["market_tide"] == "available"
+    assert by_cat["political"] == "available"
+    assert set(by_cat) == CATEGORIES
     payload = json.dumps(context.model_dump(mode="json"))
     assert "SHOULD-NOT-APPEAR" not in payload
     assert "account_number" not in payload
@@ -290,6 +410,14 @@ def test_collectors_fill_context_with_mocked_http(tmp_path: Path) -> None:
     assert "tradier_read_only_until_schwab_oauth" in payload
     assert any(r.evidence_id.startswith("company-news:aapl-story:v2") for r in context.records)
     assert any(r.evidence_id == "calendar:print-earnings" for r in context.records)
+    econ = next(r for r in context.records if r.evidence_id == "calendar:uw-economic")
+    assert econ.payload["event_count"] == 1
+    assert "actual" not in econ.payload
+    assert any(r.evidence_id == "darkpool:AAPL" for r in context.records)
+    congress = next(r for r in context.records if r.evidence_id == "political:uw-congress")
+    assert congress.payload["row_count"] == 1
+    assert congress.payload["trades"][0]["ticker"] == "MSFT"
+    assert not any(r.evidence_id == "political:uw-insider" for r in context.records)
     chain = next(r for r in context.records if r.category == "option_chain")
     assert chain.payload["contracts"][0]["open_interest_label"] == "prior_day_provider_field"
     hist = next(r for r in context.records if r.evidence_id == "history:AAPL")
@@ -465,16 +593,7 @@ def test_collect_context_survives_crashing_orders_payload() -> None:
         clock=_clock(start - timedelta(minutes=10)),
     )
     by_cat = {entry.category: entry.status for entry in context.coverage}
-    assert set(by_cat) == {
-        "company_news",
-        "world_news",
-        "macro",
-        "calendar",
-        "option_chain",
-        "history",
-        "portfolio",
-        "depth",
-    }
+    assert set(by_cat) == CATEGORIES
     assert by_cat["portfolio"] == "missing"
     portfolio = next(entry for entry in context.coverage if entry.category == "portfolio")
     assert "orders unusable" in portfolio.detail
@@ -569,6 +688,12 @@ def test_write_context_and_failure_record(tmp_path: Path) -> None:
         clock=_clock(start - timedelta(minutes=15)),
     )
     Context.model_validate_json((tmp_path / "context.json").read_text())
+    assert (tmp_path / "raw/uw-economic-calendar.json").is_file()
+    assert (tmp_path / "raw/uw-darkpool-AAPL.json").is_file()
+    assert (tmp_path / "raw/uw-darkpool-recent.json").is_file()
+    assert (tmp_path / "raw/uw-option-screener.json").is_file()
+    assert (tmp_path / "raw/uw-market-tide.json").is_file()
+    assert (tmp_path / "raw/uw-congress-recent.json").is_file()
     record = failure_from_exception(
         session=date(2026, 9, 8),
         stage="select",
@@ -862,3 +987,133 @@ def test_day_plan_and_fail_cli(tmp_path: Path, monkeypatch: Any) -> None:
     loaded = FailureRecord.model_validate_json(failure_path.read_text())
     assert loaded.stage == "select"
     assert loaded.decision_hash is None
+
+
+def test_allowed_uw_expanded_paths() -> None:
+    assert allowed_read_path("/api/market/economic-calendar")
+    assert allowed_read_path("/api/darkpool/AAPL")
+    assert allowed_read_path("/api/darkpool/recent")
+    assert allowed_read_path("/api/screener/option-contracts")
+    assert allowed_read_path("/api/market/market-tide")
+    assert allowed_read_path("/api/congress/recent-trades")
+    assert allowed_read_path("/api/insider/transactions")
+    assert not allowed_read_path("/api/darkpool/../secret")
+    assert not allowed_read_path("/api/options/flow")
+
+
+def test_uw_economic_calendar_empty_data_is_available(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/market/economic-calendar"):
+            return httpx.Response(200, json=_uw_economic_body(empty=True))
+        return _handler(request)
+
+    uw = ReadFeed(
+        "https://api.unusualwhales.com",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    uw.interval = 0
+    start, _ = window(date(2026, 9, 8))
+    records, coverage = collect_economic_calendar(
+        uw=uw,
+        clock=_clock(start - timedelta(minutes=20)),
+        directory=tmp_path,
+    )
+    assert coverage.status == "available"
+    assert records[0].payload["event_count"] == 0
+    assert records[0].payload["events"] == []
+    assert "actual" not in records[0].payload
+    assert (tmp_path / "raw/uw-economic-calendar.json").is_file()
+    uw.close()
+
+
+def test_uw_expanded_http_failure_does_not_abort_baseline(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if "/api/darkpool/" in path or path.endswith(
+            (
+                "/api/market/economic-calendar",
+                "/api/screener/option-contracts",
+                "/api/market/market-tide",
+                "/api/congress/recent-trades",
+                "/api/insider/transactions",
+            )
+        ):
+            return httpx.Response(403, json={"error": "forbidden"})
+        return _handler(request)
+
+    uw = ReadFeed(
+        "https://api.unusualwhales.com",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    tradier = ReadFeed(
+        "https://api.tradier.com/v1",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    uw.interval = tradier.interval = 0
+    start, _ = window(date(2026, 9, 8))
+    from groktrading.research.capture import isolate_optional_collectors
+
+    isolate_optional_collectors(
+        config=_config(),
+        session=date(2026, 9, 8),
+        directory=tmp_path,
+        uw=uw,
+        tradier=tradier,
+        news_events=[],
+        deadline=start,
+    )
+    assert not (tmp_path / "context-failed.json").exists()
+    context = Context.model_validate_json((tmp_path / "context.json").read_text())
+    by_cat = {entry.category: entry.status for entry in context.coverage}
+    assert by_cat["calendar"] == "partial"
+    assert by_cat["dark_pool"] == "missing"
+    assert by_cat["option_screener"] == "missing"
+    assert by_cat["market_tide"] == "missing"
+    assert by_cat["political"] == "missing"
+    assert by_cat["option_chain"] == "available"
+    assert not (tmp_path / "packet.json").exists()
+    uw.close()
+    tradier.close()
+
+
+def test_optional_uw_categories_do_not_force_degraded(tmp_path: Path) -> None:
+    config = _config()
+    demo(tmp_path / "demo", config)
+    packet = Packet.model_validate_json((tmp_path / "demo/packet.json").read_text())
+    end = window(packet.session)[1]
+    required = CATEGORIES - OPTIONAL_CATEGORIES
+    from groktrading.research.cycle import Coverage, Evidence
+
+    ctx = Context(
+        session=packet.session,
+        frozen_at=end,
+        records=[
+            Evidence(
+                evidence_id=c,
+                category=c,  # type: ignore[arg-type]
+                symbols=[],
+                source="synthetic",
+                source_uri="fixture",
+                as_of=end,
+                received_at=end,
+                summary="Synthetic test evidence",
+                payload={"value": 1},
+            )
+            for c in sorted(required)
+        ],
+        coverage=[
+            Coverage(
+                category=c,  # type: ignore[arg-type]
+                status="available" if c in required else "missing",
+                detail="fixture",
+            )
+            for c in sorted(CATEGORIES)
+        ],
+    )
+    ctx.for_selection(packet, allow_degraded=False)
