@@ -441,6 +441,7 @@ def _recommend_codex_cli(
 ) -> dict[str, Any]:
     runner = runner or run_codex
     cli = inspect_codex(runner)
+    directory = directory.resolve()
     body = request_body(packet)
     work = directory / "codex-work"
     work.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -499,7 +500,7 @@ def _recommend_codex_cli(
     result = {
         **manifest,
         "received_at": received.isoformat(),
-        "returned_model": extracted.get("returned_model") or packet.config.model,
+        "returned_model": extracted.get("returned_model"),
         "response_id": None,
         "usage": extracted.get("usage") or {},
         "synthetic": False,
@@ -586,11 +587,10 @@ def _probe_openai_responses(
             client.close()
 
 
-def _probe_codex_cli(
-    config: Config, directory: Path, runner: CodexRun | None
-) -> dict[str, Any]:
+def _probe_codex_cli(config: Config, directory: Path, runner: CodexRun | None) -> dict[str, Any]:
     runner = runner or run_codex
     cli = inspect_codex(runner)
+    directory = directory.resolve()
     work = directory / "codex-work"
     work.mkdir(parents=True, exist_ok=True, mode=0o700)
     schema_path = directory / "probe-schema.json"
@@ -650,11 +650,10 @@ def _probe_codex_cli(
         raise ValueError("model probe incomplete/refused")
     return {
         "requested_model": config.model,
-        "returned_model": extracted.get("returned_model") or config.model,
+        "returned_model": extracted.get("returned_model"),
         "recommend_backend": "codex_cli",
         "codex_version": cli["version"],
         "structured_outputs": True,
         "usage": extracted.get("usage"),
         "orders": False,
     }
-

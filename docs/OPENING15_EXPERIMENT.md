@@ -2,8 +2,8 @@
 
 ## What this tests
 
-Can a ChatGPT Pro Codex CLI session (requested model `gpt-6-astra`, which Codex may run as
-**GPT-6 Astra / GPT-6 Pro** if that is what the logged-in plan selects) examine the first
+Can an authorized Codex CLI session (requested model `gpt-6-astra`; access must be
+verified by a real host probe) examine the first
 15 minutes of options prints across ten stocks and select up to three contracts whose
 subsequent same-day paper outcomes outperform the available set? There is **no predefined
 alpha filter**: no minimum premium, ask-side requirement, sit-2, breakout recipe, or
@@ -106,8 +106,8 @@ Before the first prospective run, the operator must verify:
 
 1. Codex CLI is ≥ 0.153.0, on `PATH`, and `codex login status` succeeds for the ChatGPT
    Pro account. `model-probe` must complete against the requested model (`gpt-6-astra`).
-   No automatic fallback model. The CLI may surface Astra as GPT-6 Pro; record the
-   returned model string. Do not treat a catalog listing as a successful probe.
+   No automatic fallback model. Record the returned model string if present; absence is
+   unknown. Do not treat a catalog listing as a successful probe.
 2. UW access includes current individual option trades. An alerts-only or 15-minute-delayed
    entitlement does not satisfy this experiment. Capture rejects an empty opening tape.
 3. Tradier production option quotes are entitled and current. The weekend preflight does
@@ -251,3 +251,6 @@ resolver prompts live in `src/groktrading/research/prompts/`.
 [Related work and prospective protocol](ARXIV_RESEARCH_PROTOCOL.md) identifies relevant
 arXiv papers and specifies how to test whether feedback improves next-day decisions.
 The expanded extension is not a claim of connected feeds, completed deployment or profit.
+
+For exact connected APIs, current gaps and the execution test, see
+[Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md).

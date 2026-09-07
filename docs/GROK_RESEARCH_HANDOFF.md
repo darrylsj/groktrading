@@ -2,6 +2,8 @@
 
 Status: reviewed reference code and implementation specification, not a connected expanded-data service. Builds on PR #8 and Grok's PR #9 Codex CLI integration. No live orders or Helsinki restart. Tuesday 2026-09-08 is an operational paper pilot only if host preflight passes; it is not a promised profitability demonstration.
 
+See [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md) for the exact current APIs, execution test, and host launch checks.
+
 ## Entry points
 
 - `src/groktrading/research/cycle.py`: typed evidence manifest, archived retrieval, selection, resolver, bounded next-day memory.

@@ -167,3 +167,120 @@ def test_schema_uses_typed_stock_reflections() -> None:
         (cycle.PROMPTS / name).is_file()
         for name in ("selector_v2.md", "retrieval_v1.md", "resolver_v1.md")
     )
+
+
+def test_cli_boundary_through_evaluation_and_next_day_memory(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Exercise real orchestration/schema/archive code; only external Codex is a fixture."""
+    import subprocess
+
+    from groktrading.research.evaluation import evaluate
+    from groktrading.research.opening15 import canonical
+
+    packet, fixture, _ = sample
+    start, end = window(packet.session)
+    stages: list[str] = []
+    clock = [packet.knowledge_cutoff]
+    monkeypatch.setattr(cycle, "now_utc", lambda: clock[0])
+    monkeypatch.setenv("UW_API_TOKEN", "synthetic-test-credential")
+    monkeypatch.setenv("TRADIER_ACCESS_TOKEN", "synthetic-test-credential")
+
+    def runner(argv: Any, **kwargs: Any) -> Any:
+        if argv[1:] == ["--version"]:
+            return subprocess.CompletedProcess(argv, 0, "codex-cli 0.153.0", "")
+        if argv[1:3] == ["login", "status"]:
+            return subprocess.CompletedProcess(argv, 0, "Logged in using ChatGPT", "")
+        assert "--ignore-rules" not in argv
+        assert "UW_API_TOKEN" not in kwargs["env"]
+        assert "TRADIER_ACCESS_TOKEN" not in kwargs["env"]
+        assert "synthetic-test-credential" not in kwargs["input_text"]
+        schema_path = Path(argv[argv.index("--output-schema") + 1])
+        output = Path(argv[argv.index("--output-last-message") + 1])
+        assert schema_path.is_absolute() and output.is_absolute()
+        schema = json.loads(schema_path.read_text())
+        title = schema["title"]
+        stages.append(title)
+        if title == "RetrievalRequest":
+            result: Any = {"evidence_ids": [], "rationale": "summaries sufficient for fixture"}
+        elif title == "Selection":
+            result = {
+                "decision": fixture["decision"],
+                "context_citations": ["macro", "portfolio"],
+                "portfolio_assessment": "Synthetic standalone paper selection",
+                "memory_use": "Empty first-day memory",
+            }
+        else:
+            result = resolution(packet, fixture).model_dump(mode="json")
+        output.write_text(canonical(result))
+        return subprocess.CompletedProcess(
+            argv, 0, canonical({"type": "turn.completed", "usage": {"input_tokens": 1}}), ""
+        )
+
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    selected = cycle.select(packet, context(packet), memory, tmp_path / "full", runner=runner)
+    contract = selected["decision"]["picks"][0]["option_symbol"]
+    observations = []
+    for at, bid, ask in (
+        (clock[0] + timedelta(seconds=1), 0.95, 1.0),
+        (end + timedelta(hours=6, minutes=10), 1.10, 1.15),
+    ):
+        observations.append(
+            {
+                "received_at": at.isoformat(),
+                "source": "tradier_production",  # simulated provider response
+                "quote": {
+                    "symbol": contract,
+                    "type": "option",
+                    "bid": bid,
+                    "ask": ask,
+                    "bidsize": 1,
+                    "asksize": 1,
+                    "bid_date": at.timestamp() * 1000,
+                    "ask_date": at.timestamp() * 1000,
+                },
+            }
+        )
+    evaluation = evaluate(packet, selected, observations)
+    assert evaluation["decision_hash"] == digest(selected)
+    assert evaluation["selected_net_before_api_and_infra_usd"] == pytest.approx(6.7)
+    clock[0] = end + timedelta(hours=7)
+    daily = cycle.resolve(
+        packet, selected, evaluation, context(packet), tmp_path / "after", runner=runner
+    )
+    tomorrow = packet.session + timedelta(days=1)
+    next_memory = cycle.build_memory([daily], tomorrow, window(tomorrow)[0] - timedelta(minutes=5))
+    assert next_memory.days[0].decision_hash == digest(selected)
+    assert stages == ["RetrievalRequest", "Selection", "Resolution"]
+    assert (tmp_path / "full/selection/response.json").is_file()
+    assert (tmp_path / "after/daily-resolution.json").is_file()
+
+
+@pytest.mark.parametrize("failure", ["tool", "invalid_json", "exit"])
+def test_cli_stage_failure_never_creates_decision(
+    sample: Any, tmp_path: Path, monkeypatch: Any, failure: str
+) -> None:
+    import subprocess
+
+    packet = sample[0]
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+
+    def runner(argv: Any, **kwargs: Any) -> Any:
+        if argv[1:] == ["--version"]:
+            return subprocess.CompletedProcess(argv, 0, "codex-cli 0.153.0", "")
+        if argv[1:3] == ["login", "status"]:
+            return subprocess.CompletedProcess(argv, 0, "Logged in using ChatGPT", "")
+        output = Path(argv[argv.index("--output-last-message") + 1])
+        output.write_text(
+            "{" if failure == "invalid_json" else '{"evidence_ids":[],"rationale":"fixture"}'
+        )
+        events = '{"item":{"type":"web_search"}}' if failure == "tool" else ""
+        return subprocess.CompletedProcess(argv, int(failure == "exit"), events, "")
+
+    memory = cycle.build_memory(
+        [], packet.session, window(packet.session)[0] - timedelta(minutes=5)
+    )
+    with pytest.raises(ValueError):
+        cycle.select(packet, context(packet), memory, tmp_path / "failed", runner=runner)
+    assert not (tmp_path / "failed/decision.json").exists()
+    assert (tmp_path / "failed/retrieval-0/response.json").is_file()

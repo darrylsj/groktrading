@@ -126,7 +126,6 @@ def exec_argv(
         "exec",
         "--skip-git-repo-check",
         "--ignore-user-config",
-        "--ignore-rules",
         "--ephemeral",
         "--color",
         "never",
