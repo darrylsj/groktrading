@@ -24,6 +24,7 @@ def sample(tmp_path: Path) -> tuple[Packet, dict[str, Any], dict[str, Any]]:
     evaluation.update(
         packet_hash=decision["packet_hash"], decision_hash=digest(decision), synthetic=False
     )
+    evaluation.pop("eligibility_hash", None)
     return packet, decision, evaluation
 
 

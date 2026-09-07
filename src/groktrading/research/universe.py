@@ -25,7 +25,11 @@ FIXED_K_VALUES = (1, 2, 3)
 
 def packet_contracts(packet: Packet) -> list[str]:
     return sorted(
-        {str(event.raw["option_chain_id"]) for event in packet.events if event.kind == "option_trade"}
+        {
+            str(event.raw["option_chain_id"])
+            for event in packet.events
+            if event.kind == "option_trade"
+        }
     )
 
 
@@ -85,7 +89,7 @@ def build_shortlist_eligibility(
     shortlist: dict[str, Any],
 ) -> dict[str, Any]:
     extra_ids = {
-        str(getattr(record, "evidence_id"))
+        str(record.evidence_id)
         for record in context_records
         if getattr(record, "evidence_id", None)
     }

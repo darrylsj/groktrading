@@ -106,7 +106,8 @@ def test_abstain_and_zero_picks_baselines(sample: Any) -> None:
     assert report["baselines"]["scorecards"]["selection_quality_same_k"]["defined"] is False
     assert report["baselines"]["scorecards"]["policy_enter_or_abstain"]["entered"] is False
     assert report["baselines"]["fixed_k"]["1"]["random_k"]["percentile_of_zero"] is not None
-    assert report["baselines"]["scorecards"]["policy_enter_or_abstain"]["policy_percentile"] is not None
+    policy = report["baselines"]["scorecards"]["policy_enter_or_abstain"]
+    assert policy["policy_percentile"] is not None
 
 
 def test_mechanical_top_k_uses_ask_side_premium_only(sample: Any) -> None:

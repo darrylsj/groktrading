@@ -131,18 +131,10 @@ def test_protocol_ignores_sessions_after_five() -> None:
 
 
 def test_protocol_missing_baselines_not_scoreable() -> None:
-    result = decide_protocol(
-        [
-            {
-                "paper_only": True,
-                "synthetic": False,
-                "selected_net_before_api_and_infra_usd": 1,
-                "session": f"2026-09-0{i}",
-                "packet_hash": f"hash-{i}",
-            }
-            for i in range(1, 6)
-        ]
-    )
+    reports = [_report(f"2026-09-0{i}", 1, 1, 70) for i in range(1, 6)]
+    for report in reports:
+        report.pop("baselines")
+    result = decide_protocol(reports)
     assert result["verdict"] == "insufficient"
 
 
