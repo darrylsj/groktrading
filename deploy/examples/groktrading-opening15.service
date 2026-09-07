@@ -1,0 +1,20 @@
+# INACTIVE TEMPLATE. Dedicated research checkout; does not replace any Helsinki unit.
+# Operator must set the user, checkout, UW/Tradier env file, and a PATH that includes
+# Codex CLI (`codex`) already logged in as ChatGPT Pro for that same user.
+[Unit]
+Description=Opening15 Codex CLI prospective paper experiment (no orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=YOUR_RESEARCH_USER
+WorkingDirectory=/opt/groktrading-research
+EnvironmentFile=/etc/groktrading-research/research.env
+Environment=TRADIER_ENV=production
+ExecStart=/opt/groktrading-research/.venv/bin/python -m groktrading.research.cli run --session 2026-09-08 --output research-runs/2026-09-08
+TimeoutStartSec=8h
+Restart=no
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

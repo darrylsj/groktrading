@@ -9,6 +9,8 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Opening15 / research-cycle expanded Context collectors on `main`: UW option-trades + headlines, Tradier quotes/calendar/history/chains and read-only account snapshot, entitlement-gated Finnhub general news. Portfolio is Tradier-backed until Schwab OAuth. Typed `FailureRecord`, file-based prompt registry, and `cycle_cli day-plan`. Runbook: [docs/TUESDAY_EXECUTION_READINESS.md](docs/TUESDAY_EXECUTION_READINESS.md).
+- Opening15 recommend backend selection: `recommend_backend` is `codex_cli` (default) or `openai_responses`. Codex CLI path uses `codex exec` with the ChatGPT Pro CLI session, `--output-schema` Decision JSON, read-only/ephemeral flags, and recorded `codex --version`. `OPENAI_API_KEY` is not required when the backend is `codex_cli`. Responses API remains behind the flag. Runbook: [docs/OPENING15_EXPERIMENT.md](docs/OPENING15_EXPERIMENT.md).
 - Public OpenAI audit pack: `docs/OPENAI_AUDIT_BRIEF.md` (what to review / what not to change / $25k YOLO expansion ask) and `docs/WEBSOCKETS.md` (Finnhub stock-trade WS vs option NBBO, Helsinki `trading-desk-tape` vs package `feeds/`, WS-never-orders, webhook events, reconnect/TTL/HMAC/AH-weekend coalesce, print→filter→webhook→Grok→gate→preview→submit sequence).
 - README / operating-model / safety / architecture lead: **public reference package** for external audit; not financial advice; live is operator-gated; **$25,000 planning capital** + YOLO **capital expansion** mandate; live fills may still be cash-constrained on a smaller funded balance.
 

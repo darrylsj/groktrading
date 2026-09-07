@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main, "cursor/**"]
+    branches: [main, "cursor/**", "codex/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "codex/opening15-astra-experiment", "codex/research-learning-handoff"]
 
 permissions:
   contents: read
