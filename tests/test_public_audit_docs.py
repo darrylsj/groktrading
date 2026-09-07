@@ -81,6 +81,8 @@ def test_openai_audit_brief_states_scope_and_ask() -> None:
         "SAFETY.md",
         "WEBSOCKETS.md",
         "ARCHITECTURE.md",
+        "OPENING15_DECISION_PROTOCOL.md",
+        "TUESDAY_EXECUTION_READINESS.md",
         "Not financial advice",
     ):
         assert needle in text, needle
@@ -123,6 +125,7 @@ def test_claude_audit_brief_states_scope_and_ask() -> None:
         "SAFETY.md",
         "OPENING15_EXPERIMENT.md",
         "TUESDAY_EXECUTION_READINESS.md",
+        "OPENING15_DECISION_PROTOCOL.md",
         "GROK_RESEARCH_HANDOFF.md",
         "Not financial advice",
     ):

@@ -72,8 +72,9 @@ Discretionary **first 15 minutes** (09:30–09:45 ET) across a ten-stock univers
 | Mode | **Paper only.** No preview, submit, cancel, or modify |
 | Recommend | **Codex CLI** + operator **ChatGPT Pro** login; requested model `gpt-6-astra` (host probe required) |
 | Exit | Fixed **15:55 ET** paper mark; missing exits stay null (not a fabricated zero) |
-| Baseline | Opening-window UW prints + Tradier quotes → Codex decision → paper monitor |
-| Expanded | Same plus Context collectors (news, macro, calendar, chains, history, Tradier-backed portfolio). Required categories must be `available` (depth may be `missing`) or the run is `--allow-degraded` and labeled |
+| Baseline | Opening-window UW prints + Tradier quotes → Codex decision → paper monitor. **Tuesday 2026-09-08 launch path.** |
+| Expanded | Same plus Context collectors. Not Tuesday's claim. Required categories must be `available` (depth may be `missing`) or a later paper day is `--allow-degraded` and labeled. `--allow-degraded` is not a live entitlement. |
+| Decision protocol | After five paper sessions: `insufficient \| kill \| continue \| inconclusive`. `continue` = more paper / wider paper universe, never live. [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md) |
 
 Schwab OAuth is **not** connected. Expanded portfolio is **Tradier read-only** (`/accounts/{id}/balances|positions|orders`) until Schwab lands. Schwab remains **holdings-first** when that integration exists — it is not a second live-order path. Account numbers are opaque `acct-` aliases in model-facing JSON.
 
@@ -147,7 +148,8 @@ Do **not** invent live quotes, fills, or P&L. Journaled rows in `logs/trades.jso
 | [WEBSOCKETS.md](WEBSOCKETS.md) | Finnhub ≠ option NBBO; Helsinki tape vs package `feeds/`; WS never orders |
 | [SAFETY.md](SAFETY.md) | Live card, gate checklist, P0 hardening, forbidden list |
 | [OPENING15_EXPERIMENT.md](OPENING15_EXPERIMENT.md) | First-15m paper experiment, Codex CLI, 15:55 ET exit |
-| [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md) | Connected APIs, baseline vs expanded, host launch checks |
+| [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md) | Tuesday = clean baseline paper pilot (`research.cli run`), not `--allow-degraded` |
+| [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md) | Five paper sessions → insufficient/kill/continue/inconclusive; continue ≠ live |
 | [GROK_RESEARCH_HANDOFF.md](GROK_RESEARCH_HANDOFF.md) | Collectors, coverage contract, Schwab-not-ready portfolio |
 | [README.md](../README.md) | Public-audit lead, $25k mandate, live card |
 | [ARCHITECTURE.md](ARCHITECTURE.md) / [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) | Runtime split |

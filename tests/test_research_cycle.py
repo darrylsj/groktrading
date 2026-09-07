@@ -286,6 +286,90 @@ def test_cli_stage_failure_never_creates_decision(
     assert (tmp_path / "failed/retrieval-0/response.json").is_file()
 
 
+def test_select_uses_active_registry_prompt(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    from groktrading.research.registry import PromptRegistry, PromptVersion, seed_registry
+
+    packet, decision, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    calls: list[str] = []
+
+    def fake(name: str, payload: Any, schema: Any, *args: Any) -> Any:
+        calls.append(name)
+        if schema is cycle.RetrievalRequest:
+            return schema(evidence_ids=[], rationale="none")
+        if schema is cycle.Selection:
+            return schema(
+                decision=Decision.model_validate(decision["decision"]),
+                context_citations=["macro"],
+                portfolio_assessment="fixture",
+                memory_use="No prior days",
+            )
+        raise AssertionError(schema)
+
+    seeded = seed_registry()
+    alt = PromptVersion(
+        version_id="selector_alt",
+        prompt_name="retrieval_v1.md",
+        prompt_hash=seeded.get("retrieval_v1").prompt_hash,
+        parent_version="selector_v2",
+        supporting_sessions=[],
+        hypothesis="Prove activating a version changes the selector prompt file",
+        proposed_difference="Test double; not a production arm",
+        forward_test="Equal evidence/compute",
+        status="accepted",
+        created_at=seeded.versions[0].created_at,
+        frozen_at=seeded.versions[0].created_at,
+    )
+    registry = PromptRegistry(
+        versions=[*seeded.versions, alt], active_version_id="selector_alt"
+    )
+    monkeypatch.setattr(cycle, "cli_json", fake)
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+    selected = cycle.select(
+        packet, context(packet), memory, tmp_path / "select-alt", registry=registry
+    )
+    assert calls[-1] == "retrieval_v1.md"
+    assert selected["prompt_version"] == "selector_alt"
+
+
+def test_memory_includes_failed_session_records(sample: Any, tmp_path: Path) -> None:
+    packet, decision, _ = sample
+    daily = cycle.DailyRecord(
+        session=date(2026, 8, 7),
+        available_at=window(date(2026, 8, 7))[1],
+        source_hash="fixture",
+        decision_hash="fixture",
+        evaluation_hash="fixture",
+        status="resolved",
+        resolution=resolution(packet, decision),
+    )
+    failed = cycle.FailureRecord(
+        session=date(2026, 8, 6),
+        available_at=window(date(2026, 8, 6))[1],
+        stage="select",
+        error_type="ValueError",
+        detail="CLI stage failed; preserve attempt, no retry",
+        source_hash="fixture-fail",
+        attempt_dir=str(tmp_path / "failed-day"),
+    )
+    path = cycle.write_failure(tmp_path / "failed-day", failed)
+    loaded = cycle.load_session_record(path)
+    assert isinstance(loaded, cycle.FailureRecord)
+    target = date(2026, 8, 8)
+    memory = cycle.build_memory(
+        [daily],
+        target,
+        window(target)[0] - timedelta(minutes=10),
+        failures=[failed],
+    )
+    assert memory.failures[0].session == date(2026, 8, 6)
+    assert memory.brief()["failures"][0]["stage"] == "select"
+    assert memory.brief()["failures"][0]["status"] == "failed"
+
+
 def test_failure_record_has_no_decision_or_pnl(sample: Any, tmp_path: Path) -> None:
     packet = sample[0]
     record = cycle.failure_from_exception(

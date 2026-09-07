@@ -11,14 +11,13 @@ This software does **not** promise trading success. It must **not** invent price
 ## Opening15 experiment (paper research, Codex CLI)
 
 A separate, discretionary **first-15-minute / ten-stock** experiment is available for Tuesday,
-September 8, 2026. The recommend step runs through **OpenAI Codex CLI** using the operator's
-**ChatGPT Pro** login (not `OPENAI_API_KEY` / Responses API). Codex may select **GPT-6 Astra**
-as the underlying model when that model is requested; naming in the runbook keeps that
-distinction. Capture/monitor/report stay quote-only. There is **no broker order path** and
-the live desk is unchanged. Expanded Context collectors (UW + Tradier, optional Finnhub
-world news, Tradier-backed interim portfolio) are documented in
-**[Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md)**. Setup, Codex login,
-model probe, and Tuesday launch: **[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
+September 8, 2026. Tuesday is a **clean baseline paper pilot** (`research.cli run`), not
+`--allow-degraded` and not expanded-strategy readiness. The recommend step runs through
+**OpenAI Codex CLI** using the operator's **ChatGPT Pro** login (not `OPENAI_API_KEY` /
+Responses API). Capture/monitor/report stay quote-only. There is **no broker order path**.
+Protocol: **[Opening15 decision protocol](docs/OPENING15_DECISION_PROTOCOL.md)**. Launch:
+**[Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md)** and
+**[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
 
 ## Operator mandate (YOLO — capital expansion)
 

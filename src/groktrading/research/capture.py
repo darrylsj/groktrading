@@ -247,6 +247,67 @@ class FlowCapture:
             )
 
 
+def _record_optional_context_failure(directory: Path, detail: str) -> None:
+    path = directory / "context-failed.json"
+    if path.exists():
+        return
+    write_once(
+        path,
+        {
+            "at": now_utc().isoformat(),
+            "detail": detail,
+            "note": (
+                "baseline packet still captured; optional Finnhub/world news/chains "
+                "collectors are isolated from opening-tape capture. "
+                "expanded select needs a valid context.json"
+            ),
+        },
+    )
+
+
+def isolate_optional_collectors(
+    *,
+    config: Config,
+    session: date,
+    directory: Path,
+    uw: ReadFeed,
+    tradier: ReadFeed,
+    news_events: list[Event],
+    deadline: datetime,
+) -> None:
+    """Run expanded collectors off the baseline tape path. Timeouts never abort capture."""
+    from groktrading.research.collectors import write_expanded_context
+
+    remaining = (deadline - now_utc()).total_seconds()
+    if remaining <= 0:
+        _record_optional_context_failure(directory, "no time remaining before open")
+        return
+
+    def _run() -> None:
+        write_expanded_context(
+            config=config,
+            session=session,
+            directory=directory,
+            uw=uw,
+            tradier=tradier,
+            news_events=news_events,
+            flow_events=[],
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_run)
+        try:
+            future.result(timeout=remaining)
+        except Exception as exc:
+            if not future.done():
+                _record_optional_context_failure(
+                    directory, "expanded collectors exceeded preopen budget"
+                )
+                return
+            detail = str(exc) if str(exc) else type(exc).__name__
+            _record_optional_context_failure(directory, detail)
+
+
 def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: ReadFeed) -> Packet:
     start, end = window(day)
     locked = now_utc()
@@ -320,31 +381,17 @@ def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: R
                         raw=row,
                     )
                 )
-    from groktrading.research.collectors import write_expanded_context
-
-    try:
-        write_expanded_context(
-            config=config,
-            session=day,
-            directory=directory,
-            uw=uw,
-            tradier=tradier,
-            news_events=[event for event in events if event.kind == "news"],
-            flow_events=[],
-        )
-    except ValueError as exc:
-        write_once(
-            directory / "context-failed.json",
-            {
-                "at": now_utc().isoformat(),
-                "detail": str(exc),
-                "note": (
-                    "baseline packet still captured; "
-                    "expanded select needs a valid context.json"
-                ),
-            },
-        )
-    if now_utc() >= start:
+    news_done = now_utc()
+    isolate_optional_collectors(
+        config=config,
+        session=day,
+        directory=directory,
+        uw=uw,
+        tradier=tradier,
+        news_events=[event for event in events if event.kind == "news"],
+        deadline=start,
+    )
+    if news_done >= start:
         raise ValueError("preopen news setup overran open; launch earlier")
     with ThreadPoolExecutor(max_workers=1) as pool:
         worker = pool.submit(stock_worker)

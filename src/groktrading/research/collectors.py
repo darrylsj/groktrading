@@ -194,6 +194,15 @@ def _nested_field(mapping: Any, *keys: str) -> Any:
     return current
 
 
+def _known_amount(*values: Any) -> Any:
+    """Treat 0 as a known cash/BP figure; only None/blank/null are unknown."""
+    for value in values:
+        if value in (None, "", "null"):
+            continue
+        return value
+    return None
+
+
 def _write_raw(directory: Path, name: str, payload: dict[str, Any]) -> None:
     path = directory / "raw" / name
     if not path.exists():
@@ -431,9 +440,9 @@ def collect_macro(
     clock: Clock,
 ) -> tuple[list[Evidence], Coverage]:
     symbols = list(dict.fromkeys([*config.context_symbols, *DEFAULT_MACRO_SYMBOLS]))
-    received = clock()
     try:
         rows = quotes(tradier, symbols)
+        received = clock()
     except ValueError as exc:
         return [], Coverage(
             category="macro",
@@ -505,7 +514,6 @@ def collect_calendar(
     flow_events: list[Event],
     clock: Clock,
 ) -> tuple[list[Evidence], Coverage]:
-    received = clock()
     months = [(session.month, session.year)]
     nxt_month = 1 if session.month == 12 else session.month + 1
     nxt_year = session.year + 1 if session.month == 12 else session.year
@@ -513,6 +521,7 @@ def collect_calendar(
     days: list[dict[str, Any]] = []
     for month, year in months:
         days.extend(calendar_days(tradier, month, year))
+    received = clock()
     if not days:
         return [], Coverage(
             category="calendar",
@@ -596,6 +605,58 @@ def collect_calendar(
     )
 
 
+def _provider_quote_stamp(row: dict[str, Any]) -> datetime | None:
+    for key in ("ask_date", "bid_date", "trade_date", "quote_date"):
+        value = row.get(key)
+        if value in (None, "", 0, "0"):
+            continue
+        try:
+            return stamp(value)
+        except (ValueError, TypeError, OverflowError, OSError):
+            continue
+    return None
+
+
+def _chain_contract(
+    row: dict[str, Any], expiration: str, received: datetime, max_age: int
+) -> dict[str, Any]:
+    greeks = row.get("greeks")
+    bid_date = row.get("bid_date")
+    ask_date = row.get("ask_date")
+    contract: dict[str, Any] = {
+        "symbol": row.get("symbol"),
+        "option_type": row.get("option_type"),
+        "strike": row.get("strike"),
+        "expiration_date": row.get("expiration_date") or expiration,
+        "bid": row.get("bid"),
+        "ask": row.get("ask"),
+        "bidsize": row.get("bidsize"),
+        "asksize": row.get("asksize"),
+        "last": row.get("last"),
+        "volume": row.get("volume"),
+        "bid_date": bid_date,
+        "ask_date": ask_date,
+        "trade_date": row.get("trade_date"),
+        "quote_date": row.get("quote_date"),
+        "prior_session_open_interest": row.get("open_interest"),
+        "open_interest_label": "prior_day_provider_field",
+        "greeks": greeks if isinstance(greeks, dict) else None,
+        "greeks_label": "provider_orats_if_present" if greeks else "not_supplied",
+    }
+    ages: dict[str, float] = {}
+    try:
+        if bid_date not in (None, "", 0, "0"):
+            ages["bid"] = (received - stamp(bid_date)).total_seconds()
+        if ask_date not in (None, "", 0, "0"):
+            ages["ask"] = (received - stamp(ask_date)).total_seconds()
+    except (ValueError, TypeError, OverflowError, OSError):
+        ages = {}
+    if ages:
+        contract["quote_ages_seconds"] = ages
+        contract["quote_stale"] = any(age < 0 or age > max_age for age in ages.values())
+    return contract
+
+
 def collect_option_chain(
     *,
     config: Config,
@@ -605,7 +666,10 @@ def collect_option_chain(
 ) -> tuple[list[Evidence], Coverage]:
     records: list[Evidence] = []
     missing: list[str] = []
+    stale_contracts = 0
+    dated_contracts = 0
     for symbol in config.symbols:
+        symbol_records: list[Evidence] = []
         try:
             exp_body = tradier.get(
                 "/markets/options/expirations",
@@ -619,69 +683,82 @@ def collect_option_chain(
             missing.append(symbol)
             continue
         for expiration in expirations[:CHAIN_EXPIRATION_LIMIT]:
-            observed = clock()
             body = tradier.get(
                 "/markets/options/chains",
                 {"symbol": symbol, "expiration": expiration, "greeks": "true"},
             )
+            received = clock()
             rows = _chain_rows(body)
             contracts: list[dict[str, Any]] = []
+            provider_times: list[datetime] = []
             for row in rows:
-                greeks = row.get("greeks")
-                contracts.append(
-                    {
-                        "symbol": row.get("symbol"),
-                        "option_type": row.get("option_type"),
-                        "strike": row.get("strike"),
-                        "expiration_date": row.get("expiration_date") or expiration,
-                        "bid": row.get("bid"),
-                        "ask": row.get("ask"),
-                        "bidsize": row.get("bidsize"),
-                        "asksize": row.get("asksize"),
-                        "last": row.get("last"),
-                        "volume": row.get("volume"),
-                        "prior_session_open_interest": row.get("open_interest"),
-                        "open_interest_label": "prior_day_provider_field",
-                        "greeks": greeks if isinstance(greeks, dict) else None,
-                        "greeks_label": "provider_orats_if_present" if greeks else "not_supplied",
-                    }
+                contract = _chain_contract(
+                    row, expiration, received, config.max_quote_age_seconds
                 )
+                if "quote_ages_seconds" in contract:
+                    dated_contracts += 1
+                    if contract.get("quote_stale"):
+                        stale_contracts += 1
+                quoted = _provider_quote_stamp(row)
+                if quoted is not None:
+                    provider_times.append(quoted)
+                contracts.append(contract)
             if not contracts:
                 continue
-            records.append(
+            as_of = received
+            if provider_times:
+                latest = max(provider_times)
+                as_of = latest if latest <= received else received
+            symbol_records.append(
                 Evidence(
                     evidence_id=f"chain:{symbol}:{expiration}",
                     category="option_chain",
                     symbols=[symbol],
                     source="tradier_production",
                     source_uri=SOURCE_TRADIER_CHAINS,
-                    as_of=observed,
-                    received_at=observed,
+                    as_of=as_of,
+                    received_at=received,
                     summary=_summary(
                         f"{symbol} {expiration} chain {len(contracts)} contracts; "
                         "OI labeled prior-day; Greeks only if Tradier returned them"
                     ),
                     payload={
                         "expiration": expiration,
-                        "observed_at": observed.isoformat(),
+                        "observed_at": received.isoformat(),
+                        "provider_quote_as_of": as_of.isoformat(),
                         "contract_count": len(contracts),
                         "contracts": contracts,
                     },
                 )
             )
+        if not symbol_records:
+            missing.append(symbol)
+            continue
+        records.extend(symbol_records)
+    covered = {symbol for record in records for symbol in record.symbols}
+    uncovered = [symbol for symbol in config.symbols if symbol not in covered]
+    for symbol in uncovered:
+        if symbol not in missing:
+            missing.append(symbol)
     if not records:
         return [], Coverage(
             category="option_chain",
             status="missing",
-            detail=f"Tradier chains unavailable. missing={missing or config.symbols}",
+            detail=f"Tradier chains unavailable. missing={missing or list(config.symbols)}",
         )
-    status: CoverageStatus = "partial" if missing else "available"
+    status: CoverageStatus = "available"
+    if missing:
+        status = "partial"
+    elif dated_contracts and stale_contracts == dated_contracts:
+        status = "delayed"
     return records, Coverage(
         category="option_chain",
         status=status,
         detail=(
             f"{len(records)} Tradier chain snapshots (max {CHAIN_EXPIRATION_LIMIT} expirations). "
-            f"missing_underlyings={missing or 'none'}. "
+            f"per_symbol_missing={missing or 'none'}. "
+            f"provider_quote_timestamps={dated_contracts} stale={stale_contracts}. "
+            "available only when every configured underlying has at least one chain. "
             "open_interest is the provider prior-session field, not today's opening OI. "
             "Greeks are copied only when present; none are invented."
         ),
@@ -695,7 +772,6 @@ def collect_history(
     tradier: ReadFeed,
     clock: Clock,
 ) -> tuple[list[Evidence], Coverage]:
-    received = clock()
     prior = prior_open_session(tradier, session)
     if prior is None:
         return [], Coverage(
@@ -706,6 +782,7 @@ def collect_history(
     start = session - timedelta(days=HISTORY_LOOKBACK_CALENDAR_DAYS)
     records: list[Evidence] = []
     missing: list[str] = []
+    received = clock()
     for symbol in [*config.symbols, *config.context_symbols]:
         body = tradier.get(
             "/markets/history",
@@ -716,6 +793,7 @@ def collect_history(
                 "end": prior.isoformat(),
             },
         )
+        received = clock()
         days = [
             row
             for row in _history_days(body)
@@ -786,7 +864,6 @@ def collect_portfolio(
                 "(no TRADIER_ACCOUNT_ID). Expanded mode fails closed without --allow-degraded."
             ),
         )
-    received = clock()
     alias = account_alias(account_id)
     reasons: list[str] = []
     bal: dict[str, Any] = {}
@@ -794,6 +871,7 @@ def collect_portfolio(
     order_rows: list[dict[str, Any]] = []
     try:
         balances = tradier.get(f"/accounts/{account_id}/balances")
+        received = clock()
         parsed = _drop_secret_keys(
             _mapping(_walk(balances, "balances", label="balances"), label="balances")
         )
@@ -816,6 +894,7 @@ def collect_portfolio(
         order_rows = _dicts(_walk(orders, "orders", "order", label="orders"), label="orders")
     except (ValueError, TypeError, AttributeError) as exc:
         reasons.append(f"orders unusable ({exc})")
+    received = clock()
     if reasons:
         return [], Coverage(
             category="portfolio",
@@ -824,6 +903,21 @@ def collect_portfolio(
                 "Tradier portfolio fail-closed: "
                 + "; ".join(reasons)
                 + ". Working orders not assumed empty."
+            ),
+        )
+    cash = _known_amount(bal.get("total_cash"), bal.get("cash"))
+    buying_power = _known_amount(
+        _nested_field(bal, "margin", "option_buying_power"),
+        _nested_field(bal, "pdt", "option_buying_power"),
+        bal.get("option_buying_power"),
+    )
+    if cash is None or buying_power is None:
+        return [], Coverage(
+            category="portfolio",
+            status="missing",
+            detail=(
+                "Tradier portfolio snapshot missing known cash and/or option buying power. "
+                "Empty or unknown capital fields are not coverage available."
             ),
         )
     working = []
@@ -877,11 +971,9 @@ def collect_portfolio(
         payload={
             "account_alias": alias,
             "portfolio_source": "tradier_read_only_until_schwab_oauth",
-            "cash": bal.get("total_cash") or bal.get("cash"),
-            "equity": bal.get("total_equity") or bal.get("equity"),
-            "option_buying_power": _nested_field(bal, "margin", "option_buying_power")
-            or _nested_field(bal, "pdt", "option_buying_power")
-            or bal.get("option_buying_power"),
+            "cash": cash,
+            "equity": _known_amount(bal.get("total_equity"), bal.get("equity")),
+            "option_buying_power": buying_power,
             "account_type": bal.get("account_type"),
             "pending_orders_count": bal.get("pending_orders_count"),
             "positions": held,
@@ -977,7 +1069,14 @@ def collect_context(
     for category, collector in collectors:
         try:
             collected, entry = collector()
-        except (ValueError, TypeError, AttributeError) as exc:
+        except (
+            ValueError,
+            TypeError,
+            AttributeError,
+            TimeoutError,
+            OSError,
+            httpx.HTTPError,
+        ) as exc:
             collected, entry = [], Coverage(
                 category=category,
                 status="missing",
@@ -1006,6 +1105,7 @@ def write_expanded_context(
     finnhub: FinnhubRest | None = None,
     account_id: str | None = None,
     clock: Clock | None = None,
+    target: Path | None = None,
 ) -> Context:
     context = collect_context(
         config=config,
@@ -1027,7 +1127,7 @@ def write_expanded_context(
             "coverage": [item.model_dump() for item in context.coverage],
         },
     )
-    target = directory / "context.json"
-    if not target.exists():
-        write_once(target, context.model_dump(mode="json"))
+    dest = target or (directory / "context.json")
+    if not dest.exists():
+        write_once(dest, context.model_dump(mode="json"))
     return context

@@ -67,6 +67,8 @@ Do **not** invent live quotes, fills, or P&L. Journaled historical rows in `logs
 | [OPERATING_MODEL.md](OPERATING_MODEL.md) | Modes, paper vs production pricing |
 | [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md) | Host facts; this commit is not deployed |
 | [REVIEWER.md](REVIEWER.md) | Passive reviewer is **outside** the loop |
+| [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md) | Five paper sessions then act; `continue` never means live |
+| [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md) | Tuesday = clean baseline paper pilot, not expanded readiness |
 
 ## Out of scope for this review
 

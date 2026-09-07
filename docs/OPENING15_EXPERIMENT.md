@@ -129,6 +129,10 @@ experiment ready for unattended use.
 
 ### Tuesday launch
 
+Tuesday 2026-09-08 is an **operational paper pilot on the clean baseline**. It is **not**
+`--allow-degraded` and is **not** a claim of full expanded-strategy readiness. Passing
+unit tests is not live entitlement proof.
+
 At **09:25 Eastern / 06:25 Pacific**, from the dedicated checkout with credentials loaded:
 
 ```bash
@@ -254,3 +258,5 @@ The expanded extension is not a claim of connected feeds, completed deployment o
 
 For exact connected APIs, current gaps and the execution test, see
 [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md).
+After five paper sessions, apply [Opening15 decision protocol](OPENING15_DECISION_PROTOCOL.md)
+(`insufficient | kill | continue | inconclusive`). `continue` means more paper only.
