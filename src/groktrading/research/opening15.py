@@ -22,6 +22,7 @@ from groktrading.research.codex_cli import exec_argv as codex_exec_argv
 from groktrading.research.codex_cli import inspect as inspect_codex
 from groktrading.research.codex_cli import parse_events as parse_codex_events
 from groktrading.research.codex_cli import subprocess_env as codex_env
+from groktrading.research.hygiene import HygieneSettings
 
 NY = ZoneInfo("America/New_York")
 PROMPT_VERSION = "opening15-discretion-v1"
@@ -106,6 +107,9 @@ class Config(BaseModel):
     # Simulation assumptions, not claims of current provider prices.
     api_input_usd_per_million: float = Field(default=0, ge=0)
     api_output_usd_per_million: float = Field(default=0, ge=0)
+    # Expanded/select pre-LLM shortlist only. Stripped from Packet.compact() so
+    # Tuesday baseline recommend input is unchanged.
+    hygiene: HygieneSettings = Field(default_factory=HygieneSettings)
 
     @model_validator(mode="after")
     def symbols_valid(self) -> Config:
@@ -234,8 +238,13 @@ class Packet(BaseModel):
                     else {"values": values}
                 )
             tables[kind] = {"row_count": len(flat), "columns": encoded}
+        dumped = self.model_dump(mode="json", exclude={"events"})
+        config = dumped.get("config")
+        if isinstance(config, dict):
+            # Hygiene is select-path only; baseline recommend must not see it.
+            config.pop("hygiene", None)
         return {
-            **self.model_dump(mode="json", exclude={"events"}),
+            **dumped,
             "tables": tables,
             "encoding": "Each column contains values or dictionary[codes[row_index]]. "
             "All columns share row order; no rows were dropped.",
@@ -272,14 +281,24 @@ class Decision(BaseModel):
     stock_assessments: list[StockAssessment]
     picks: list[Pick] = Field(max_length=3)
 
-    def validate_evidence(self, packet: Packet) -> None:
+    def validate_evidence(
+        self,
+        packet: Packet,
+        allowed_contracts: set[str] | None = None,
+        extra_evidence_ids: set[str] | None = None,
+    ) -> None:
         assessments = [s.symbol for s in self.stock_assessments]
         if len(assessments) != 10 or set(assessments) != set(packet.config.symbols):
             raise ValueError("must assess all ten stocks exactly once")
-        contracts = {
-            str(e.raw.get("option_chain_id")) for e in packet.events if e.kind == "option_trade"
-        }
-        ids = {e.event_id for e in packet.events}
+        if allowed_contracts is None:
+            contracts = {
+                str(e.raw.get("option_chain_id"))
+                for e in packet.events
+                if e.kind == "option_trade"
+            }
+        else:
+            contracts = set(allowed_contracts)
+        ids = {e.event_id for e in packet.events} | (extra_evidence_ids or set())
         selected: set[str] = set()
         for pick in self.picks:
             if pick.option_symbol not in contracts or pick.option_symbol in selected:

@@ -12,7 +12,9 @@ This software does **not** promise trading success. It must **not** invent price
 
 A separate, discretionary **first-15-minute / ten-stock** experiment is available for Tuesday,
 September 8, 2026. Tuesday is a **clean baseline paper pilot** (`research.cli run`), not
-`--allow-degraded` and not expanded-strategy readiness. The recommend step runs through
+`--allow-degraded` and not expanded-strategy readiness. Post-Tue expanded select feeds the
+LLM a **hygiene shortlist** after deterministic gates (judgment only; no computable refuse
+rules in the selector prompt). The recommend step runs through
 **OpenAI Codex CLI** using the operator's **ChatGPT Pro** login (not `OPENAI_API_KEY` /
 Responses API). Capture/monitor/report stay quote-only. There is **no broker order path**.
 Protocol: **[Opening15 decision protocol](docs/OPENING15_DECISION_PROTOCOL.md)**. Launch:

@@ -6,6 +6,7 @@ See [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md) for the exact 
 
 ## Entry points
 
+- `src/groktrading/research/hygiene.py`: pre-LLM universe shortlist for expanded `select` (`candidates.json`, logged gates, budget-derived premium). Not used by Tuesday `research.cli run`.
 - `src/groktrading/research/cycle.py`: typed evidence manifest, archived retrieval, selection, resolver, bounded next-day memory, **typed `FailureRecord`**.
 - `src/groktrading/research/collectors.py`: Context adapters (UW / Tradier / optional Finnhub).
 - `src/groktrading/research/registry.py`: file-based prompt version registry (hash + proposed/shadow/accepted/rejected).
@@ -54,7 +55,8 @@ python -m groktrading.research.cli run --session 2026-09-08 --output /private/re
 ```
 
 Expanded — **default after Tuesday** (session 2+ / Wed 2026-09-09 onward) so the LLM
-gets UW economic calendar, dark pool (per 10 names), option screener, market tide,
+gets a **hygiene shortlist** (`candidates.json`, deterministic gates then judgment)
+plus UW economic calendar, dark pool (per 10 names), option screener, market tide,
 and political slices via `context.json` + `cycle_cli select`. If required coverage is
 incomplete, fall back to baseline or add `--allow-degraded` and label gaps:
 

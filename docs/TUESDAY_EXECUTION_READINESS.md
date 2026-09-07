@@ -5,7 +5,7 @@
 | Session | Default | Not a claim of |
 | --- | --- | --- |
 | **Tue 2026-09-08** (session 1) | Clean baseline `python -m groktrading.research.cli run` only | Expanded-strategy readiness. Do **not** add `--allow-degraded`. |
-| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) | Live orders, or expanded readiness if required coverage is incomplete. Fall back to baseline or explicit `--allow-degraded` only then. |
+| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + hygiene `candidates.json` + `cycle_cli select`) | Live orders, or expanded readiness if required coverage is incomplete. Fall back to baseline or explicit `--allow-degraded` only then. |
 
 **Tuesday 2026-09-08 is an operational paper pilot on the clean baseline
 (`python -m groktrading.research.cli run`). It is not `--allow-degraded`. It is not a
@@ -13,8 +13,9 @@ claim of full expanded-strategy readiness.** Passing unit tests is not live enti
 proof. Schwab is still unconnected. The dedicated earnings calendar is still
 print-fields only. UW economic calendar, dark pool (per 10 names), option screener,
 market tide, and political slices reach the LLM only through expanded
-`context.json` + `cycle_cli select` — that is the **default after Tuesday**, not
-Tuesday's launch path. Finnhub `/calendar/economic` still returns 403 on this plan
+`context.json` + pre-LLM hygiene shortlist + `cycle_cli select` — that is the
+**default after Tuesday**, not Tuesday's launch path. Architecture: **deterministic
+gates, then LLM judgment** (thesis / cite-or-abstain). Finnhub `/calendar/economic` still returns 403 on this plan
 and is unused. Host credentials, requested-model access and scheduling have not
 been tested from this workspace. There is no live-order execution path in this
 experiment.
@@ -64,7 +65,7 @@ Source of truth: `src/groktrading/research/capture.py`, `collectors.py`, `codex_
 | Path | Code status | When to run |
 | --- | --- | --- |
 | Baseline 15-minute selection + fixed-exit paper evaluation | Implemented | **Tuesday 2026-09-08 launch path** and the fallback if post-Tue required coverage is incomplete. Host preflight, real CLI model probe, UW/quote entitlement check, dedicated process launch. Clean `research.cli run` only. `--allow-degraded` is not Tuesday's command. |
-| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry implemented | **Default after Tuesday** (session 2+ / Wed 2026-09-09 onward) so the LLM gets UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices via `context.json` + `cycle_cli select`. Required categories must be `available` (depth / dark pool / screener / tide / political may be `missing`). Fall back to baseline or explicit `--allow-degraded` only if required coverage is incomplete. Do not present a degraded run as expanded readiness. |
+| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry + **pre-LLM hygiene shortlist** implemented | **Default after Tuesday** (session 2+ / Wed 2026-09-09 onward). `cycle_cli select` writes `candidates.json` (logged gates, budget-derived premium, DTE on every row) and feeds that shortlist to Codex with UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices via `context.json`. Required categories must be `available` (depth / dark pool / screener / tide / political may be `missing`). Fall back to baseline or explicit `--allow-degraded` only if required coverage is incomplete. Do not present a degraded run as expanded readiness. Tuesday `research.cli run` is still the packet baseline and does not shortlist. |
 | Existing systemd Tuesday template | Present, inactive; runs baseline `research.cli run` | Do **not** enable the timer. It does not invoke `cycle_cli`. |
 | Schwab-backed or actual broker order execution | Not part of this path | Paper selections do not become orders. |
 
@@ -79,7 +80,7 @@ python -m groktrading.research.cycle_cli day-plan --session 2026-09-08 --out res
 `tests/test_research_collectors.py` mocks UW/Tradier/Finnhub HTTP (no live network). Existing opening15 + research_cycle tests remain the plumbing/schema suite. Protocol input gates (distinct real sessions, no synthetic copies, complete baselines) live in `tests/test_opening15_protocol.py`. Registry hash/status/freeze checks live in `tests/test_research_cycle.py`.
 
 ```bash
-python -m pytest tests/test_research_cycle.py tests/test_opening15.py tests/test_opening15_protocol.py tests/test_research_collectors.py
+python -m pytest tests/test_research_cycle.py tests/test_opening15.py tests/test_opening15_hygiene.py tests/test_opening15_protocol.py tests/test_research_collectors.py
 python -m pytest
 python -m ruff check src tests scripts
 python -m mypy src/groktrading
@@ -119,7 +120,8 @@ features only; they do not change clean `research.cli run` baseline tape.
 
 ### Post-Tuesday default — expanded select (session 2+ / Wed 2026-09-09 onward)
 
-After Tuesday, **default to this expanded sequence** so the LLM sees UW economic
+After Tuesday, **default to this expanded sequence** so the LLM sees a hygiene
+shortlist (`candidates.json`, gates then judgment) plus UW economic
 calendar, dark pool (per 10 names), option screener, market tide, and political
 slices through `context.json` + `cycle_cli select`. `research.cli capture` may
 write preopen `context.json` from isolated optional collectors (timeouts cannot

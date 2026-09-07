@@ -14,5 +14,16 @@
   "tradier_requests_per_minute": 90,
   "max_flow_requests": 1500,
   "api_input_usd_per_million": 0,
-  "api_output_usd_per_million": 0
+  "api_output_usd_per_million": 0,
+  "hygiene": {
+    "planning_equity_usd": 25000,
+    "premium_budget_pct": 0.008,
+    "dte_min": 0,
+    "dte_max": 45,
+    "max_spread": 0.50,
+    "max_spread_frac": 0.25,
+    "min_volume": 1,
+    "min_open_interest": 0,
+    "require_ask_side_tag": false
+  }
 }

@@ -132,7 +132,7 @@ experiment ready for unattended use.
 | Session | Default | Fallback |
 | --- | --- | --- |
 | **Tue 2026-09-08** (session 1) | Clean baseline `research.cli run` (packet recommend) | Do **not** use `--allow-degraded`. Do **not** claim expanded readiness. |
-| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) so the LLM gets UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices | Baseline `research.cli run`, or explicit `--allow-degraded`, only if required coverage is incomplete |
+| **Wed 2026-09-09 onward** (session 2+) | **Expanded select** (`context.json` + `cycle_cli select`) so the LLM gets a **hygiene shortlist** (deterministic gates, then judgment) plus UW economic calendar, dark pool (per 10 names), option screener, market tide, and political slices | Baseline `research.cli run`, or explicit `--allow-degraded`, only if required coverage is incomplete |
 
 ### Tuesday launch
 
@@ -167,10 +167,14 @@ python -m groktrading.research.cli report --output research-runs/2026-09-08
 
 After Tuesday, **default to expanded select**. `research.cli capture` still writes the
 baseline packet (and may write preopen `context.json`); selection then goes through
-`cycle_cli select` so the model sees UW economic calendar, dark pool (per 10 names),
-option screener, market tide, and political slices. Inspect `context.json` coverage
-first. Fall back to baseline `research.cli run` or add `--allow-degraded` only if a
-**required** category is not `available`.
+`cycle_cli select`. That path runs **universe hygiene first** (logged gates, budget-derived
+premium cap, DTE recorded on every row) and writes `candidates.json`; Codex sees that
+curated shortlist, not the whole chain. The selector prompt is not given computable refuse
+rules — architecture is **gates then judgment**. Context still includes UW economic
+calendar, dark pool (per 10 names), option screener, market tide, and political slices.
+Inspect `context.json` coverage first. Fall back to baseline `research.cli run` or add
+`--allow-degraded` only if a **required** category is not `available`.
+Tuesday itself stays on clean `research.cli run` (packet baseline; no shortlist).
 
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-09 --out research-runs/2026-09-09/memory.json
@@ -218,6 +222,12 @@ enter/watch, max entry price, validity duration, thesis, alternative explanation
 proposed exit, qualitative confidence, and real evidence IDs. Output validation rejects
 invented contracts, unknown evidence, duplicate picks and missing stock assessments.
 
+**Architecture (locked):** deterministic filters run **before** the LLM and are logged
+(which gate fired). The LLM only makes judgment calls (thesis coherence, cite-or-abstain).
+Computable refuse rules are not put into the selector prompt. Tuesday `research.cli run`
+stays the packet baseline. Post-Tue expanded `cycle_cli select` feeds Codex the hygiene
+shortlist in `candidates.json` after those gates.
+
 The strategy prompt is versioned. Packet, request and response timestamps/hashes are recorded.
 Codex CLI `exec` is invoked once per run directory: prompt on stdin (`-`),
 `--output-schema` for the Decision JSON, `--output-last-message`, `--json` events,
@@ -254,6 +264,7 @@ independent experiments. This first Tuesday is an operational trial, not proof o
 | `config.json` | Universe and assumptions frozen before open |
 | `raw/flow-*.json`, `raw/stocks-*.json` | Provider response pages, stock snapshots and receive times |
 | `packet.json` | Frozen validated evidence, coverage and limitations |
+| `candidates.json` | Expanded/select only: pre-LLM hygiene shortlist + structured rejects (not written by Tuesday `research.cli run`) |
 | `request.json` | Exact prompt/config/input plus hashes, start time, backend, and `codex --version` |
 | `opening15-schema.json` | Decision JSON Schema passed to `codex exec --output-schema` |
 | `response.json` | Raw Codex JSONL/stderr or Responses body, plus receipt time |

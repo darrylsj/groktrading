@@ -51,12 +51,13 @@ def _day_plan_note(session: date) -> str:
         "Tue 2026-09-08 = clean baseline (research.cli run only). "
         "Do not launch with --allow-degraded on Tuesday and do not claim expanded "
         "readiness. Post-Tue paper days (session 2+ / Wed 2026-09-09 onward) default "
-        "to expanded select (context.json + cycle_cli select) so the LLM gets UW "
-        "economic calendar, dark pool (per 10 names), option screener, market tide, "
-        "and political slices. Fall back to baseline or explicit --allow-degraded "
-        "only if required coverage is incomplete. Do not present a degraded run as "
-        "the full-context experiment. Passing unit tests is not live entitlement. "
-        "No systemd/timers, no Helsinki restart, no live orders."
+        "to expanded select (context.json + cycle_cli select) so the LLM gets a "
+        "hygiene shortlist (gates then judgment) plus UW economic calendar, dark "
+        "pool (per 10 names), option screener, market tide, and political slices. "
+        "Fall back to baseline or explicit --allow-degraded only if required "
+        "coverage is incomplete. Do not present a degraded run as the full-context "
+        "experiment. Passing unit tests is not live entitlement. No systemd/timers, "
+        "no Helsinki restart, no live orders."
     )
     if session <= _TUESDAY_PILOT:
         return (
