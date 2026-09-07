@@ -9,9 +9,10 @@ from typing import Literal
 from pydantic import AwareDatetime, Field
 
 from groktrading.research.cycle import Strict
-from groktrading.research.opening15 import digest, now_utc, write_once
+from groktrading.research.opening15 import digest, now_utc, window, write_once
 
 PromptStatus = Literal["proposed", "shadow", "accepted", "rejected"]
+INFERENCE_STATUSES = frozenset({"accepted", "shadow"})
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 
 
@@ -42,6 +43,35 @@ class PromptRegistry(Strict):
 
 def prompt_hash(prompt_name: str) -> str:
     return digest((PROMPTS / prompt_name).read_text())
+
+
+def require_usable_for_inference(version: PromptVersion, *, session: date | None = None) -> None:
+    """Reject rejected/proposed versions, hash mismatches, and unfrozen or late freezes.
+
+    No silent fallback to another version.
+    """
+    if version.status not in INFERENCE_STATUSES:
+        raise ValueError(
+            f"prompt version {version.version_id} status {version.status} is not permitted "
+            "for inference (accepted or shadow required); no fallback to a rejected version"
+        )
+    actual = prompt_hash(version.prompt_name)
+    if actual != version.prompt_hash:
+        raise ValueError(
+            f"prompt version {version.version_id} hash mismatch: recorded hash does not "
+            "match the prompt file; no fallback"
+        )
+    if version.frozen_at is None:
+        raise ValueError(
+            f"prompt version {version.version_id} is not frozen before the session; "
+            "freeze the active version before inference"
+        )
+    if session is not None:
+        start, _ = window(session)
+        if version.frozen_at >= start:
+            raise ValueError(
+                f"prompt version {version.version_id} frozen_at is not before session open"
+            )
 
 
 def seed_registry(built_at: datetime | None = None) -> PromptRegistry:

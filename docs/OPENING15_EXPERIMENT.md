@@ -258,5 +258,6 @@ The expanded extension is not a claim of connected feeds, completed deployment o
 
 For exact connected APIs, current gaps and the execution test, see
 [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md).
-After five paper sessions, apply [Opening15 decision protocol](OPENING15_DECISION_PROTOCOL.md)
-(`insufficient | kill | continue | inconclusive`). `continue` means more paper only.
+After five distinct real paper sessions, apply [Opening15 decision protocol](OPENING15_DECISION_PROTOCOL.md)
+(`insufficient | rejected | kill | continue | inconclusive`). Duplicate or synthetic
+copies are `rejected`. `continue` means more paper only.

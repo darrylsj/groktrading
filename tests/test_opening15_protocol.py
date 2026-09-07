@@ -19,9 +19,11 @@ def _report(
     percentile: float,
     *,
     k: int = 1,
+    synthetic: bool = False,
 ) -> dict[str, Any]:
     return {
         "paper_only": True,
+        "synthetic": synthetic,
         "session": session,
         "packet_hash": f"hash-{session}",
         "selected_count": k,
@@ -29,7 +31,7 @@ def _report(
         "baselines": {
             "k": k,
             "model_net_usd": model_net,
-            "random_k": {"percentile": percentile},
+            "random_k": {"percentile": percentile, "seed": 20260908, "draws": 1000},
             "mechanical_top_k_ask_side_premium": {"net_usd": mechanical_net},
             "abstain": {"selected_count": 0, "net_usd": 0.0},
         },
@@ -92,10 +94,53 @@ def test_protocol_ignores_sessions_after_five() -> None:
 
 def test_protocol_missing_baselines_not_scoreable() -> None:
     result = decide_protocol(
-        [{"paper_only": True, "selected_net_before_api_and_infra_usd": 1, "session": "x"}]
-        * 5
+        [
+            {
+                "paper_only": True,
+                "synthetic": False,
+                "selected_net_before_api_and_infra_usd": 1,
+                "session": f"2026-09-0{i}",
+                "packet_hash": f"hash-{i}",
+            }
+            for i in range(1, 6)
+        ]
     )
     assert result["verdict"] == "insufficient"
+
+
+def test_protocol_rejects_five_copies_of_one_synthetic_day() -> None:
+    one = _report("2026-09-08", 20, 1, 70, synthetic=True)
+    result = decide_protocol([one] * 5)
+    assert result["verdict"] == "rejected"
+    assert result["live_orders"] is False
+    assert result["touches_live_gate_or_helsinki"] is False
+    blob = " ".join(result["reasons"]).lower()
+    assert "synthetic" in blob
+    assert "duplicate" in blob or "copies" in blob
+
+
+def test_protocol_rejects_duplicate_real_sessions() -> None:
+    result = decide_protocol([_report("2026-09-08", 20, 1, 70)] * 5)
+    assert result["verdict"] == "rejected"
+    assert any("duplicate" in reason.lower() for reason in result["reasons"])
+
+
+def test_protocol_insufficient_when_only_one_random_percentile() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 6)]
+    for report in reports[1:]:
+        report["baselines"]["random_k"]["percentile"] = None
+    result = decide_protocol(reports)
+    assert result["verdict"] == "insufficient"
+    assert "percentile" in " ".join(result["reasons"]).lower()
+    assert result["verdict"] != "continue"
+
+
+def test_protocol_rejects_inconsistent_experiment_identity() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 6)]
+    reports[2]["prompt_version"] = "selector_alt"
+    result = decide_protocol(reports)
+    assert result["verdict"] == "rejected"
+    assert any("identity" in reason.lower() for reason in result["reasons"])
 
 
 def test_protocol_cli_reads_evaluation_files(tmp_path: Path, monkeypatch: Any) -> None:

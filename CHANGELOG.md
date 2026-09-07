@@ -10,11 +10,13 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 ### Fixed
 
 - Opening15 capture: `isolate_optional_collectors` no longer blocks past its pre-open budget. The previous `with ThreadPoolExecutor` form called `shutdown(wait=True)` on exit, so a hung expanded collector (slow Finnhub/UW call) held the process until it finished, delaying stock capture past 09:30 and failing the 90 s coverage-gap check (lost session). Now `shutdown(wait=False)`; budget overrun is detected via `future.done()` (on 3.11+ `concurrent.futures.TimeoutError` is the builtin `TimeoutError`, so type alone cannot distinguish a slow collector from one that raised). Regression test with a real hang asserts return at the budget. Paper research path only; no Helsinki/live change.
+- Opening15 five-session protocol now rejects duplicate or synthetic evaluation copies and mixed experiment identity (no kill/continue from five copies of one day). Kill/continue also require five known random-K percentiles and five mechanical nets; a single known percentile is `insufficient`.
+- Registry-backed `select` validates prompt hash, permitted status (`accepted`/`shadow`), and pre-session freeze before any CLI inference. Rejected or wrong-hash versions raise with no fallback.
 
 ### Added
 
 - Opening15 `evaluation.json` additive `baselines` (1,000 seeded random-K percentile, mechanical top-K-by-ask-side-premium, abstain, decision/entry latency) on the same frozen packet and 15:55 ET exit. Original evaluate keys stay byte-identical.
-- Pre-registered paper decision protocol: `python -m groktrading.research.cli protocol` reads up to five sessions and returns `insufficient | kill | continue | inconclusive`. `continue` means more paper only. [docs/OPENING15_DECISION_PROTOCOL.md](docs/OPENING15_DECISION_PROTOCOL.md).
+- Pre-registered paper decision protocol: `python -m groktrading.research.cli protocol` reads up to five sessions and returns `insufficient | rejected | kill | continue | inconclusive`. `continue` means more paper only. [docs/OPENING15_DECISION_PROTOCOL.md](docs/OPENING15_DECISION_PROTOCOL.md).
 - Daily expanded sequence now **creates** post-session `outcome-context.json` before resolve. Prompt registry active version is what `select` actually loads. Failed session records are included in next-day memory.
 
 ### Changed
