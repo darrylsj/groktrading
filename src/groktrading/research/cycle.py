@@ -86,6 +86,9 @@ OPTIONAL_CATEGORIES = {
     "political",
 }
 PROMPTS = Path(__file__).resolve().parent / "prompts"
+SHADOW_V3_VERSION_ID = "selector_v3"
+SHADOW_V3_ARTIFACT = "selection-shadow-v3.json"
+SHADOW_V3_COMPARE = "selection-shadow-compare.json"
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -379,6 +382,7 @@ def active_selector_prompt(
 
     When a registry is supplied, hash, permitted status, and pre-session freeze are
     enforced. Mismatches raise; there is no fallback to a rejected version.
+    Seeded selector_v3 is shadow-only and is never the default active version.
     """
     if registry is None or not registry.active_version_id:
         return "selector_v2.md", "selector_v2"
@@ -387,6 +391,82 @@ def active_selector_prompt(
     version = registry.get(registry.active_version_id)
     require_usable_for_inference(version, session=session)
     return version.prompt_name, version.version_id
+
+
+def shadow_selector_prompt(
+    registry: PromptRegistry | None,
+    version_id: str,
+    *,
+    session: date | None = None,
+) -> tuple[str, str]:
+    """Resolve a shadow selector. Never swaps or returns the active version.
+
+    Requires a registry so hash, shadow status, and pre-session freeze are
+    enforced. Mismatches raise; there is no fallback to the active prompt.
+    """
+    if registry is None or not registry.active_version_id:
+        raise ValueError(
+            "shadow selector requires a prompt registry so hash, status, and "
+            "freeze can be enforced; no fallback"
+        )
+    if version_id == registry.active_version_id:
+        raise ValueError("shadow selector must not be the active version")
+    from groktrading.research.registry import require_usable_for_inference
+
+    version = registry.get(version_id)
+    if version.status != "shadow":
+        raise ValueError(
+            f"prompt version {version.version_id} status {version.status} is not "
+            "shadow; do not promote or use a non-shadow version on the shadow path"
+        )
+    require_usable_for_inference(version, session=session)
+    return version.prompt_name, version.version_id
+
+
+def _pick_verdicts(decision: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        {"option_symbol": str(pick["option_symbol"]), "action": str(pick["action"])}
+        for pick in decision.get("picks") or []
+    ]
+
+
+def shadow_compare_record(
+    active: dict[str, Any],
+    shadow: dict[str, Any],
+) -> dict[str, Any]:
+    """Side-by-side verdicts for later scoring vs v2 and the abstain baseline."""
+    active_picks = _pick_verdicts(active.get("decision") or {})
+    shadow_status = str(shadow.get("status") or "recorded")
+    shadow_picks = (
+        _pick_verdicts(shadow.get("decision") or {}) if shadow_status != "failed" else []
+    )
+    return {
+        "architecture": "gates_then_judgment",
+        "active_prompt_version": active.get("prompt_version"),
+        "shadow_prompt_version": shadow.get("prompt_version"),
+        "active_artifact": "decision.json",
+        "shadow_artifact": SHADOW_V3_ARTIFACT,
+        "packet_hash": active.get("packet_hash"),
+        "active_picks": active_picks,
+        "shadow_picks": shadow_picks,
+        "active_enter_count": sum(1 for pick in active_picks if pick["action"] == "enter"),
+        "shadow_enter_count": sum(1 for pick in shadow_picks if pick["action"] == "enter"),
+        "active_abstain": not any(pick["action"] == "enter" for pick in active_picks),
+        "shadow_abstain": None
+        if shadow_status == "failed"
+        else not any(pick["action"] == "enter" for pick in shadow_picks),
+        "shadow_status": shadow_status,
+        "abstain_baseline": {
+            "source": "evaluation.json baselines.abstain after monitor/report",
+            "selected_count": 0,
+            "net_usd": 0.0,
+            "note": (
+                "Always-flat arm (zero enters, net 0). Score decision.json and "
+                f"{SHADOW_V3_ARTIFACT} on the same packet and 15:55 ET marks. "
+                "Do not promote selector_v3 from this comparison."
+            ),
+        },
+    }
 
 
 def build_memory(
@@ -500,6 +580,7 @@ def select(
     allow_degraded: bool = False,
     runner: CodexRun | None = None,
     registry: PromptRegistry | None = None,
+    shadow_version_id: str | None = None,
 ) -> dict[str, Any]:
     if packet.synthetic or packet.config.recommend_backend != "codex_cli":
         raise ValueError("prospective Codex CLI packet required")
@@ -509,6 +590,12 @@ def select(
     if memory.target_session != packet.session:
         raise ValueError("wrong memory session")
     selector_prompt, prompt_version = active_selector_prompt(registry, session=packet.session)
+    shadow_prompt = None
+    shadow_prompt_version = None
+    if shadow_version_id:
+        shadow_prompt, shadow_prompt_version = shadow_selector_prompt(
+            registry, shadow_version_id, session=packet.session
+        )
     shortlist = build_shortlist(packet, context.records)
     write_once(directory / "candidates.json", shortlist)
     write_once(
@@ -597,7 +684,88 @@ def select(
         "memory_use": selection.memory_use,
     }
     write_once(directory / "decision.json", record)
+    if shadow_prompt is not None and shadow_prompt_version is not None:
+        _record_shadow_selection(
+            packet=packet,
+            context=context,
+            memory=memory,
+            directory=directory,
+            payload=payload,
+            shortlist=shortlist,
+            cfg=cfg,
+            runner=runner,
+            deadline=deadline,
+            selector_prompt=shadow_prompt,
+            prompt_version=shadow_prompt_version,
+            active=record,
+        )
     return record
+
+
+def _record_shadow_selection(
+    *,
+    packet: Packet,
+    context: Context,
+    memory: Memory,
+    directory: Path,
+    payload: dict[str, Any],
+    shortlist: dict[str, Any],
+    cfg: Any,
+    runner: CodexRun | None,
+    deadline: datetime,
+    selector_prompt: str,
+    prompt_version: str,
+    active: dict[str, Any],
+) -> None:
+    """Run a shadow selector on the same payload. Never overwrites decision.json."""
+    try:
+        if now_utc() > deadline:
+            raise ValueError("overall selection deadline exceeded")
+        selection = cli_json(
+            selector_prompt,
+            payload,
+            Selection,
+            directory / "shadow-v3",
+            cfg.model,
+            cfg.reasoning_effort,
+            cfg.max_input_bytes,
+            runner,
+        )
+        selection.decision.validate_evidence(
+            packet,
+            allowed_contracts=shortlist_contracts(shortlist),
+            extra_evidence_ids={r.evidence_id for r in context.records},
+        )
+        context.retrieve(selection.context_citations)
+        shadow = {
+            "status": "recorded",
+            "packet_hash": digest(packet.model_dump(mode="json")),
+            "context_hash": digest(context.model_dump(mode="json")),
+            "memory_hash": digest(memory.model_dump(mode="json")),
+            "received_at": now_utc().isoformat(),
+            "synthetic": False,
+            "requested_model": cfg.model,
+            "recommend_backend": "codex_cli",
+            "prompt_version": prompt_version,
+            "role": "shadow",
+            "active_prompt_version": active.get("prompt_version"),
+            "decision": selection.decision.model_dump(mode="json"),
+            "context_citations": selection.context_citations,
+            "portfolio_assessment": selection.portfolio_assessment,
+            "memory_use": selection.memory_use,
+        }
+    except Exception as exc:
+        shadow = {
+            "status": "failed",
+            "role": "shadow",
+            "prompt_version": prompt_version,
+            "active_prompt_version": active.get("prompt_version"),
+            "packet_hash": active.get("packet_hash"),
+            "error_type": type(exc).__name__,
+            "detail": str(exc) if type(exc) is ValueError else type(exc).__name__,
+        }
+    write_once(directory / SHADOW_V3_ARTIFACT, shadow)
+    write_once(directory / SHADOW_V3_COMPARE, shadow_compare_record(active, shadow))
 
 
 def resolve(

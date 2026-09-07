@@ -125,5 +125,8 @@ dark pool, screener, and market tide are expanded Opening15 LLM context only
 (session 2+ / Wed 2026-09-09 onward) **default to expanded select** after a
 logged pre-LLM hygiene shortlist (`candidates.json`; gates then judgment). Fall
 back to baseline or explicit `--allow-degraded` only if required coverage is
-incomplete. Tuesday stays packet baseline (`research.cli run`). See
-[TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md).
+incomplete. Tuesday stays packet baseline (`research.cli run`). **selector_v3**
+is a shadow prompt only (optional `cycle_cli select --shadow-v3 --registry`);
+it is not Tuesday's selector and is not the active registry version. Post-Tue
+expanded select still defaults to active **selector_v2** plus the hygiene
+shortlist. See [TUESDAY_EXECUTION_READINESS.md](TUESDAY_EXECUTION_READINESS.md).
