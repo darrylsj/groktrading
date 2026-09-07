@@ -340,15 +340,19 @@ class _AccountFeed:
         positions: Any = None,
         orders: Any = None,
     ) -> None:
-        self.balances = balances if balances is not None else {
-            "balances": {
-                "account_number": "SHOULD-NOT-APPEAR",
-                "total_cash": 1000,
-                "total_equity": 1200,
-                "account_type": "margin",
-                "margin": {"option_buying_power": 800},
+        self.balances = (
+            balances
+            if balances is not None
+            else {
+                "balances": {
+                    "account_number": "SHOULD-NOT-APPEAR",
+                    "total_cash": 1000,
+                    "total_equity": 1200,
+                    "account_type": "margin",
+                    "margin": {"option_buying_power": 800},
+                }
             }
-        }
+        )
         self.positions = positions if positions is not None else {"positions": {"position": []}}
         self.orders = orders
 
@@ -656,9 +660,7 @@ def test_option_chain_subset_is_partial_not_available() -> None:
 
 def test_portfolio_unknown_cash_or_bp_is_not_available() -> None:
     records, coverage = collect_portfolio(
-        tradier=_AccountFeed(
-            balances={"balances": {"account_type": "margin", "total_equity": 10}}
-        ),
+        tradier=_AccountFeed(balances={"balances": {"account_type": "margin", "total_equity": 10}}),
         account_id="RESEARCH1",
         clock=_portfolio_clock(),
     )
@@ -758,6 +760,52 @@ def test_optional_collectors_timeout_does_not_abort_baseline(tmp_path: Path) -> 
     assert "hung" in failure["detail"] or failure["detail"] == "TimeoutError"
     assert "baseline packet still captured" in failure["note"]
     assert not (tmp_path / "packet.json").exists()
+
+
+def test_optional_collectors_hang_returns_at_budget_not_at_completion(tmp_path: Path) -> None:
+    """Regression: a collector that hangs must not hold the opening tape past its budget.
+
+    The previous `with ThreadPoolExecutor` form called shutdown(wait=True) on exit and
+    blocked until the hung thread finished, delaying stock capture past 09:30.
+    """
+    import threading
+    import time
+
+    from groktrading.research.capture import isolate_optional_collectors
+    from groktrading.research.opening15 import now_utc
+
+    started = threading.Event()
+
+    def hang(*args: Any, **kwargs: Any) -> None:
+        started.set()
+        time.sleep(2.0)  # simulates a collector stuck in an HTTP call past the budget
+
+    import groktrading.research.collectors as collectors
+
+    original = collectors.write_expanded_context
+    collectors.write_expanded_context = hang  # type: ignore[method-assign]
+    budget = 0.3
+    t0 = time.monotonic()
+    try:
+        isolate_optional_collectors(
+            config=_config(),
+            session=date(2026, 9, 8),
+            directory=tmp_path,
+            uw=None,  # type: ignore[arg-type]
+            tradier=None,  # type: ignore[arg-type]
+            news_events=[],
+            deadline=now_utc() + timedelta(seconds=budget),
+        )
+        elapsed = time.monotonic() - t0
+    finally:
+        # Let the abandoned thread finish before restoring the module attribute.
+        time.sleep(2.2)
+        collectors.write_expanded_context = original  # type: ignore[method-assign]
+    assert started.is_set()
+    assert elapsed < 1.0, f"returned after {elapsed:.2f}s; must return at budget, not completion"
+    failure = json.loads((tmp_path / "context-failed.json").read_text())
+    assert failure["detail"] == "expanded collectors exceeded preopen budget"
+    assert "baseline packet still captured" in failure["note"]
 
 
 def test_day_plan_creates_outcome_context_step(tmp_path: Path) -> None:
