@@ -46,7 +46,7 @@ A Mac must remain awake and connected until collection ends. An existing always-
 is preferable. No extra paid data provider is required for the first trial.
 
 ```bash
-git clone --branch codex/opening15-astra-experiment https://github.com/darrylsj/groktrading.git groktrading-research
+git clone --branch main https://github.com/darrylsj/groktrading.git groktrading-research
 cd groktrading-research
 python3 -m venv .venv
 . .venv/bin/activate

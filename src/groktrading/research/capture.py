@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,28 @@ from groktrading.research.opening15 import (
     write_once,
 )
 
+# Documented UW + Tradier production GET paths only. No invented aliases, no POST.
+_UW_READ_PREFIXES = ("/api/option-trades", "/api/news/headlines")
+_TRADIER_MARKET_PATHS = {
+    "/markets/quotes",
+    "/markets/calendar",
+    "/markets/clock",
+    "/markets/history",
+    "/markets/timesales",
+    "/markets/options/chains",
+    "/markets/options/expirations",
+}
+_TRADIER_ACCOUNT_READ = re.compile(r"^/accounts/[A-Za-z0-9]+/(balances|positions|orders)$")
+
+
+def allowed_read_path(path: str) -> bool:
+    """Allow only documented UW tape/news and Tradier market/account GET paths."""
+    if any(path == prefix or path.startswith(prefix) for prefix in _UW_READ_PREFIXES):
+        return True
+    if path in _TRADIER_MARKET_PATHS:
+        return True
+    return bool(_TRADIER_ACCOUNT_READ.fullmatch(path))
+
 
 class ReadFeed:
     def __init__(self, base: str, key: str, rpm: int, client: httpx.Client | None = None) -> None:
@@ -35,8 +58,8 @@ class ReadFeed:
         self.lock = threading.Lock()
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        # This adapter has NO order endpoint or POST method.
-        if not path.startswith(("/api/option-trades", "/api/news/headlines", "/markets/")):
+        # This adapter has NO order-submit or POST method.
+        if not allowed_read_path(path):
             raise ValueError("read endpoint not allowed")
         with self.lock:
             delay = self.interval - (time.monotonic() - self.last_request)
@@ -100,6 +123,39 @@ def as_rows(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not all(isinstance(v, dict) for v in value):
         raise ValueError("unexpected provider rows")
     return value
+
+
+def _tokens(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).lower() for item in value]
+    return [str(value).lower()]
+
+
+def classify_uw_revision(row: dict[str, Any]) -> str:
+    """Label UW-supplied cancel/correction codes. Unknown codes stay prints."""
+    tokens: list[str] = []
+    for key in ("tags", "tag", "trade_codes", "trade_code", "condition", "conditions"):
+        tokens.extend(_tokens(row.get(key)))
+    blob = " ".join(tokens)
+    if any(word in blob for word in ("cancel", "cancelled", "canceled", "bust")):
+        return "cancellation"
+    if any(word in blob for word in ("correct", "correction", "late_correction")):
+        return "correction"
+    return "print"
+
+
+def provider_aggressor(row: dict[str, Any]) -> dict[str, str]:
+    """Report only provider-supplied side tags. Do not infer from price vs NBBO."""
+    tokens: list[str] = []
+    for key in ("tags", "tag"):
+        tokens.extend(_tokens(row.get(key)))
+    if any(token == "ask_side" or token.endswith("ask_side") for token in tokens):
+        return {"label": "ask_side", "source": "uw_tag"}
+    if any(token == "bid_side" or token.endswith("bid_side") for token in tokens):
+        return {"label": "bid_side", "source": "uw_tag"}
+    return {"label": "unknown", "source": "not_supplied"}
 
 
 def session_open(feed: ReadFeed, day: date) -> bool:
@@ -264,6 +320,30 @@ def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: R
                         raw=row,
                     )
                 )
+    from groktrading.research.collectors import write_expanded_context
+
+    try:
+        write_expanded_context(
+            config=config,
+            session=day,
+            directory=directory,
+            uw=uw,
+            tradier=tradier,
+            news_events=[event for event in events if event.kind == "news"],
+            flow_events=[],
+        )
+    except ValueError as exc:
+        write_once(
+            directory / "context-failed.json",
+            {
+                "at": now_utc().isoformat(),
+                "detail": str(exc),
+                "note": (
+                    "baseline packet still captured; "
+                    "expanded select needs a valid context.json"
+                ),
+            },
+        )
     if now_utc() >= start:
         raise ValueError("preopen news setup overran open; launch earlier")
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -298,6 +378,11 @@ def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: R
     freeze = now_utc()
     events += list(flow.events.values())
     events.sort(key=lambda e: (e.event_at, e.event_id))
+    if not flow.events:
+        raise ValueError("empty options tape; capture fail-closed")
+    revisions = {"print": 0, "correction": 0, "cancellation": 0}
+    for event in flow.events.values():
+        revisions[classify_uw_revision(event.raw)] += 1
     packet = Packet(
         session=day,
         config=config,
@@ -311,9 +396,19 @@ def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: R
             "flow_trade_counts": {
                 s: sum(e.symbol == s for e in flow.events.values()) for s in config.symbols
             },
+            "flow_revisions": revisions,
+            "flow_entitlement": (
+                "UW GET /api/option-trades accessible tape only; "
+                "not independently OPRA-reconciled all-market traffic"
+            ),
+            "flow_row_cap": (
+                "Provider page cap 500; time-range bisection; saturated timestamps fail closed"
+            ),
+            "flow_late_retrieval": "One bounded recheck of the last minute after 09:45 ET",
             "news_sample_counts": news_count,
             "limitations": [
                 "UW-returned prints, not independently OPRA-reconciled",
+                "Corrections/cancellations are kept when UW tags or trade codes supply them",
                 "News is a preopen sample of up to 100 per stock",
                 "Options NBBO/Greeks are sampled at prints, not every quote",
                 "Selection universe is contracts that printed",

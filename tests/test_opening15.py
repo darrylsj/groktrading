@@ -330,8 +330,16 @@ def test_read_adapter_blocks_orders(config: Config) -> None:
     client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(500)))
     feed = ReadFeed("https://api.tradier.com/v1", "test-only", 120, client)
     with pytest.raises(ValueError, match="not allowed"):
-        feed.get("/accounts/123/orders")
+        feed.get("/accounts/123/orders/preview")
+    with pytest.raises(ValueError, match="not allowed"):
+        feed.get("/markets/events/session")
     assert not hasattr(feed, "post")
+    allowed = httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"balances": {}}))
+    )
+    readable = ReadFeed("https://api.tradier.com/v1", "test-only", 120, allowed)
+    assert readable.get("/accounts/RESEARCH1/balances") == {"balances": {}}
+    readable.close()
     feed.close()
 
 

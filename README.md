@@ -15,8 +15,10 @@ September 8, 2026. The recommend step runs through **OpenAI Codex CLI** using th
 **ChatGPT Pro** login (not `OPENAI_API_KEY` / Responses API). Codex may select **GPT-6 Astra**
 as the underlying model when that model is requested; naming in the runbook keeps that
 distinction. Capture/monitor/report stay quote-only. There is **no broker order path** and
-the live desk is unchanged. Setup, Codex login, model probe, and Tuesday launch:
-**[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
+the live desk is unchanged. Expanded Context collectors (UW + Tradier, optional Finnhub
+world news, Tradier-backed interim portfolio) are documented in
+**[Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md)**. Setup, Codex login,
+model probe, and Tuesday launch: **[Opening15 runbook](docs/OPENING15_EXPERIMENT.md)**.
 
 ## Operator mandate (YOLO — capital expansion)
 

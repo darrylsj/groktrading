@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "cursor/**", "codex/**"]
   pull_request:
-    branches: [main, "codex/opening15-astra-experiment"]
+    branches: [main, "codex/opening15-astra-experiment", "codex/research-learning-handoff"]
 
 permissions:
   contents: read

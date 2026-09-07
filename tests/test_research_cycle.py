@@ -284,3 +284,31 @@ def test_cli_stage_failure_never_creates_decision(
         cycle.select(packet, context(packet), memory, tmp_path / "failed", runner=runner)
     assert not (tmp_path / "failed/decision.json").exists()
     assert (tmp_path / "failed/retrieval-0/response.json").is_file()
+
+
+def test_failure_record_has_no_decision_or_pnl(sample: Any, tmp_path: Path) -> None:
+    packet = sample[0]
+    record = cycle.failure_from_exception(
+        session=packet.session,
+        stage="select",
+        exc=ValueError("CLI stage failed; preserve attempt, no retry"),
+        directory=tmp_path / "ledger",
+    )
+    path = cycle.write_failure(tmp_path / "ledger", record)
+    loaded = cycle.FailureRecord.model_validate_json(path.read_text())
+    assert loaded.status == "failed"
+    assert loaded.decision_hash is None
+    assert loaded.evaluation_hash is None
+    dumped = loaded.model_dump()
+    assert not any(key in dumped for key in ("pnl", "net", "profit"))
+    with pytest.raises(ValueError, match="pre-decision"):
+        cycle.FailureRecord(
+            session=packet.session,
+            available_at=packet.knowledge_cutoff,
+            stage="select",
+            error_type="ValueError",
+            detail="should not attach a decision",
+            source_hash="fixture",
+            attempt_dir=str(tmp_path),
+            decision_hash="not-a-real-decision",
+        )

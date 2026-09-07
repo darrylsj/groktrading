@@ -42,6 +42,17 @@ Category = Literal[
     "portfolio",
     "depth",
 ]
+CoverageStatus = Literal["available", "partial", "missing", "delayed"]
+StageName = Literal[
+    "memory",
+    "capture",
+    "context",
+    "select",
+    "monitor",
+    "evaluate",
+    "resolve",
+    "day",
+]
 CATEGORIES = {
     "world_news",
     "company_news",
@@ -95,7 +106,7 @@ class Evidence(Strict):
 
 class Coverage(Strict):
     category: Category
-    status: Literal["available", "partial", "missing", "delayed"]
+    status: CoverageStatus
     detail: str = Field(min_length=1, max_length=600)
 
 
@@ -210,6 +221,56 @@ class DailyRecord(Strict):
     evaluation_hash: str
     status: Literal["resolved", "failed", "no_trade"]
     resolution: Resolution
+
+
+class FailureRecord(Strict):
+    """Typed ledger row for a stage that never produced a decision or PnL."""
+
+    session: date
+    available_at: AwareDatetime
+    status: Literal["failed"] = "failed"
+    stage: StageName
+    error_type: str = Field(min_length=1, max_length=80)
+    detail: str = Field(min_length=1, max_length=800)
+    source_hash: str
+    attempt_dir: str = Field(max_length=400)
+    decision_hash: str | None = None
+    evaluation_hash: str | None = None
+
+    @model_validator(mode="after")
+    def no_invented_pnl(self) -> FailureRecord:
+        dumped = self.model_dump()
+        forbidden = {"pnl", "net", "profit", "loss", "fill", "fills"}
+        if any(key.lower() in forbidden for key in dumped):
+            raise ValueError("failure records must not invent PnL")
+        if self.stage in {"select", "capture", "context", "memory"} and self.decision_hash:
+            raise ValueError("pre-decision failure cannot attach a decision hash")
+        return self
+
+
+def write_failure(directory: Path, record: FailureRecord) -> Path:
+    path = directory / "failure-record.json"
+    write_once(path, record.model_dump(mode="json"))
+    return path
+
+
+def failure_from_exception(
+    *,
+    session: date,
+    stage: StageName,
+    exc: Exception,
+    directory: Path,
+    source: dict[str, Any] | None = None,
+) -> FailureRecord:
+    return FailureRecord(
+        session=session,
+        available_at=now_utc(),
+        stage=stage,
+        error_type=type(exc).__name__,
+        detail=str(exc) if type(exc) is ValueError else type(exc).__name__,
+        source_hash=digest(source or {"stage": stage, "error_type": type(exc).__name__}),
+        attempt_dir=str(directory),
+    )
 
 
 class Memory(Strict):
