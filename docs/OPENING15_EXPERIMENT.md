@@ -242,3 +242,12 @@ run: duplicate attempts compromise the frozen first decision.
 - [UW news](https://api.unusualwhales.com/docs/operations/PublicApi.NewsController.headlines)
 - [Tradier quotes](https://docs.tradier.com/reference/brokerage-api-markets-get-quotes)
 - [Tradier calendar](https://docs.tradier.com/reference/brokerage-api-markets-get-calendar)
+
+## Expanded context, daily memory and publication experiment
+
+The CLI-only reference extension and remaining provider integration work are described in
+[Grok research handoff](GROK_RESEARCH_HANDOFF.md). The selection, archived retrieval and
+resolver prompts live in `src/groktrading/research/prompts/`.
+[Related work and prospective protocol](ARXIV_RESEARCH_PROTOCOL.md) identifies relevant
+arXiv papers and specifies how to test whether feedback improves next-day decisions.
+The expanded extension is not a claim of connected feeds, completed deployment or profit.

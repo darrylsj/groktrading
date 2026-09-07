@@ -145,6 +145,7 @@ def evaluate(
         "synthetic": packet.synthetic,
         "session": str(packet.session),
         "packet_hash": record["packet_hash"],
+        "decision_hash": digest(record),
         "selected_count": len(selected),
         "selected_net_before_api_and_infra_usd": net,
         "estimated_api_cost_usd": estimated_api,
