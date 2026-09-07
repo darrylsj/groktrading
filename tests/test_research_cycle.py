@@ -310,6 +310,7 @@ def test_select_uses_active_registry_prompt(
         raise AssertionError(schema)
 
     seeded = seed_registry()
+    frozen_at = start - timedelta(hours=1)
     alt = PromptVersion(
         version_id="selector_alt",
         prompt_name="retrieval_v1.md",
@@ -320,8 +321,8 @@ def test_select_uses_active_registry_prompt(
         proposed_difference="Test double; not a production arm",
         forward_test="Equal evidence/compute",
         status="accepted",
-        created_at=seeded.versions[0].created_at,
-        frozen_at=seeded.versions[0].created_at,
+        created_at=frozen_at,
+        frozen_at=frozen_at,
     )
     registry = PromptRegistry(
         versions=[*seeded.versions, alt], active_version_id="selector_alt"
@@ -333,6 +334,82 @@ def test_select_uses_active_registry_prompt(
     )
     assert calls[-1] == "retrieval_v1.md"
     assert selected["prompt_version"] == "selector_alt"
+
+
+def test_select_rejects_wrong_hash_registry_prompt(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    from groktrading.research.registry import PromptRegistry, PromptVersion, seed_registry
+
+    packet, _, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    seeded = seed_registry()
+    frozen_at = start - timedelta(hours=1)
+    bad = PromptVersion(
+        version_id="selector_bad_hash",
+        prompt_name="selector_v2.md",
+        prompt_hash="0" * 64,
+        parent_version="selector_v2",
+        supporting_sessions=[],
+        hypothesis="Incorrect recorded hash must not be used for inference",
+        proposed_difference="Hash does not match selector_v2.md",
+        forward_test="Must raise; no fallback",
+        status="accepted",
+        created_at=frozen_at,
+        frozen_at=frozen_at,
+    )
+    registry = PromptRegistry(
+        versions=[*seeded.versions, bad], active_version_id="selector_bad_hash"
+    )
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+
+    def fail_cli(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("inference must not run on a hash mismatch")
+
+    monkeypatch.setattr(cycle, "cli_json", fail_cli)
+    with pytest.raises(ValueError, match="hash mismatch"):
+        cycle.select(packet, context(packet), memory, tmp_path / "bad-hash", registry=registry)
+    assert not (tmp_path / "bad-hash/decision.json").exists()
+
+
+def test_select_rejects_rejected_registry_prompt(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    from groktrading.research.registry import PromptRegistry, PromptVersion, seed_registry
+
+    packet, _, _ = sample
+    start, _ = window(packet.session)
+    memory = cycle.build_memory([], packet.session, start - timedelta(minutes=5))
+    seeded = seed_registry()
+    frozen_at = start - timedelta(hours=1)
+    rejected = PromptVersion(
+        version_id="selector_rejected",
+        prompt_name="selector_v2.md",
+        prompt_hash=seeded.get("selector_v2").prompt_hash,
+        parent_version="selector_v2",
+        supporting_sessions=[],
+        hypothesis="Rejected status must not be used for inference",
+        proposed_difference="Status rejected after a recorded review",
+        forward_test="Must raise; no fallback to rejected version",
+        status="rejected",
+        created_at=frozen_at,
+        frozen_at=frozen_at,
+    )
+    registry = PromptRegistry(
+        versions=[*seeded.versions, rejected], active_version_id="selector_rejected"
+    )
+    monkeypatch.setattr(cycle, "now_utc", lambda: packet.knowledge_cutoff)
+
+    def fail_cli(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("inference must not run on a rejected prompt")
+
+    monkeypatch.setattr(cycle, "cli_json", fail_cli)
+    with pytest.raises(ValueError, match="not permitted"):
+        cycle.select(
+            packet, context(packet), memory, tmp_path / "rejected-prompt", registry=registry
+        )
+    assert not (tmp_path / "rejected-prompt/decision.json").exists()
 
 
 def test_memory_includes_failed_session_records(sample: Any, tmp_path: Path) -> None:

@@ -25,12 +25,29 @@ decision, or a live Candidate.
 
 Collect **five scoreable paper sessions**, then apply the rule once.
 
-A session is scoreable when `evaluation.json` is paper-only, includes the `baselines`
-block, and `selected_net_before_api_and_infra_usd` is not null (zero-trade days count;
+A session is scoreable when `evaluation.json` is paper-only, **`synthetic` is
+explicitly `false`**, includes the `baselines` block, and
+`selected_net_before_api_and_infra_usd` is not null (zero-trade days count;
 missing exits do not).
 
-Fewer than five scoreable sessions → **`insufficient`**. Do not kill, continue, or go
-live. Keep collecting paper sessions.
+**Input gates (before kill/continue):**
+
+1. **Distinct real sessions** — five different `session` dates and five different
+   `packet_hash` values. Five copies of one day (or one synthetic demo supplied
+   five times) are **`rejected`**, not a five-session block.
+2. **Not synthetic** — any `synthetic: true` evaluation → **`rejected`**. Demo /
+   fixture packets cannot produce kill or continue.
+3. **Consistent experiment identity** — `experiment_id`, `requested_model`,
+   `recommend_backend`, `prompt_version`, and random-K `seed` / `draws` must match
+   across the set when present. Mixing arms → **`rejected`**.
+4. **Sufficient baselines** — kill/continue require **five known random-K
+   percentiles** and **five mechanical nets**. One known percentile (or a missing
+   mechanical mark) is **`insufficient`**, not continue.
+
+Fewer than five scoreable sessions, or five sessions with incomplete baselines →
+**`insufficient`**. Do not kill, continue, or go live. Keep collecting paper
+sessions. Duplicate or synthetic inputs are **`rejected`** — do not treat them as
+progress.
 
 The CLI reads **at most five** paths, in the order given. Do not cherry-pick after
 seeing outcomes.
@@ -46,10 +63,11 @@ python -m groktrading.research.cli protocol \
 
 | Verdict | Meaning | What to do |
 | --- | --- | --- |
-| `insufficient` | Fewer than five scoreable paper sessions | Collect more paper sessions. Do not act. |
+| `insufficient` | Fewer than five scoreable paper sessions, or five sessions without a full set of known random-K percentiles and mechanical nets | Collect more complete paper sessions. Do not act. |
+| `rejected` | Duplicate sessions, synthetic evaluations, missing identity, or mixed experiment identity | Do not kill or continue. Supply five distinct real paper sessions from the same experiment. |
 | `kill` | Pre-registered stop rule matched | Stop this selector arm. Do **not** go live. Archive and review. |
 | `continue` | Pre-registered paper-progress rule matched | More **paper** sessions and/or a **wider paper universe** only. Never live. Never `--allow-degraded` as a live claim. |
-| `inconclusive` | Five scoreable sessions, neither kill nor continue | Stay paper-only. Do not treat mixed results as an edge. |
+| `inconclusive` | Five complete scoreable sessions, neither kill nor continue | Stay paper-only. Do not treat mixed results as an edge. |
 
 ### Kill (any)
 
@@ -61,10 +79,11 @@ Registered constants live in `src/groktrading/research/protocol.py`:
 
 ### Continue (all, and not kill)
 
-1. Five scoreable sessions
-2. Mean random-K percentile `≥ 60`
-3. Model five-session total net `>` mechanical five-session total
-4. Model five-session total net `> 0`
+1. Five distinct real (non-synthetic) scoreable sessions with consistent experiment identity
+2. Five known random-K percentiles and five mechanical nets
+3. Mean random-K percentile `≥ 60`
+4. Model five-session total net `>` mechanical five-session total
+5. Model five-session total net `> 0`
 
 **`continue` never means live.** It never means enable systemd, restart Helsinki, widen
 the live universe, or feed Opening15 picks into the gate. It means: run more paper
@@ -73,8 +92,9 @@ rule again on a newly registered block.
 
 ### Inconclusive
 
-Five scoreable sessions exist but neither rule matched (wide intervals, mixed days,
-incomplete mechanical marks). Keep paper-only. Publish the uncertainty. Do not go live.
+Five complete scoreable sessions exist but neither rule matched (wide intervals,
+mixed days). Incomplete mechanical or random-K marks are **`insufficient`**, not
+inconclusive. Keep paper-only. Publish the uncertainty. Do not go live.
 
 ## Baselines on every `evaluation.json`
 

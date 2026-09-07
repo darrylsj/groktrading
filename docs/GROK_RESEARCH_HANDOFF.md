@@ -61,7 +61,7 @@ Schema errors, missing required categories and time guards fail closed. Commands
 
 ## Prompt version registry
 
-`python -m groktrading.research.cycle_cli registry --path /private/research/prompt-registry.json --seed` writes accepted hashes for `selector_v2`, `retrieval_v1`, and `resolver_v1`. New candidates are `proposed` then `shadow`; only a recorded review may mark `accepted`. Freeze the active version before an evaluation block. `cycle_cli select --registry` uses that active selector prompt (activating a version changes the selection prompt; it is not hardcoded to `selector_v2.md`). Do not silently edit the confirmatory arm.
+`python -m groktrading.research.cycle_cli registry --path /private/research/prompt-registry.json --seed` writes accepted hashes for `selector_v2`, `retrieval_v1`, and `resolver_v1`. New candidates are `proposed` then `shadow`; only a recorded review may mark `accepted`. Freeze the active version before an evaluation block. `cycle_cli select --registry` uses that active selector prompt (activating a version changes the selection prompt; it is not hardcoded to `selector_v2.md`). Before inference, `select` checks the recorded hash, permitted status (`accepted` or `shadow`), and pre-session freeze. A rejected or wrong-hash version raises; there is no silent fallback. Do not silently edit the confirmatory arm.
 
 `cycle_cli memory --records` accepts both `daily-resolution.json` and `failure-record.json`. Failed sessions appear in the next-day memory brief.
 

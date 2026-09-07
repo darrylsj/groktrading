@@ -352,11 +352,22 @@ def load_session_record(path: Path) -> DailyRecord | FailureRecord:
     return DailyRecord.model_validate(data)
 
 
-def active_selector_prompt(registry: PromptRegistry | None) -> tuple[str, str]:
-    """Return (prompt filename, version id). Default remains the shipped selector."""
+def active_selector_prompt(
+    registry: PromptRegistry | None,
+    *,
+    session: date | None = None,
+) -> tuple[str, str]:
+    """Return (prompt filename, version id). Default remains the shipped selector.
+
+    When a registry is supplied, hash, permitted status, and pre-session freeze are
+    enforced. Mismatches raise; there is no fallback to a rejected version.
+    """
     if registry is None or not registry.active_version_id:
         return "selector_v2.md", "selector_v2"
+    from groktrading.research.registry import require_usable_for_inference
+
     version = registry.get(registry.active_version_id)
+    require_usable_for_inference(version, session=session)
     return version.prompt_name, version.version_id
 
 
@@ -479,6 +490,7 @@ def select(
     context.for_selection(packet, allow_degraded)
     if memory.target_session != packet.session:
         raise ValueError("wrong memory session")
+    selector_prompt, prompt_version = active_selector_prompt(registry, session=packet.session)
     write_once(
         directory / "cycle-input.json",
         {
@@ -517,7 +529,6 @@ def select(
             break
         retrieved |= new
         payload["retrieved"] = context.retrieve(sorted(retrieved))
-    selector_prompt, prompt_version = active_selector_prompt(registry)
     selection = cli_json(
         selector_prompt,
         payload,

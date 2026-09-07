@@ -7,8 +7,13 @@ proof. Schwab is still unconnected. The economic / FOMC / earnings calendar is s
 incomplete. Host credentials, requested-model access and scheduling have not been tested
 from this workspace. There is no live-order execution path in this experiment.
 
-Decision protocol (five paper sessions → `insufficient | kill | continue | inconclusive`;
-`continue` means more paper only): [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
+Decision protocol (five **distinct real** paper sessions →
+`insufficient | rejected | kill | continue | inconclusive`;
+duplicate/synthetic copies are `rejected`; `continue` means more paper only):
+[OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
+Registry prompts used for selection must match the recorded hash, be
+`accepted` or `shadow`, and be frozen before session open — rejected or
+wrong-hash versions do not run.
 
 Tuesday should ship from **main**. Do not enable systemd timers. No Helsinki restart. No live orders.
 
@@ -52,10 +57,10 @@ python -m groktrading.research.cycle_cli day-plan --session 2026-09-08 --out res
 
 ## Tests
 
-`tests/test_research_collectors.py` mocks UW/Tradier/Finnhub HTTP (no live network). Existing opening15 + research_cycle tests remain the plumbing/schema suite.
+`tests/test_research_collectors.py` mocks UW/Tradier/Finnhub HTTP (no live network). Existing opening15 + research_cycle tests remain the plumbing/schema suite. Protocol input gates (distinct real sessions, no synthetic copies, complete baselines) live in `tests/test_opening15_protocol.py`. Registry hash/status/freeze checks live in `tests/test_research_cycle.py`.
 
 ```bash
-python -m pytest tests/test_research_cycle.py tests/test_opening15.py tests/test_research_collectors.py
+python -m pytest tests/test_research_cycle.py tests/test_opening15.py tests/test_opening15_protocol.py tests/test_research_collectors.py
 python -m pytest
 python -m ruff check src tests scripts
 python -m mypy src/groktrading

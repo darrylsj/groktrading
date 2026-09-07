@@ -16,7 +16,7 @@ REQUIRED_SESSIONS = 5
 KILL_MEAN_PERCENTILE = 40.0
 KILL_MAJORITY = 4
 CONTINUE_MEAN_PERCENTILE = 60.0
-Verdict = Literal["insufficient", "kill", "continue", "inconclusive"]
+Verdict = Literal["insufficient", "rejected", "kill", "continue", "inconclusive"]
 
 
 def load_evaluation(path: Path) -> dict[str, Any]:
@@ -28,11 +28,56 @@ def load_evaluation(path: Path) -> dict[str, Any]:
 def _scoreable(report: dict[str, Any]) -> bool:
     if report.get("paper_only") is not True:
         return False
+    if report.get("synthetic") is not False:
+        return False
     if "baselines" not in report:
         return False
     if "selected_net_before_api_and_infra_usd" not in report:
         return False
     return report["selected_net_before_api_and_infra_usd"] is not None
+
+
+def _experiment_identity(report: dict[str, Any]) -> tuple[Any, ...]:
+    """Stable experiment fingerprint. Missing optional fields are None (must match)."""
+    baselines = report.get("baselines") or {}
+    random_k = baselines.get("random_k") or {}
+    return (
+        report.get("experiment_id"),
+        report.get("requested_model"),
+        report.get("recommend_backend"),
+        report.get("prompt_version"),
+        random_k.get("seed"),
+        random_k.get("draws"),
+    )
+
+
+def _reject_invalid_inputs(reports: list[dict[str, Any]]) -> list[str]:
+    """Return reject reasons. Duplicate or synthetic sets cannot yield kill/continue."""
+    reasons: list[str] = []
+    if any(report.get("synthetic") is True for report in reports):
+        reasons.append(
+            "rejected: synthetic evaluation(s) cannot produce kill/continue; "
+            "use distinct real paper sessions only"
+        )
+    sessions = [report.get("session") for report in reports]
+    hashes = [report.get("packet_hash") for report in reports]
+    if any(item in (None, "") for item in sessions) or len(set(sessions)) != len(sessions):
+        reasons.append(
+            "rejected: sessions must be distinct real dates; "
+            "duplicate or missing session identity is not a five-session block"
+        )
+    if any(item in (None, "") for item in hashes) or len(set(hashes)) != len(hashes):
+        reasons.append(
+            "rejected: packet_hash values must be distinct; "
+            "five copies of one day are not five sessions"
+        )
+    identities = [_experiment_identity(report) for report in reports]
+    if identities and len(set(identities)) != 1:
+        reasons.append(
+            "rejected: inconsistent experiment identity across the set "
+            "(experiment_id / model / backend / prompt_version / random-K seed and draws)"
+        )
+    return reasons
 
 
 def _session_metrics(report: dict[str, Any]) -> dict[str, Any]:
@@ -53,6 +98,9 @@ def _session_metrics(report: dict[str, Any]) -> dict[str, Any]:
 def decide_protocol(reports: list[dict[str, Any]]) -> dict[str, Any]:
     """Apply the pre-registered five-session rule. Extra reports after five are ignored."""
     considered = reports[:REQUIRED_SESSIONS]
+    reject_reasons = _reject_invalid_inputs(considered)
+    if reject_reasons:
+        return _result("rejected", reject_reasons, [], considered)
     scoreable = [report for report in considered if _scoreable(report)]
     metrics = [_session_metrics(report) for report in scoreable]
     reasons: list[str] = []
@@ -76,6 +124,16 @@ def decide_protocol(reports: list[dict[str, Any]]) -> dict[str, Any]:
         for item in metrics
         if item["random_k_percentile"] is not None
     ]
+    if (
+        len(percentiles) < REQUIRED_SESSIONS
+        or len(mechanical_known) < REQUIRED_SESSIONS
+    ):
+        reasons.append(
+            f"insufficient: need {REQUIRED_SESSIONS} known random-K percentiles and "
+            f"{REQUIRED_SESSIONS} mechanical nets; got {len(percentiles)} percentile(s) "
+            f"and {len(mechanical_known)} mechanical mark(s). Do not kill or continue."
+        )
+        return _result("insufficient", reasons, metrics, considered)
     mean_percentile = (
         round(sum(percentiles) / len(percentiles), 4) if percentiles else None
     )

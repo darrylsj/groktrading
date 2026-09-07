@@ -74,7 +74,7 @@ Discretionary **first 15 minutes** (09:30–09:45 ET) across a ten-stock univers
 | Exit | Fixed **15:55 ET** paper mark; missing exits stay null (not a fabricated zero) |
 | Baseline | Opening-window UW prints + Tradier quotes → Codex decision → paper monitor. **Tuesday 2026-09-08 launch path.** |
 | Expanded | Same plus Context collectors. Not Tuesday's claim. Required categories must be `available` (depth may be `missing`) or a later paper day is `--allow-degraded` and labeled. `--allow-degraded` is not a live entitlement. |
-| Decision protocol | After five paper sessions: `insufficient \| kill \| continue \| inconclusive`. `continue` = more paper / wider paper universe, never live. [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md) |
+| Decision protocol | After five **distinct real** paper sessions: `insufficient \| rejected \| kill \| continue \| inconclusive`. Duplicate/synthetic copies are `rejected`. Incomplete random-K/mechanical marks are `insufficient`. `continue` = more paper / wider paper universe, never live. [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md) |
 
 Schwab OAuth is **not** connected. Expanded portfolio is **Tradier read-only** (`/accounts/{id}/balances|positions|orders`) until Schwab lands. Schwab remains **holdings-first** when that integration exists — it is not a second live-order path. Account numbers are opaque `acct-` aliases in model-facing JSON.
 
@@ -126,6 +126,7 @@ CI on GitHub runs the same ruff / pytest / mypy / secret-scan set. Do not place 
 4. **Schwab still holdings-first** — when Schwab OAuth lands it is a holdings/portfolio source, not a second live-order path. Until then, Tradier read-only snapshot is interim.
 5. **Architecture / WS safety** — Helsinki vs Grok Bot vs Opening15; ticks never submit; Grok outside the broker boundary. [WEBSOCKETS.md](WEBSOCKETS.md), [SAFETY.md](SAFETY.md).
 6. **Secrets posture** — zero credentials in the tree; `scripts/scan_secrets.py` + detect-secrets in CI.
+7. **Protocol / registry honesty (after PR #13)** — five-session protocol must not emit kill/continue from duplicate or synthetic copies, or from a single known random-K percentile. Registry-backed selection must reject wrong-hash and rejected-status prompts (no silent fallback). Collector timeout isolation is a separate patch.
 
 ## Explicit ask
 
