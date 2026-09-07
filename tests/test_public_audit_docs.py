@@ -1,4 +1,4 @@
-"""Guards for the public OpenAI audit pack and $25k YOLO framing."""
+"""Guards for the public OpenAI / Claude audit packs and $25k YOLO framing."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 WEBSOCKETS = ROOT / "docs" / "WEBSOCKETS.md"
 AUDIT = ROOT / "docs" / "OPENAI_AUDIT_BRIEF.md"
+CLAUDE_AUDIT = ROOT / "docs" / "CLAUDE_AUDIT.md"
 LICENSE = ROOT / "LICENSE"
 
 
@@ -27,6 +28,7 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
         "$25,000",
         "Planning capital ≠ current broker equity",
         "docs/OPENAI_AUDIT_BRIEF.md",
+        "docs/CLAUDE_AUDIT.md",
         "docs/WEBSOCKETS.md",
         "docs/SAFETY.md",
         "docs/ARCHITECTURE.md",
@@ -79,6 +81,49 @@ def test_openai_audit_brief_states_scope_and_ask() -> None:
         "SAFETY.md",
         "WEBSOCKETS.md",
         "ARCHITECTURE.md",
+        "Not financial advice",
+    ):
+        assert needle in text, needle
+
+
+def test_claude_audit_brief_states_scope_and_ask() -> None:
+    text = CLAUDE_AUDIT.read_text(encoding="utf-8")
+    for needle in (
+        "What this repo is / is not",
+        "public reference",
+        "signals-only",
+        "YOLO",
+        "$25,000",
+        "capital expansion",
+        "not capital preservation",
+        "Helsinki",
+        "Grok Bot",
+        "Opening15",
+        "Codex CLI",
+        "ChatGPT Pro",
+        "WebSocket never places orders",
+        "Overnight long options",
+        "12:30 PT",
+        "NEW-ENTRY CUTOFF ONLY",
+        "≥20%",
+        "Matching ask",
+        "outside the broker",
+        "15:55 ET",
+        "baseline",
+        "expanded",
+        "Unusual Whales",
+        "Tradier",
+        "Finnhub",
+        "pytest",
+        "Schwab",
+        "holdings-first",
+        "preserve capital",
+        "OPENAI_AUDIT_BRIEF.md",
+        "WEBSOCKETS.md",
+        "SAFETY.md",
+        "OPENING15_EXPERIMENT.md",
+        "TUESDAY_EXECUTION_READINESS.md",
+        "GROK_RESEARCH_HANDOFF.md",
         "Not financial advice",
     ):
         assert needle in text, needle

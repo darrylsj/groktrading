@@ -6,7 +6,7 @@ This git repository is **not deployed** by being merged; see [docs/OBSERVED_DEPL
 
 This software does **not** promise trading success. It must **not** invent prices or P&L.
 
-**Auditor pack:** [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md) · **Safety:** [docs/SAFETY.md](docs/SAFETY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**Auditor pack:** [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · [docs/CLAUDE_AUDIT.md](docs/CLAUDE_AUDIT.md) · **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md) · **Safety:** [docs/SAFETY.md](docs/SAFETY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Opening15 experiment (paper research, Codex CLI)
 
@@ -244,6 +244,7 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
 | `docs/WEBSOCKETS.md` | Auditor WS/webhook map (Finnhub ≠ option NBBO; WS never orders) |
 | `docs/OPENAI_AUDIT_BRIEF.md` | What to review / what not to change / $25k YOLO ask |
+| `docs/CLAUDE_AUDIT.md` | External Claude audit: live card, Opening15 paper path, APIs, local tests |
 | `src/groktrading/llm.py` | Decision protocol (approve/skip only) |
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |

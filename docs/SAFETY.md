@@ -1,6 +1,6 @@
 # Safety
 
-Public-audit context: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md).
+Public-audit context: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md) · [CLAUDE_AUDIT.md](CLAUDE_AUDIT.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md).
 
 This is Darryl’s **YOLO** desk. Goal is **capital expansion** on a **$25,000 planning** frame, not capital preservation. Live fills may still be cash-constrained on a smaller funded balance until the $25k is deposited — planning capital ≠ current broker equity. Do **not** restore flatten-everything, no-overnight, daily-loser breakers, hard concurrent caps, or a ≥50% cash floor as “safer defaults.”
 
