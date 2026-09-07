@@ -53,6 +53,7 @@ python -m groktrading.research.cli capture --session 2026-09-08 --output /privat
 python -m groktrading.research.cycle_cli select --packet /private/research/2026-09-08/packet.json --context /private/research/2026-09-08/context.json --memory /private/research/2026-09-08/memory.json --out /private/research/2026-09-08/selection
 python -m groktrading.research.cli monitor --session 2026-09-08 --output /private/research/2026-09-08/selection
 python -m groktrading.research.cli report --session 2026-09-08 --output /private/research/2026-09-08/selection
+python -m groktrading.research.cycle_cli collect-context --session 2026-09-08 --packet /private/research/2026-09-08/packet.json --out /private/research/2026-09-08/outcome-context.json
 python -m groktrading.research.cycle_cli resolve --packet /private/research/2026-09-08/selection/packet.json --decision /private/research/2026-09-08/selection/decision.json --evaluation /private/research/2026-09-08/selection/evaluation.json --context /private/research/2026-09-08/outcome-context.json --out /private/research/2026-09-08/resolution
 ```
 
@@ -60,7 +61,11 @@ Schema errors, missing required categories and time guards fail closed. Commands
 
 ## Prompt version registry
 
-`python -m groktrading.research.cycle_cli registry --path /private/research/prompt-registry.json --seed` writes accepted hashes for `selector_v2`, `retrieval_v1`, and `resolver_v1`. New candidates are `proposed` then `shadow`; only a recorded review may mark `accepted`. Freeze the active version before an evaluation block. Do not silently edit the confirmatory arm.
+`python -m groktrading.research.cycle_cli registry --path /private/research/prompt-registry.json --seed` writes accepted hashes for `selector_v2`, `retrieval_v1`, and `resolver_v1`. New candidates are `proposed` then `shadow`; only a recorded review may mark `accepted`. Freeze the active version before an evaluation block. `cycle_cli select --registry` uses that active selector prompt (activating a version changes the selection prompt; it is not hardcoded to `selector_v2.md`). Do not silently edit the confirmatory arm.
+
+`cycle_cli memory --records` accepts both `daily-resolution.json` and `failure-record.json`. Failed sessions appear in the next-day memory brief.
+
+Tuesday 2026-09-08 remains the clean baseline (`research.cli run`), not this expanded sequence. See [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
 
 ## Remaining production work
 

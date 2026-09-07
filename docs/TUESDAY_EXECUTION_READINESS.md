@@ -1,8 +1,16 @@
 # Tuesday execution readiness — 2026-09-08
 
-**Verdict: baseline paper-run is executable; expanded Tuesday is executable only when collectors report `available` coverage (except optional depth).** Host credentials, entitlements, requested-model access and scheduling have not been tested from this workspace. There is no live-order execution path in this experiment.
+**Tuesday 2026-09-08 is an operational paper pilot on the clean baseline
+(`python -m groktrading.research.cli run`). It is not `--allow-degraded`. It is not a
+claim of full expanded-strategy readiness.** Passing unit tests is not live entitlement
+proof. Schwab is still unconnected. The economic / FOMC / earnings calendar is still
+incomplete. Host credentials, requested-model access and scheduling have not been tested
+from this workspace. There is no live-order execution path in this experiment.
 
-This branch rebases the Opening15 + Codex CLI + research-cycle work onto `main` (PR #9 was merged only into the old stacked base; PR #8/#10 were stacked on `codex/opening15-astra-experiment`). Tuesday should ship from **main**. Do not enable systemd timers. No Helsinki restart. No live orders.
+Decision protocol (five paper sessions → `insufficient | kill | continue | inconclusive`;
+`continue` means more paper only): [OPENING15_DECISION_PROTOCOL.md](OPENING15_DECISION_PROTOCOL.md).
+
+Tuesday should ship from **main**. Do not enable systemd timers. No Helsinki restart. No live orders.
 
 ## Exactly where the model's information comes from
 
@@ -31,8 +39,8 @@ Source of truth: `src/groktrading/research/capture.py`, `collectors.py`, `codex_
 
 | Path | Code status | Before Tuesday |
 | --- | --- | --- |
-| Baseline 15-minute selection + fixed-exit paper evaluation | Implemented | Host preflight, real CLI model probe, UW/quote entitlement check, dedicated process launch. |
-| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry stub implemented | Run only if required categories are `available` (depth may be `missing`). Otherwise use baseline `research.cli run` or `cycle_cli select --allow-degraded` and label the gaps. |
+| Baseline 15-minute selection + fixed-exit paper evaluation | Implemented | **Tuesday launch path.** Host preflight, real CLI model probe, UW/quote entitlement check, dedicated process launch. Clean `research.cli run` only. |
+| Expanded context + resolver + next-day memory | Collectors + CLI + failure records + prompt registry implemented | **Not Tuesday's launch claim.** Run later only if required categories are `available` (depth may be `missing`). Do not use `--allow-degraded` on Tuesday and do not present a degraded run as expanded readiness. |
 | Existing systemd Tuesday template | Present, inactive; runs baseline `research.cli run` | Do **not** enable the timer. It does not invoke `cycle_cli`. |
 | Schwab-backed or actual broker order execution | Not part of this path | Paper selections do not become orders. |
 
@@ -67,19 +75,28 @@ python -m groktrading.research.cli model-probe --output research-runs/model-prob
 
 Preflight confirms connectivity and calendar. It does not prove UW realtime entitlement, ten-stock completeness, Finnhub news entitlement, Tradier index quotes, or fresh option NBBO. Never relabel delayed data as realtime.
 
-### Baseline (default if expanded coverage is incomplete)
+### Tuesday launch — clean baseline only
 
-At **06:25 Pacific / 09:25 Eastern on Tuesday September 8**:
+At **06:25 Pacific / 09:25 Eastern on Tuesday September 8**, this is the only authorized
+Tuesday command. Do **not** add `--allow-degraded`. Do **not** start the expanded cycle.
 
 ```bash
 python -m groktrading.research.cli run --session 2026-09-08 --output research-runs/2026-09-08
 ```
 
-That command is capture → CLI recommendation → quote monitor → paper evaluation. Archive `packet.json`, `request.json`, `response.json`, `decision.json`, `observations.jsonl`, `evaluation.json` and any `failure-record.json`.
+That command is capture → CLI recommendation → quote monitor → paper evaluation (now with
+an additive `baselines` block). Archive `packet.json`, `request.json`, `response.json`,
+`decision.json`, `observations.jsonl`, `evaluation.json` and any `failure-*.json`.
 
-### Expanded (only if coverage is available)
+Passing this repo's unit tests does **not** prove UW realtime entitlement, ten-stock
+completeness, Codex model access, or live broker connectivity. Schwab OAuth is not
+connected. Macro/economic calendars remain incomplete.
 
-`research.cli capture` also writes preopen `context.json` from the collectors above. Inspect coverage before select:
+### Expanded (later paper days only; not Tuesday's claim)
+
+`research.cli capture` may also write preopen `context.json` from isolated optional
+collectors (timeouts cannot abort the baseline tape). Inspect coverage before select.
+Tuesday itself stays on clean baseline even if this file exists.
 
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-08 --out research-runs/2026-09-08/memory.json
@@ -92,4 +109,4 @@ python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-0
 
 Typical first-day gaps that force baseline or `--allow-degraded`: unused Finnhub (`world_news` missing), unused `TRADIER_ACCOUNT_ID` (`portfolio` missing), missing `$VIX.X` (macro `partial`). Depth is optional and stays `missing`.
 
-Do not present Tuesday as a world-news/portfolio-aware full-context experiment unless those categories are actually `available`. Do not claim a recursive learning loop is already operating. Stages that never produce a decision write `failure-record.json` (no invented PnL).
+Do not present Tuesday as a world-news/portfolio-aware full-context experiment. Do not claim a recursive learning loop is already operating. Stages that never produce a decision write `failure-record.json` (no invented PnL). After five paper sessions, run `research.cli protocol` — `continue` is more paper, never live.

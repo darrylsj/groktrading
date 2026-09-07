@@ -615,6 +615,164 @@ def test_prompt_registry_is_immutable_file_based(tmp_path: Path) -> None:
         freeze_active(proposed, "selector_v2_shadow", frozen_at)
 
 
+def test_option_chain_subset_is_partial_not_available() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets/options/expirations"):
+            symbol = request.url.params.get("symbol")
+            if symbol != "AAPL":
+                return httpx.Response(200, json={"expirations": {"date": []}})
+        return _handler(request)
+
+    uw = ReadFeed(
+        "https://api.unusualwhales.com",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    tradier = ReadFeed(
+        "https://api.tradier.com/v1",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    uw.interval = tradier.interval = 0
+    start, _ = window(date(2026, 9, 8))
+    context = collect_context(
+        config=_config(),
+        session=date(2026, 9, 8),
+        uw=uw,
+        tradier=tradier,
+        finnhub=None,
+        account_id=None,
+        clock=_clock(start - timedelta(minutes=10)),
+    )
+    chain = next(entry for entry in context.coverage if entry.category == "option_chain")
+    assert chain.status == "partial"
+    assert "AAPL" not in chain.detail or "per_symbol_missing" in chain.detail
+    assert "MSFT" in chain.detail
+    uw.close()
+    tradier.close()
+
+
+def test_portfolio_unknown_cash_or_bp_is_not_available() -> None:
+    records, coverage = collect_portfolio(
+        tradier=_AccountFeed(
+            balances={"balances": {"account_type": "margin", "total_equity": 10}}
+        ),
+        account_id="RESEARCH1",
+        clock=_portfolio_clock(),
+    )
+    assert records == []
+    assert coverage.status == "missing"
+    assert "buying power" in coverage.detail.lower() or "cash" in coverage.detail.lower()
+
+
+def test_chain_preserves_provider_quote_timestamps_and_stamps_after_http() -> None:
+    ticks = {"n": 0}
+
+    def clock() -> datetime:
+        ticks["n"] += 1
+        return datetime(2026, 9, 8, 13, 10, ticks["n"], tzinfo=UTC)
+
+    seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets/options/chains"):
+            seen.append(ticks["n"])
+            return httpx.Response(
+                200,
+                json={
+                    "options": {
+                        "option": [
+                            {
+                                "symbol": "AAPL260911C00100000",
+                                "option_type": "call",
+                                "strike": 100,
+                                "expiration_date": "2026-09-11",
+                                "bid": 1.0,
+                                "ask": 1.1,
+                                "bidsize": 10,
+                                "asksize": 12,
+                                "open_interest": 500,
+                                "bid_date": int(
+                                    datetime(2026, 9, 8, 13, 10, tzinfo=UTC).timestamp() * 1000
+                                ),
+                                "ask_date": int(
+                                    datetime(2026, 9, 8, 13, 10, tzinfo=UTC).timestamp() * 1000
+                                ),
+                            }
+                        ]
+                    }
+                },
+            )
+        return _handler(request)
+
+    tradier = ReadFeed(
+        "https://api.tradier.com/v1",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    tradier.interval = 0
+    from groktrading.research.collectors import collect_option_chain
+
+    records, coverage = collect_option_chain(
+        config=_config(),
+        session=date(2026, 9, 8),
+        tradier=tradier,
+        clock=clock,
+    )
+    assert coverage.status == "available"
+    contract = records[0].payload["contracts"][0]
+    assert contract["bid_date"]
+    assert contract["ask_date"]
+    assert "quote_ages_seconds" in contract
+    assert records[0].received_at > datetime(2026, 9, 8, 13, 10, 0, tzinfo=UTC)
+    assert seen and all(n >= 0 for n in seen)
+    tradier.close()
+
+
+def test_optional_collectors_timeout_does_not_abort_baseline(tmp_path: Path) -> None:
+    from groktrading.research.capture import isolate_optional_collectors
+
+    def hang(*args: Any, **kwargs: Any) -> None:
+        raise TimeoutError("finnhub hung")
+
+    import groktrading.research.collectors as collectors
+
+    original = collectors.write_expanded_context
+    collectors.write_expanded_context = hang  # type: ignore[method-assign]
+    try:
+        isolate_optional_collectors(
+            config=_config(),
+            session=date(2026, 9, 8),
+            directory=tmp_path,
+            uw=None,  # type: ignore[arg-type]
+            tradier=None,  # type: ignore[arg-type]
+            news_events=[],
+            deadline=datetime(2026, 9, 8, 13, 30, tzinfo=UTC),
+        )
+    finally:
+        collectors.write_expanded_context = original  # type: ignore[method-assign]
+    failure = json.loads((tmp_path / "context-failed.json").read_text())
+    assert "hung" in failure["detail"] or failure["detail"] == "TimeoutError"
+    assert "baseline packet still captured" in failure["note"]
+    assert not (tmp_path / "packet.json").exists()
+
+
+def test_day_plan_creates_outcome_context_step(tmp_path: Path) -> None:
+    from groktrading.research.cycle_cli import tuesday_commands
+
+    plan = tuesday_commands(date(2026, 9, 8), tmp_path, allow_degraded=False)
+    expanded = " ".join(plan["expanded"])
+    assert "outcome-context.json" in expanded
+    assert "collect-context" in expanded
+    assert plan["expanded"][-3].endswith("outcome-context.json  # post-session outcome collector")
+    assert "--allow-degraded" not in " ".join(plan["baseline"])
+    assert "research.cli run" in plan["baseline"][-1]
+    assert "clean baseline" in plan["note"]
+
+
 def test_day_plan_and_fail_cli(tmp_path: Path, monkeypatch: Any) -> None:
     from groktrading.research import cycle_cli
 

@@ -33,6 +33,7 @@ from groktrading.research.opening15 import (
     window,
     write_once,
 )
+from groktrading.research.protocol import protocol_from_paths
 
 
 def load(path: Path) -> Any:
@@ -155,11 +156,19 @@ def main() -> None:
             "report",
             "run",
             "demo",
+            "protocol",
         ],
     )
     parser.add_argument("--config", type=Path, default=Path("research/opening15.example.json"))
     parser.add_argument("--session", type=date.fromisoformat, default=date(2026, 9, 8))
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--sessions",
+        nargs="*",
+        default=[],
+        type=Path,
+        help="Up to five session directories or evaluation.json files for protocol",
+    )
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -173,6 +182,13 @@ def main() -> None:
                 print(json.dumps(probe_model(config, args.output), indent=2))
             else:
                 print(json.dumps(probe_model(config, args.output, openai_api_key()), indent=2))
+            return
+        if args.command == "protocol":
+            verdict = protocol_from_paths(list(args.sessions))
+            target = args.output if args.output.suffix == ".json" else args.output / "protocol.json"
+            if not target.exists():
+                write_once(target, verdict)
+            print(json.dumps(verdict, indent=2))
             return
         if args.command == "report":
             packet = Packet.model_validate(load(args.output / "packet.json"))

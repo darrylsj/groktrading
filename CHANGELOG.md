@@ -7,8 +7,21 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Opening15 `evaluation.json` additive `baselines` (1,000 seeded random-K percentile, mechanical top-K-by-ask-side-premium, abstain, decision/entry latency) on the same frozen packet and 15:55 ET exit. Original evaluate keys stay byte-identical.
+- Pre-registered paper decision protocol: `python -m groktrading.research.cli protocol` reads up to five sessions and returns `insufficient | kill | continue | inconclusive`. `continue` means more paper only. [docs/OPENING15_DECISION_PROTOCOL.md](docs/OPENING15_DECISION_PROTOCOL.md).
+- Daily expanded sequence now **creates** post-session `outcome-context.json` before resolve. Prompt registry active version is what `select` actually loads. Failed session records are included in next-day memory.
+
+### Changed
+
+- Tuesday 2026-09-08 posture: operational paper pilot on clean baseline (`research.cli run`), not `--allow-degraded`, not expanded-strategy readiness. Unit tests ≠ live entitlement. Schwab still unconnected; economic calendar incomplete.
+
 ### Fixed
 
+- Option-chain coverage is per-symbol: a subset (e.g. AAPL only) is `partial`, never universe-`available`. Portfolio coverage requires known cash and buying-power fields.
+- Collector receipt timestamps are stamped after the HTTP response. Chain rows keep provider quote timestamps and ages when present.
+- Optional/expanded collector timeouts no longer abort baseline opening-tape capture.
 - Opening15 expanded Context portfolio collector: Tradier `/accounts/{id}/orders` (and balances/positions) payloads no longer assume every wrapper or row is a dict. `"null"` strings, empty lists, and nested shapes fail closed to coverage `missing` or an empty working-orders list with a reason. `collect_context` also fail-closes `TypeError`/`AttributeError` so a bad snapshot cannot abort the cycle. Account numbers stay opaque `acct-` aliases. Missing `$VIX.X` remains macro `partial`.
 
 ### Added

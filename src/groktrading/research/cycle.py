@@ -5,10 +5,11 @@ Provider adapters supply Context JSON. No providers or broker order APIs are cal
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -31,6 +32,9 @@ from groktrading.research.opening15 import (
     window,
     write_once,
 )
+
+if TYPE_CHECKING:
+    from groktrading.research.registry import PromptRegistry
 
 Category = Literal[
     "world_news",
@@ -277,6 +281,7 @@ class Memory(Strict):
     target_session: date
     built_at: AwareDatetime
     days: list[DailyRecord] = Field(max_length=5)
+    failures: list[FailureRecord] = Field(default_factory=list, max_length=5)
     omitted_sessions: list[date]
 
     @model_validator(mode="after")
@@ -289,6 +294,11 @@ class Memory(Strict):
             raise ValueError("memory must be locked before target session open")
         if any(
             d.session >= self.target_session or d.available_at > self.built_at for d in self.days
+        ):
+            raise ValueError("same-day/future or unavailable memory")
+        if any(
+            item.session >= self.target_session or item.available_at > self.built_at
+            for item in self.failures
         ):
             raise ValueError("same-day/future or unavailable memory")
         return self
@@ -317,6 +327,17 @@ class Memory(Strict):
                 }
                 for d in self.days
             ],
+            "failures": [
+                {
+                    "session": str(item.session),
+                    "status": item.status,
+                    "stage": item.stage,
+                    "error_type": item.error_type,
+                    "detail": item.detail,
+                    "source_hash": item.source_hash,
+                }
+                for item in self.failures
+            ],
             "omitted_sessions": [str(d) for d in self.omitted_sessions],
         }
         if len(canonical(result).encode()) > 14000:
@@ -324,7 +345,27 @@ class Memory(Strict):
         return result
 
 
-def build_memory(days: list[DailyRecord], target: date, built_at: datetime) -> Memory:
+def load_session_record(path: Path) -> DailyRecord | FailureRecord:
+    data = json.loads(path.read_text())
+    if "stage" in data and "resolution" not in data:
+        return FailureRecord.model_validate(data)
+    return DailyRecord.model_validate(data)
+
+
+def active_selector_prompt(registry: PromptRegistry | None) -> tuple[str, str]:
+    """Return (prompt filename, version id). Default remains the shipped selector."""
+    if registry is None or not registry.active_version_id:
+        return "selector_v2.md", "selector_v2"
+    version = registry.get(registry.active_version_id)
+    return version.prompt_name, version.version_id
+
+
+def build_memory(
+    days: list[DailyRecord],
+    target: date,
+    built_at: datetime,
+    failures: list[FailureRecord] | None = None,
+) -> Memory:
     if len({d.session for d in days}) != len(days):
         raise ValueError("multiple resolutions for one session; explicitly reconcile versions")
     eligible = sorted(
@@ -333,11 +374,18 @@ def build_memory(days: list[DailyRecord], target: date, built_at: datetime) -> M
         reverse=True,
     )
     kept = eligible[:5]
+    failure_rows = [
+        item
+        for item in (failures or [])
+        if item.session < target and item.available_at <= built_at
+    ]
+    failure_rows = sorted(failure_rows, key=lambda item: item.session, reverse=True)[:5]
     while True:
         memory = Memory(
             target_session=target,
             built_at=built_at,
             days=kept,
+            failures=failure_rows,
             omitted_sessions=[d.session for d in days if d not in kept],
         )
         try:
@@ -422,6 +470,7 @@ def select(
     directory: Path,
     allow_degraded: bool = False,
     runner: CodexRun | None = None,
+    registry: PromptRegistry | None = None,
 ) -> dict[str, Any]:
     if packet.synthetic or packet.config.recommend_backend != "codex_cli":
         raise ValueError("prospective Codex CLI packet required")
@@ -468,8 +517,9 @@ def select(
             break
         retrieved |= new
         payload["retrieved"] = context.retrieve(sorted(retrieved))
+    selector_prompt, prompt_version = active_selector_prompt(registry)
     selection = cli_json(
-        "selector_v2.md",
+        selector_prompt,
         payload,
         Selection,
         directory / "selection",
@@ -490,7 +540,7 @@ def select(
         "synthetic": False,
         "requested_model": cfg.model,
         "recommend_backend": "codex_cli",
-        "prompt_version": "selector_v2",
+        "prompt_version": prompt_version,
         "decision": selection.decision.model_dump(mode="json"),
         "context_citations": selection.context_citations,
         "portfolio_assessment": selection.portfolio_assessment,

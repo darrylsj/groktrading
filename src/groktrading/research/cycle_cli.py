@@ -17,16 +17,17 @@ from groktrading.research.collectors import (
 )
 from groktrading.research.cycle import (
     Context,
-    DailyRecord,
     FailureRecord,
     Memory,
     build_memory,
     failure_from_exception,
+    load_session_record,
     resolve,
     select,
     write_failure,
 )
 from groktrading.research.opening15 import Config, Packet, now_utc, write_once
+from groktrading.research.protocol import protocol_from_paths
 from groktrading.research.registry import (
     freeze_active,
     load_registry,
@@ -48,9 +49,12 @@ def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> di
     return {
         "session": session.isoformat(),
         "note": (
-            "Expanded select requires context coverage available (except optional depth) "
-            "or an explicit --allow-degraded label. Do not present a degraded run as the "
-            "full-context experiment. No systemd/timers, no Helsinki restart, no live orders."
+            "Tuesday 2026-09-08 is an operational paper pilot on the clean baseline "
+            "(research.cli run). Do not launch with --allow-degraded. Expanded select "
+            "requires context coverage available (except optional depth) or an explicit "
+            "--allow-degraded label on a later paper day. Do not present a degraded run "
+            "as the full-context experiment. Passing unit tests is not live entitlement. "
+            "No systemd/timers, no Helsinki restart, no live orders."
         ),
         "baseline": [
             (
@@ -93,6 +97,11 @@ def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> di
                 f"--session {session} --output {root}/selection"
             ),
             (
+                f"python -m groktrading.research.cycle_cli collect-context "
+                f"--session {session} --packet {root}/packet.json "
+                f"--out {root}/outcome-context.json  # post-session outcome collector"
+            ),
+            (
                 "python -m groktrading.research.cycle_cli resolve "
                 f"--packet {root}/selection/packet.json "
                 f"--decision {root}/selection/decision.json "
@@ -128,6 +137,7 @@ def main() -> None:
         if name == "select":
             command.add_argument("--memory", required=True, type=Path)
             command.add_argument("--allow-degraded", action="store_true")
+            command.add_argument("--registry", type=Path)
         else:
             command.add_argument("--decision", required=True, type=Path)
             command.add_argument("--evaluation", required=True, type=Path)
@@ -170,12 +180,25 @@ def main() -> None:
     registry.add_argument("--forward-test")
     registry.add_argument("--status")
     registry.add_argument("--freeze")
+    protocol = commands.add_parser("protocol")
+    protocol.add_argument("--sessions", nargs="*", default=[], type=Path)
+    protocol.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
     try:
         if args.command == "memory":
-            records = [DailyRecord.model_validate_json(p.read_text()) for p in args.records]
-            result = build_memory(records, args.session, now_utc())
+            days = []
+            failures = []
+            for path in args.records:
+                loaded = load_session_record(path)
+                if isinstance(loaded, FailureRecord):
+                    failures.append(loaded)
+                else:
+                    days.append(loaded)
+            result = build_memory(days, args.session, now_utc(), failures=failures)
             write_once(args.out, result.model_dump(mode="json"))
+        elif args.command == "protocol":
+            verdict = protocol_from_paths(list(args.sessions))
+            write_once(args.out, verdict)
         elif args.command == "day-plan":
             write_once(
                 args.out,
@@ -244,11 +267,12 @@ def main() -> None:
         elif args.command == "collect-context":
             config = Config.model_validate(_load_json(args.config))
             packet = Packet.model_validate_json(args.packet.read_text()) if args.packet else None
-            if args.out.is_dir() or args.out.suffix != ".json":
-                target = args.out / "context.json"
-            else:
+            if args.out.suffix == ".json" and not args.out.is_dir():
                 target = args.out
-            directory = target.parent if target.name == "context.json" else args.out
+                directory = target.parent
+            else:
+                directory = args.out
+                target = directory / "context.json"
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             uw, tradier = feeds(packet.config if packet is not None else config)
             try:
@@ -262,6 +286,7 @@ def main() -> None:
                         news_events=[],
                         flow_events=[],
                         packet=packet,
+                        target=target,
                     )
                 else:
                     context = collect_context(
@@ -272,7 +297,8 @@ def main() -> None:
                         finnhub=optional_finnhub(),
                         account_id=optional_account_id(),
                     )
-                    write_once(directory / "context.json", context.model_dump(mode="json"))
+                    if not target.exists():
+                        write_once(target, context.model_dump(mode="json"))
             finally:
                 uw.close()
                 tradier.close()
@@ -280,12 +306,14 @@ def main() -> None:
             packet = Packet.model_validate_json(args.packet.read_text())
             context = Context.model_validate_json(args.context.read_text())
             if args.command == "select":
+                active_registry = load_registry(args.registry) if args.registry else None
                 select(
                     packet,
                     context,
                     Memory.model_validate_json(args.memory.read_text()),
                     args.out,
                     args.allow_degraded,
+                    registry=active_registry,
                 )
             else:
                 resolve(
