@@ -294,18 +294,26 @@ def isolate_optional_collectors(
             flow_events=[],
         )
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_run)
-        try:
-            future.result(timeout=remaining)
-        except Exception as exc:
-            if not future.done():
-                _record_optional_context_failure(
-                    directory, "expanded collectors exceeded preopen budget"
-                )
-                return
+    # No `with` block: ThreadPoolExecutor.__exit__ calls shutdown(wait=True), which
+    # would block on a hung collector until it finished and push the opening tape
+    # capture past 09:30 (coverage-gap failure = lost session). shutdown(wait=False)
+    # returns immediately; the abandoned thread finishes or dies on its own.
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="opening15-context")
+    future = pool.submit(_run)
+    try:
+        future.result(timeout=remaining)
+    except Exception as exc:
+        # On 3.11+ concurrent.futures.TimeoutError is the builtin TimeoutError, so a
+        # collector that itself raised TimeoutError is indistinguishable by type; use done().
+        if not future.done():
+            _record_optional_context_failure(
+                directory, "expanded collectors exceeded preopen budget"
+            )
+        else:
             detail = str(exc) if str(exc) else type(exc).__name__
             _record_optional_context_failure(directory, detail)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def collect(config: Config, day: date, directory: Path, uw: ReadFeed, tradier: ReadFeed) -> Packet:
