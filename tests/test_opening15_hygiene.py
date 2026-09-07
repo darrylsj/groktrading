@@ -226,7 +226,9 @@ def test_premium_cap_follows_account_equity_not_hardcoded_range(sample: Any) -> 
     assert cheap_budget["source"] == "account_equity"
     assert cheap_budget["base_usd"] == 5_000
     assert cheap_budget["max_premium_per_share"] == pytest.approx(0.40)
-    assert any(r["contract"] == contract and r["gate"] == "premium_budget" for r in dropped["rejects"])
+    assert any(
+        r["contract"] == contract and r["gate"] == "premium_budget" for r in dropped["rejects"]
+    )
     rich_budget = kept["budget"]
     assert rich_budget["max_premium_per_share"] == pytest.approx(4.00)
     assert any(c["contract"] == contract for c in kept["candidates"])
@@ -363,7 +365,9 @@ def test_dte_window_logs_zero_two_without_forcing_overnight(sample: Any) -> None
     assert dropped["dte_bucket"] == "3+"
 
 
-def test_select_writes_candidates_and_payload(sample: Any, tmp_path: Path, monkeypatch: Any) -> None:
+def test_select_writes_candidates_and_payload(
+    sample: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
     packet, decision = sample
     packet.synthetic = False
     start, _ = window(packet.session)

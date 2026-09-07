@@ -158,7 +158,12 @@ def dte_bucket(dte: int | None) -> str:
     return "3+"
 
 
-def observed_premium(*, ask: float | None, print_price: float | None, last: float | None) -> tuple[float | None, str | None]:
+def observed_premium(
+    *,
+    ask: float | None,
+    print_price: float | None,
+    last: float | None,
+) -> tuple[float | None, str | None]:
     if ask is not None:
         return ask, "ask"
     if print_price is not None:
@@ -356,9 +361,11 @@ def collect_universe(
         item = _get(records, event.symbol, str(contract))
         item.add_source("packet_print")
         item.add_evidence(event.event_id)
+        bid = event.raw.get("nbbo_bid")
+        ask = event.raw.get("nbbo_ask")
         item.fill_quote(
-            bid=event.raw.get("nbbo_bid") if event.raw.get("nbbo_bid") not in (None, "") else event.raw.get("bid"),
-            ask=event.raw.get("nbbo_ask") if event.raw.get("nbbo_ask") not in (None, "") else event.raw.get("ask"),
+            bid=bid if bid not in (None, "") else event.raw.get("bid"),
+            ask=ask if ask not in (None, "") else event.raw.get("ask"),
             last=event.raw.get("last"),
         )
         if item.print_price is None:
@@ -380,7 +387,9 @@ def collect_universe(
         if not isinstance(payload, dict):
             continue
         if category == "option_chain":
-            expiration = parse_expiration(payload.get("expiration") or payload.get("expiration_date"))
+            expiration = parse_expiration(
+                payload.get("expiration") or payload.get("expiration_date")
+            )
             for contract in payload.get("contracts") or []:
                 if not isinstance(contract, dict):
                     continue
@@ -413,7 +422,9 @@ def collect_universe(
                     or contract.get("open_interest"),
                 )
                 if item.expiration is None:
-                    item.expiration = parse_expiration(contract.get("expiration_date")) or expiration
+                    item.expiration = (
+                        parse_expiration(contract.get("expiration_date")) or expiration
+                    )
         elif category == "option_screener":
             rows = payload.get("contracts") or payload.get("rows") or []
             if isinstance(payload.get("option_symbol"), str):
@@ -481,7 +492,11 @@ def apply_gates(
     )
 
     if item.symbol not in symbols:
-        return None, _reject("universe", "contract underlying is outside the frozen ten-stock universe", row)
+        return None, _reject(
+            "universe",
+            "contract underlying is outside the frozen ten-stock universe",
+            row,
+        )
     if not item.contract:
         return None, _reject("universe", "missing option symbol", row)
 
