@@ -134,15 +134,26 @@ write preopen `context.json` from isolated optional collectors (timeouts cannot
 abort the baseline tape). Inspect coverage before select. Tuesday itself stays on
 clean baseline even if that file exists.
 
-If any **required** category is not `available`, fall back to baseline
-`research.cli run` or add explicit `--allow-degraded` and label the gaps. Do not
-treat that fallback as expanded readiness.
+If any **required** category is not `available`, fall back to the packet-only
+baseline or add explicit `--allow-degraded` and label the gaps. Do not treat that
+fallback as expanded readiness.
+
+**After `capture` has already written `packet.json`, do not re-`run`.** `run`
+includes capture and `packet.json` is write-once. Continue the frozen packet:
+
+```bash
+python -m groktrading.research.cli recommend --session 2026-09-09 --output research-runs/2026-09-09
+python -m groktrading.research.cli monitor --session 2026-09-09 --output research-runs/2026-09-09
+```
+
+If you have not captured yet, the from-scratch fallback remains clean
+`research.cli run`.
 
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-09 --out research-runs/2026-09-09/memory.json
 python -m groktrading.research.cli capture --session 2026-09-09 --output research-runs/2026-09-09
 # Read context.json coverage. If any required category is not available:
-#   - fall back to: python -m groktrading.research.cli run --session 2026-09-09 --output research-runs/2026-09-09
+#   - after capture: recommend + monitor on this directory (do not re-run)
 #   - or: python -m groktrading.research.cycle_cli select ... --allow-degraded
 python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-09/packet.json --context research-runs/2026-09-09/context.json --memory research-runs/2026-09-09/memory.json --out research-runs/2026-09-09/selection
 python -m groktrading.research.cli monitor --session 2026-09-09 --output research-runs/2026-09-09/selection

@@ -66,6 +66,11 @@ def test_evaluate_original_keys_byte_identical(sample: Any) -> None:
     assert canonical(original_evaluation_fields(full)) == canonical(core)
     assert full["baselines"]["same_packet_hash"] == core["packet_hash"]
     assert "baselines" not in core
+    assert full["experiment_id"]
+    assert full["arm"]["universe"] == "packet_printed"
+    assert full["baselines"]["fixed_k_values"] == [1, 2, 3]
+    assert full["baselines"]["scorecards"]["selection_quality_same_k"]["defined"] is True
+    assert "arm" not in core
 
 
 def test_baselines_share_packet_and_1555_exit(sample: Any) -> None:
@@ -98,6 +103,10 @@ def test_abstain_and_zero_picks_baselines(sample: Any) -> None:
     assert report["baselines"]["mechanical_top_k_ask_side_premium"]["option_symbols"] == []
     assert report["baselines"]["mechanical_top_k_ask_side_premium"]["net_usd"] == 0.0
     assert report["baselines"]["abstain"]["net_usd"] == 0.0
+    assert report["baselines"]["scorecards"]["selection_quality_same_k"]["defined"] is False
+    assert report["baselines"]["scorecards"]["policy_enter_or_abstain"]["entered"] is False
+    assert report["baselines"]["fixed_k"]["1"]["random_k"]["percentile_of_zero"] is not None
+    assert report["baselines"]["scorecards"]["policy_enter_or_abstain"]["policy_percentile"] is not None
 
 
 def test_mechanical_top_k_uses_ask_side_premium_only(sample: Any) -> None:

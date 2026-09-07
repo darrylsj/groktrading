@@ -466,6 +466,7 @@ def test_codex_cli_recommend_mocked_subprocess(sample: Any, monkeypatch: Any) ->
     directory = folder / "codex-ok"
     result = recommend(packet, directory, runner=runner)
     assert result["recommend_backend"] == "codex_cli"
+    assert result["experiment_id"] == "opening15-packet-baseline"
     assert result["codex_version"] == "codex-cli 0.153.0"
     assert result["returned_model"] == "gpt-6-astra"
     assert result["usage"]["output_tokens"] == 2

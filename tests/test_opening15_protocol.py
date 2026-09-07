@@ -20,20 +20,58 @@ def _report(
     *,
     k: int = 1,
     synthetic: bool = False,
+    experiment_id: str = "opening15-packet-baseline",
+    prompt_version: str = "opening15-discretion-v1",
+    universe: str = "packet_printed",
+    policy_percentile: float | None = None,
 ) -> dict[str, Any]:
+    same_k = None if k == 0 else percentile
+    policy = policy_percentile if policy_percentile is not None else (
+        same_k if k else percentile
+    )
     return {
         "paper_only": True,
         "synthetic": synthetic,
         "session": session,
         "packet_hash": f"hash-{session}",
+        "experiment_id": experiment_id,
+        "requested_model": "gpt-6-astra",
+        "recommend_backend": "codex_cli",
+        "prompt_version": prompt_version,
         "selected_count": k,
         "selected_net_before_api_and_infra_usd": model_net,
+        "arm": {
+            "experiment_id": experiment_id,
+            "requested_model": "gpt-6-astra",
+            "recommend_backend": "codex_cli",
+            "prompt_version": prompt_version,
+            "universe": universe,
+        },
         "baselines": {
             "k": k,
             "model_net_usd": model_net,
-            "random_k": {"percentile": percentile, "seed": 20260908, "draws": 1000},
+            "random_k": {
+                "percentile": same_k,
+                "seed": 20260908,
+                "draws": 1000,
+                "incomplete_draws": 0,
+            },
             "mechanical_top_k_ask_side_premium": {"net_usd": mechanical_net},
             "abstain": {"selected_count": 0, "net_usd": 0.0},
+            "fixed_k_values": [1, 2, 3],
+            "fixed_k": {
+                "1": {
+                    "mechanical_net_usd": mechanical_net,
+                    "random_k": {"percentile_of_zero": policy, "complete_draws": 1000},
+                }
+            },
+            "scorecards": {
+                "selection_quality_same_k": {
+                    "defined": k > 0,
+                    "random_k_percentile": same_k,
+                },
+                "policy_enter_or_abstain": {"policy_percentile": policy},
+            },
         },
     }
 
@@ -129,6 +167,8 @@ def test_protocol_insufficient_when_only_one_random_percentile() -> None:
     reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 6)]
     for report in reports[1:]:
         report["baselines"]["random_k"]["percentile"] = None
+        report["baselines"]["scorecards"]["policy_enter_or_abstain"]["policy_percentile"] = None
+        report["baselines"]["fixed_k"]["1"]["random_k"]["percentile_of_zero"] = None
     result = decide_protocol(reports)
     assert result["verdict"] == "insufficient"
     assert "percentile" in " ".join(result["reasons"]).lower()
@@ -138,9 +178,63 @@ def test_protocol_insufficient_when_only_one_random_percentile() -> None:
 def test_protocol_rejects_inconsistent_experiment_identity() -> None:
     reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 6)]
     reports[2]["prompt_version"] = "selector_alt"
+    reports[2]["arm"]["prompt_version"] = "selector_alt"
     result = decide_protocol(reports)
     assert result["verdict"] == "rejected"
     assert any("identity" in reason.lower() for reason in result["reasons"])
+
+
+def test_protocol_rejects_missing_experiment_identity() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 6)]
+    for key in ("experiment_id", "requested_model", "recommend_backend", "prompt_version"):
+        reports[0].pop(key, None)
+        reports[0]["arm"].pop(key, None)
+    result = decide_protocol(reports)
+    assert result["verdict"] == "rejected"
+    assert any("missing" in reason.lower() for reason in result["reasons"])
+
+
+def test_protocol_rejects_mixed_tuesday_and_expanded_arms() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 5)]
+    reports.append(
+        _report(
+            "2026-09-09",
+            20,
+            1,
+            70,
+            experiment_id="opening15-expanded-select",
+            prompt_version="selector_v2",
+            universe="hygiene_shortlist",
+        )
+    )
+    result = decide_protocol(reports)
+    assert result["verdict"] == "rejected"
+    blob = " ".join(result["reasons"]).lower()
+    assert "identity" in blob
+    assert "expanded" in blob or "baseline" in blob
+
+
+def test_protocol_abstain_day_is_scoreable_via_fixed_k() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 5)]
+    reports.append(_report("2026-09-09", 0, 0, 70, k=0))
+    result = decide_protocol(reports)
+    assert result["verdict"] != "insufficient"
+    assert result["sessions_scoreable"] == 5
+    abstain = next(item for item in result["sessions"] if item["session"] == "2026-09-09")
+    assert abstain["k"] == 0
+    assert abstain["random_k_percentile"] is None
+    assert abstain["policy_percentile"] == 70
+
+
+def test_protocol_abstain_without_fixed_k_is_insufficient() -> None:
+    reports = [_report(f"2026-09-0{i}", 20, 1, 70) for i in range(1, 5)]
+    bare = _report("2026-09-09", 0, 0, 70, k=0)
+    bare["baselines"]["fixed_k"] = {}
+    bare["baselines"]["scorecards"]["policy_enter_or_abstain"]["policy_percentile"] = None
+    reports.append(bare)
+    result = decide_protocol(reports)
+    assert result["verdict"] == "insufficient"
+    assert "percentile" in " ".join(result["reasons"]).lower()
 
 
 def test_protocol_cli_reads_evaluation_files(tmp_path: Path, monkeypatch: Any) -> None:

@@ -579,6 +579,7 @@ def test_select_shadow_v3_writes_artifact_without_swapping_active(
         if schema is cycle.Selection:
             assert payload["candidates"]
             assert payload["hygiene"]["architecture"] == "gates_then_judgment"
+            assert payload["eligibility"]["declared_before_inference"] is True
             body = (
                 _abstain_decision(decision)
                 if name == "selector_v3.md"

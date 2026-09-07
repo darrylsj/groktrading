@@ -143,6 +143,20 @@ def tuesday_commands(session: date, output: Path, *, allow_degraded: bool) -> di
             f"python -m groktrading.research.cycle_cli fail --session {session} "
             f"--stage <stage> --detail '<ValueError>' --out {root}/failed-<attempt>"
         ),
+        "fallback_after_capture": [
+            (
+                "Do not re-run research.cli run after capture; packet.json is "
+                "write-once. Continue the frozen packet with recommend + monitor."
+            ),
+            (
+                "python -m groktrading.research.cli recommend "
+                f"--session {session} --output {root}"
+            ),
+            (
+                "python -m groktrading.research.cli monitor "
+                f"--session {session} --output {root}"
+            ),
+        ],
         "shadow_compare": [
             (
                 f"python -m groktrading.research.cycle_cli select --packet {root}/packet.json "

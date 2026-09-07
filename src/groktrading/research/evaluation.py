@@ -21,6 +21,14 @@ from groktrading.research.opening15 import (
     stamp,
     write_once,
 )
+from groktrading.research.universe import (
+    FIXED_K_VALUES,
+    UNIVERSE_SHORTLIST,
+    apply_eligibility,
+    arm_identity,
+    packet_contracts,
+    resolve_eligibility,
+)
 
 # Additive baselines never mutate these keys or their values.
 ORIGINAL_EVALUATION_KEYS = (
@@ -71,9 +79,7 @@ def usable_quote(row: dict[str, Any], received: datetime, max_age: int) -> bool:
 
 
 def printed_universe(packet: Packet) -> list[str]:
-    return sorted(
-        {str(e.raw["option_chain_id"]) for e in packet.events if e.kind == "option_trade"}
-    )
+    return packet_contracts(packet)
 
 
 def session_exit(packet: Packet) -> datetime:
@@ -100,6 +106,7 @@ def mark_contract(
     max_price: float,
     group: str,
     ranked_action: str,
+    explicit_coverage: bool = False,
 ) -> dict[str, Any]:
     """Same 15:55 ET ask-in/bid-out mark used by the model arm."""
     exit_at = session_exit(packet)
@@ -107,6 +114,7 @@ def mark_contract(
     entry: dict[str, Any] | None = None
     exit_mark: dict[str, Any] | None = None
     marks: list[float] = []
+    saw_usable = False
     for observation in observations:
         received = stamp(observation["received_at"])
         quote = observation["quote"]
@@ -117,6 +125,7 @@ def mark_contract(
                 continue
         if not usable_quote(quote, received, config.max_quote_age_seconds):
             continue
+        saw_usable = True
         if entry is None:
             if received > min(available + timedelta(seconds=validity), exit_at):
                 continue
@@ -141,11 +150,19 @@ def mark_contract(
             100 * (exit_mark["price"] - entry["price"]) - 2 * config.commission_per_contract_side,
             4,
         )
+    if exit_mark:
+        status = "closed_simulation"
+    elif entry:
+        status = "missing_exit"
+    elif explicit_coverage and not saw_usable:
+        status = "observation_inadequate"
+    else:
+        status = "not_filled"
     return {
         "option_symbol": contract,
         "group": group,
         "ranked_action": ranked_action,
-        "status": "closed_simulation" if exit_mark else "missing_exit" if entry else "not_filled",
+        "status": status,
         "entry": entry,
         "exit": exit_mark,
         "paper_net_usd": pnl,
@@ -154,8 +171,17 @@ def mark_contract(
     }
 
 
-def _portfolio_net(rows: list[dict[str, Any]]) -> float | None:
-    if any(row["status"] == "missing_exit" for row in rows):
+def _missing_data_statuses(explicit_coverage: bool) -> tuple[str, ...]:
+    if explicit_coverage:
+        return ("missing_exit", "observation_inadequate")
+    return ("missing_exit",)
+
+
+def _portfolio_net(
+    rows: list[dict[str, Any]], *, explicit_coverage: bool = False
+) -> float | None:
+    missing = _missing_data_statuses(explicit_coverage)
+    if any(row["status"] in missing for row in rows):
         return None
     return round(sum(row["paper_net_usd"] or 0 for row in rows), 4)
 
@@ -165,6 +191,8 @@ def mechanical_mark(
     contract: str,
     observations: list[dict[str, Any]],
     available: datetime,
+    *,
+    explicit_coverage: bool = False,
 ) -> dict[str, Any]:
     return mark_contract(
         packet,
@@ -175,6 +203,7 @@ def mechanical_mark(
         max_price=math.inf,
         group="mechanical",
         ranked_action="mechanical",
+        explicit_coverage=explicit_coverage,
     )
 
 
@@ -214,8 +243,81 @@ def random_k_rng(packet_hash: str) -> random.Random:
     return random.Random(int(digest(f"{RANDOM_K_SEED}:{packet_hash}")[:16], 16))
 
 
-def _draw_net(marks: dict[str, dict[str, Any]], contracts: list[str]) -> float | None:
-    return _portfolio_net([marks[c] for c in contracts])
+def _draw_net(
+    marks: dict[str, dict[str, Any]],
+    contracts: list[str],
+    *,
+    explicit_coverage: bool = False,
+) -> float | None:
+    return _portfolio_net([marks[c] for c in contracts], explicit_coverage=explicit_coverage)
+
+
+def _random_k_draws(
+    *,
+    k: int,
+    universe: list[str],
+    mechanical: dict[str, dict[str, Any]],
+    packet_hash: str,
+    explicit_coverage: bool,
+) -> tuple[list[float], int]:
+    draws: list[float] = []
+    incomplete_draws = 0
+    if k and universe:
+        rng = random_k_rng(packet_hash)
+        size = min(k, len(universe))
+        for _ in range(RANDOM_K_DRAWS):
+            pick = rng.sample(universe, size)
+            net = _draw_net(mechanical, pick, explicit_coverage=explicit_coverage)
+            if net is None:
+                incomplete_draws += 1
+                continue
+            draws.append(net)
+    return draws, incomplete_draws
+
+
+def _k_summary(draws: list[float], incomplete_draws: int, k: int) -> dict[str, Any]:
+    return {
+        "draws": RANDOM_K_DRAWS,
+        "seed": RANDOM_K_SEED,
+        "k": k,
+        "complete_draws": len(draws),
+        "incomplete_draws": incomplete_draws,
+        "mean_net_usd": round(sum(draws) / len(draws), 4) if draws else None,
+        "median_net_usd": (round(sorted(draws)[len(draws) // 2], 4) if draws else None),
+    }
+
+
+def _fixed_k_arm(
+    *,
+    k: int,
+    universe: list[str],
+    mechanical: dict[str, dict[str, Any]],
+    premiums: dict[str, float],
+    packet_hash: str,
+    explicit_coverage: bool,
+) -> dict[str, Any]:
+    ranked = sorted(universe, key=lambda contract: (-premiums.get(contract, 0.0), contract))
+    top = ranked[:k]
+    mechanical_rows = [mechanical[contract] for contract in top]
+    mechanical_net = (
+        _portfolio_net(mechanical_rows, explicit_coverage=explicit_coverage) if k else 0.0
+    )
+    draws, incomplete = _random_k_draws(
+        k=k,
+        universe=universe,
+        mechanical=mechanical,
+        packet_hash=packet_hash,
+        explicit_coverage=explicit_coverage,
+    )
+    summary = _k_summary(draws, incomplete, k)
+    summary["percentile_of_zero"] = percentile_rank(0.0, draws) if draws else None
+    return {
+        "k": k,
+        "option_symbols": top,
+        "mechanical_net_usd": mechanical_net,
+        "premium_by_contract": {c: round(premiums.get(c, 0.0), 4) for c in top},
+        "random_k": summary,
+    }
 
 
 def compute_baselines(
@@ -223,12 +325,20 @@ def compute_baselines(
     record: dict[str, Any],
     observations: list[dict[str, Any]],
     core: dict[str, Any],
+    *,
+    explicit_coverage: bool = False,
 ) -> dict[str, Any]:
     available = stamp(record["received_at"])
     universe = [row["option_symbol"] for row in core["rows"]]
     by_contract = index_observations(observations)
     mechanical = {
-        contract: mechanical_mark(packet, contract, by_contract.get(contract, []), available)
+        contract: mechanical_mark(
+            packet,
+            contract,
+            by_contract.get(contract, []),
+            available,
+            explicit_coverage=explicit_coverage,
+        )
         for contract in universe
     }
     k = int(core["selected_count"])
@@ -237,22 +347,17 @@ def compute_baselines(
     ranked = sorted(universe, key=lambda c: (-premiums.get(c, 0.0), c))
     top = ranked[:k]
     mechanical_rows = [mechanical[c] for c in top]
-    mechanical_net = _portfolio_net(mechanical_rows) if k else 0.0
-    draws: list[float] = []
-    incomplete_draws = 0
-    if k and universe:
-        rng = random_k_rng(str(core["packet_hash"]))
-        size = min(k, len(universe))
-        for _ in range(RANDOM_K_DRAWS):
-            pick = rng.sample(universe, size)
-            net = _draw_net(mechanical, pick)
-            if net is None:
-                incomplete_draws += 1
-                continue
-            draws.append(net)
-    percentile = (
-        percentile_rank(model_net, draws) if model_net is not None and draws else None
+    mechanical_net = (
+        _portfolio_net(mechanical_rows, explicit_coverage=explicit_coverage) if k else 0.0
     )
+    draws, incomplete_draws = _random_k_draws(
+        k=k,
+        universe=universe,
+        mechanical=mechanical,
+        packet_hash=str(core["packet_hash"]),
+        explicit_coverage=explicit_coverage,
+    )
+    percentile = percentile_rank(model_net, draws) if model_net is not None and draws else None
     selected_rows = [row for row in core["rows"] if row["group"] == "selected"]
     entry_lags: list[dict[str, Any]] = []
     for row in selected_rows:
@@ -267,23 +372,30 @@ def compute_baselines(
             }
         )
     lag_values = [item["entry_minus_decision_seconds"] for item in entry_lags]
+    same_k = _k_summary(draws, incomplete_draws, k)
+    same_k["percentile"] = percentile
+    fixed_k = {
+        str(arm_k): _fixed_k_arm(
+            k=arm_k,
+            universe=universe,
+            mechanical=mechanical,
+            premiums=premiums,
+            packet_hash=str(core["packet_hash"]),
+            explicit_coverage=explicit_coverage,
+        )
+        for arm_k in FIXED_K_VALUES
+    }
+    policy_percentile = (
+        percentile
+        if k
+        else (fixed_k["1"]["random_k"]["percentile_of_zero"] if fixed_k["1"]["random_k"] else None)
+    )
     return {
         "same_packet_hash": core["packet_hash"],
         "same_exit": "15:55 ET",
         "k": k,
         "model_net_usd": model_net,
-        "random_k": {
-            "draws": RANDOM_K_DRAWS,
-            "seed": RANDOM_K_SEED,
-            "k": k,
-            "complete_draws": len(draws),
-            "incomplete_draws": incomplete_draws,
-            "percentile": percentile,
-            "mean_net_usd": round(sum(draws) / len(draws), 4) if draws else None,
-            "median_net_usd": (
-                round(sorted(draws)[len(draws) // 2], 4) if draws else None
-            ),
-        },
+        "random_k": same_k,
         "mechanical_top_k_ask_side_premium": {
             "k": k,
             "option_symbols": top,
@@ -291,6 +403,25 @@ def compute_baselines(
             "premium_by_contract": {c: round(premiums.get(c, 0.0), 4) for c in top},
         },
         "abstain": {"selected_count": 0, "net_usd": 0.0},
+        "fixed_k_values": list(FIXED_K_VALUES),
+        "fixed_k": fixed_k,
+        "scorecards": {
+            "selection_quality_same_k": {
+                "defined": k > 0,
+                "k": k,
+                "random_k_percentile": percentile,
+                "mechanical_net_usd": mechanical_net,
+                "model_net_usd": model_net,
+            },
+            "policy_enter_or_abstain": {
+                "model_net_usd": model_net,
+                "always_flat_net_usd": 0.0,
+                "model_minus_always_flat_usd": model_net,
+                "entered": k > 0,
+                "fixed_k": "1",
+                "policy_percentile": policy_percentile,
+            },
+        },
         "latency": {
             "knowledge_cutoff": packet.knowledge_cutoff.isoformat(),
             "decision_received_at": available.isoformat(),
@@ -302,6 +433,9 @@ def compute_baselines(
                 round(sum(lag_values) / len(lag_values), 4) if lag_values else None
             ),
             "unfilled_selected": sum(1 for row in selected_rows if row["status"] == "not_filled"),
+            "observation_inadequate_selected": sum(
+                1 for row in selected_rows if row["status"] == "observation_inadequate"
+            ),
         },
     }
 
@@ -311,13 +445,15 @@ def evaluate_core(
 ) -> dict[str, Any]:
     if record["packet_hash"] != digest(packet.model_dump(mode="json")):
         raise ValueError("decision/packet hash mismatch")
+    eligibility = resolve_eligibility(packet, record)
     decision = Decision.model_validate(record["decision"])
-    decision.validate_evidence(packet)
+    apply_eligibility(decision, packet, eligibility)
     available = stamp(record["received_at"])
     if available < packet.knowledge_cutoff:
         raise ValueError("decision predates packet")
     picks = {p.option_symbol: p for p in decision.picks}
-    universe = printed_universe(packet)
+    expanded = eligibility["universe"] == UNIVERSE_SHORTLIST
+    universe = list(eligibility["contracts"]) if expanded else printed_universe(packet)
     by_contract = index_observations(observations)
     rows: list[dict[str, Any]] = []
     for contract in universe:
@@ -335,6 +471,7 @@ def evaluate_core(
                 max_price=max_price,
                 group="selected" if eligible else "counterfactual",
                 ranked_action=pick.action if pick else "unranked",
+                explicit_coverage=expanded,
             )
         )
     selected = [r for r in rows if r["group"] == "selected"]
@@ -350,7 +487,7 @@ def evaluate_core(
         if cost_known
         else None
     )
-    net = _portfolio_net(selected)
+    net = _portfolio_net(selected, explicit_coverage=expanded)
     return {
         "paper_only": True,
         "synthetic": packet.synthetic,
@@ -375,9 +512,33 @@ def original_evaluation_fields(report: dict[str, Any]) -> dict[str, Any]:
 def evaluate(
     packet: Packet, record: dict[str, Any], observations: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    eligibility = resolve_eligibility(packet, record)
+    expanded = eligibility["universe"] == UNIVERSE_SHORTLIST
     core = evaluate_core(packet, record, observations)
     result = dict(core)
-    result["baselines"] = compute_baselines(packet, record, observations, core)
+    result["baselines"] = compute_baselines(
+        packet, record, observations, core, explicit_coverage=expanded
+    )
+    identity = arm_identity(packet, record, eligibility)
+    result["arm"] = identity
+    result["experiment_id"] = identity["experiment_id"]
+    result["requested_model"] = identity["requested_model"]
+    result["recommend_backend"] = identity["recommend_backend"]
+    result["prompt_version"] = identity["prompt_version"]
+    result["eligibility_hash"] = eligibility["manifest_hash"]
+    selected_rows = [row for row in core["rows"] if row["group"] == "selected"]
+    result["observation_coverage"] = {
+        "selected_not_filled": sum(1 for row in selected_rows if row["status"] == "not_filled"),
+        "selected_observation_inadequate": sum(
+            1 for row in selected_rows if row["status"] == "observation_inadequate"
+        ),
+        "selected_missing_exit": sum(1 for row in selected_rows if row["status"] == "missing_exit"),
+        "incomplete_random_draws": result["baselines"]["random_k"]["incomplete_draws"],
+        "incomplete_fixed_k_draws": {
+            key: arm["random_k"]["incomplete_draws"]
+            for key, arm in result["baselines"]["fixed_k"].items()
+        },
+    }
     return result
 
 
@@ -387,8 +548,10 @@ def monitor(packet: Packet, record: dict[str, Any], directory: Path, feed: ReadF
     )
     if now_utc().astimezone(NY).date() != packet.session or now_utc() >= until:
         raise ValueError("monitor requires the same active session")
-    contracts = printed_universe(packet)
+    eligibility = resolve_eligibility(packet, record)
+    contracts = list(eligibility["contracts"])
     decision = Decision.model_validate(record["decision"])
+    apply_eligibility(decision, packet, eligibility)
     selected = [p.option_symbol for p in decision.picks]
     remaining = [c for c in contracts if c not in selected]
     path = directory / "observations.jsonl"

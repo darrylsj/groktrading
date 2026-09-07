@@ -26,6 +26,8 @@ from groktrading.research.hygiene import HygieneSettings
 
 NY = ZoneInfo("America/New_York")
 PROMPT_VERSION = "opening15-discretion-v1"
+PACKET_BASELINE_EXPERIMENT_ID = "opening15-packet-baseline"
+EXPANDED_SELECT_EXPERIMENT_ID = "opening15-expanded-select"
 PROMPT = """You are conducting a prospective, paper-only options selection experiment.
 Use flexible, discretionary judgment over ALL ten stocks and all supplied options activity.
 There is no prescribed entry algorithm, indicator recipe, premium target, or required
@@ -397,6 +399,7 @@ def _recommend_openai_responses(
         "packet_hash": digest(packet.model_dump(mode="json")),
         "request_hash": digest(body),
         "prompt_version": PROMPT_VERSION,
+        "experiment_id": PACKET_BASELINE_EXPERIMENT_ID,
         "started_at": started.isoformat(),
         "requested_model": packet.config.model,
         "recommend_backend": "openai_responses",
@@ -477,6 +480,7 @@ def _recommend_codex_cli(
         "packet_hash": digest(packet.model_dump(mode="json")),
         "request_hash": digest(body),
         "prompt_version": PROMPT_VERSION,
+        "experiment_id": PACKET_BASELINE_EXPERIMENT_ID,
         "started_at": started.isoformat(),
         "requested_model": packet.config.model,
         "recommend_backend": "codex_cli",
