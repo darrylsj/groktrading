@@ -540,3 +540,22 @@ def test_market_credentials_do_not_require_openai_key(monkeypatch: Any) -> None:
     assert market_credentials() == ("uw-test", "tradier-test")
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):
         openai_api_key()
+
+
+def test_codex_probe_resolves_relative_output_paths(
+    tmp_path: Path, config: Config, monkeypatch: Any
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    original = _codex_runner('{"status":"ok"}', events='{"type":"turn.completed"}')
+
+    def runner(argv: Any, **kwargs: Any) -> Any:
+        if argv[1] == "exec":
+            assert Path(argv[argv.index("--output-schema") + 1]).is_absolute()
+            assert Path(argv[argv.index("--output-last-message") + 1]).is_absolute()
+            assert Path(argv[argv.index("--cd") + 1]).is_absolute()
+            assert "--ignore-rules" not in argv
+        return original(argv, **kwargs)
+
+    result = probe_model(config, Path("relative-probe"), runner=runner)
+    assert result["returned_model"] is None
+    assert (tmp_path / "relative-probe/probe-response.json").is_file()
