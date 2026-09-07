@@ -15,10 +15,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from groktrading.brokers.protocol import Broker
 from groktrading.errors import LiveGatingError
 from groktrading.gate import evaluate_gate
 from groktrading.models import Candidate, GateContext, GateResult
 from groktrading.modes import OperatingMode
+from groktrading.order_fsm import payload_from_candidate, tradier_form
 
 
 class OrderSink(Protocol):
@@ -33,6 +35,23 @@ class RecordingSink:
     def submit(self, candidate: Candidate, preview: bool) -> dict[str, Any]:
         self.submissions.append((candidate, preview))
         return {"status": "recorded", "preview": preview, "signal_id": candidate.signal_id}
+
+
+class BrokerSink:
+    """OrderSink adapter over the venue-aware Broker protocol.
+
+    Phase A still uses the existing Tradier form body so preview/submit
+    stay byte-compatible with OrderMachine.
+    """
+
+    def __init__(self, broker: Broker) -> None:
+        self.broker = broker
+
+    def submit(self, candidate: Candidate, preview: bool) -> dict[str, Any]:
+        form = tradier_form(payload_from_candidate(candidate), preview=preview)
+        if preview:
+            return self.broker.preview_option_order(form)
+        return self.broker.submit_option_order(form)
 
 
 @dataclass
@@ -81,3 +100,6 @@ class Executor:
             return result
         # Live still previews first; placement is OrderMachine.submit after a refreshed gate.
         return result
+
+
+__all__ = ["BrokerSink", "Executor", "OrderSink", "RecordingSink"]

@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from groktrading.brokers.protocol import OrderBroker
+from groktrading.brokers.recording import RecordingOrderBroker
 from groktrading.errors import LiveGatingError
 from groktrading.gate import evaluate_gate
 from groktrading.models import (
@@ -94,42 +96,6 @@ def tradier_form(payload: OrderPayload, *, preview: bool) -> dict[str, str]:
         "tag": payload.tag,
         "preview": "true" if preview else "false",
     }
-
-
-class OrderBroker(Protocol):
-    def preview_option_order(self, payload: dict[str, str]) -> dict[str, Any]: ...
-
-    def submit_option_order(self, payload: dict[str, str]) -> dict[str, Any]: ...
-
-    def find_order_by_tag(self, tag: str) -> dict[str, Any] | None: ...
-
-
-class RecordingOrderBroker:
-    """In-memory stub. No network. No credentials."""
-
-    def __init__(self) -> None:
-        self.previews: list[dict[str, str]] = []
-        self.submits: list[dict[str, str]] = []
-        self.known_by_tag: dict[str, dict[str, Any]] = {}
-        self.submit_acks: bool = True
-        self.next_broker_id: str = "brk-1"
-
-    def preview_option_order(self, payload: dict[str, str]) -> dict[str, Any]:
-        self.previews.append(payload)
-        return {"status": "ok", "preview": True, "tag": payload.get("tag")}
-
-    def submit_option_order(self, payload: dict[str, str]) -> dict[str, Any]:
-        self.submits.append(payload)
-        if not self.submit_acks:
-            return {"status": "unknown"}
-        row = {"id": self.next_broker_id, "tag": payload.get("tag"), "status": "ok"}
-        tag = payload.get("tag")
-        if tag:
-            self.known_by_tag[tag] = row
-        return row
-
-    def find_order_by_tag(self, tag: str) -> dict[str, Any] | None:
-        return self.known_by_tag.get(tag)
 
 
 class OrderStore(Protocol):

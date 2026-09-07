@@ -42,6 +42,9 @@ class HttpJson(Protocol):
     ) -> tuple[int, Any]:
         ...
 
+    def delete(self, url: str, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+        ...
+
 
 class Clock(Protocol):
     def now(self) -> datetime: ...
@@ -97,6 +100,23 @@ class TradierClient:
         if status >= 400:
             raise TimeoutFailClosedError(f"tradier_http_{status}")
         return body
+
+    def _delete(self, path: str) -> Any:
+        url = f"{rest_base(self.env)}{path}"
+        try:
+            status, body = self.http.delete(url, headers=self.headers())
+        except TimeoutError as exc:
+            raise TimeoutFailClosedError("tradier_timeout") from exc
+        if status >= 400:
+            raise TimeoutFailClosedError(f"tradier_http_{status}")
+        return body
+
+    def _order_rows(self) -> list[Any]:
+        body = self._get(f"/accounts/{self.account_id}/orders")
+        rows = ((body or {}).get("orders") or {}).get("order") or []
+        if isinstance(rows, dict):
+            return [rows]
+        return rows if isinstance(rows, list) else []
 
     def quote_option(self, option_symbol: str) -> OptionQuote:
         """GET /markets/quotes — official quotes path (see Tradier market-data docs)."""
@@ -163,12 +183,8 @@ class TradierClient:
 
     def working_option_symbols(self) -> list[str]:
         """GET /accounts/{id}/orders — working entry symbols for duplicate checks."""
-        body = self._get(f"/accounts/{self.account_id}/orders")
-        rows = ((body or {}).get("orders") or {}).get("order") or []
-        if isinstance(rows, dict):
-            rows = [rows]
         symbols: list[str] = []
-        for row in rows:
+        for row in self._order_rows():
             if not isinstance(row, dict):
                 continue
             status = str(row.get("status", "")).lower()
@@ -181,14 +197,29 @@ class TradierClient:
 
     def find_order_by_tag(self, tag: str) -> dict[str, Any] | None:
         """Query existing orders by tag=signal_id. Never blind-retry a submit."""
-        body = self._get(f"/accounts/{self.account_id}/orders")
-        rows = ((body or {}).get("orders") or {}).get("order") or []
-        if isinstance(rows, dict):
-            rows = [rows]
-        for row in rows:
+        for row in self._order_rows():
             if isinstance(row, dict) and str(row.get("tag") or "") == tag:
                 return row
         return None
+
+    def cancel_working_entry_orders(self) -> list[str]:
+        """DELETE working buy-to-open entries only. Does not flatten positions."""
+        canceled: list[str] = []
+        for row in self._order_rows():
+            if not isinstance(row, dict):
+                continue
+            status = str(row.get("status", "")).lower()
+            if status in {"filled", "canceled", "cancelled", "expired", "rejected"}:
+                continue
+            side = str(row.get("side", "")).lower()
+            if side and side not in {"buy_to_open", "buy"}:
+                continue
+            order_id = str(row.get("id") or "")
+            if not order_id:
+                continue
+            self._delete(f"/accounts/{self.account_id}/orders/{order_id}")
+            canceled.append(order_id)
+        return canceled
 
     def snapshot_account(self) -> AccountSnapshot:
         """Fresh balances + positions + working orders for the final gate."""

@@ -41,6 +41,12 @@ class FakeHttp:
             raise TimeoutError("slow")
         return self.status, {"preview": True, "data": data}
 
+    def delete(self, url: str, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+        if self.timeout:
+            raise TimeoutError("slow")
+        self.urls.append(url)
+        return self.status, {"status": "canceled"}
+
 
 def test_tradier_env_urls_and_timeout() -> None:
     assert rest_base("production") == PRODUCTION_REST
