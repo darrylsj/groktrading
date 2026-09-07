@@ -87,6 +87,7 @@ Credential **names** only. Examples in the tree are `YOUR_*`. Do not ask for or 
 | Surface | Role |
 | --- | --- |
 | Unusual Whales `GET /api/option-trades`, `GET /api/news/headlines` | Opening prints + company headlines. Env: `UW_API_TOKEN` or `UW_API_KEY` |
+| Unusual Whales `GET /api/market/economic-calendar`, `/api/darkpool/{ticker}`, `/api/darkpool/recent`, `/api/screener/option-contracts`, `/api/market/market-tide`, `/api/congress/recent-trades` | **Expanded/optional** Opening15 LLM context for the 10 configured symbols (plus session-level tide/calendar). Isolated from baseline tape. |
 | Tradier production `GET /markets/quotes`, `/calendar`, `/history`, `/options/expirations`, `/options/chains` | Quotes, session calendar, prior bars, near chains. Env: `TRADIER_ACCESS_TOKEN` |
 | Tradier production `GET /accounts/{id}/balances\|positions\|orders` | Read-only interim portfolio. Optional `TRADIER_ACCOUNT_ID`. **GET only** on the research path |
 | Finnhub `GET /news?category=general` | World news when entitled. Optional `FINNHUB_API_KEY`. Unused/401/403 → coverage **missing**, not fabricated |
@@ -94,7 +95,7 @@ Credential **names** only. Examples in the tree are `YOUR_*`. Do not ask for or 
 
 Tradier sandbox is paper-lifecycle only (15-minute delayed). Sandbox ≠ live fill evidence.
 
-**Still missing / not claimed:** Schwab OAuth, exchange depth, dedicated macro-release calendars, UW article bodies, independently reconciled OPRA, live broker orders from this research path.
+**Still missing / not claimed:** Schwab OAuth, exchange depth, dedicated earnings calendar, UW article bodies, independently reconciled OPRA, live broker orders from this research path. Finnhub `/calendar/economic` still 403 on this plan (UW economic calendar is the expanded source).
 
 ## How to run tests locally
 
@@ -122,7 +123,7 @@ CI on GitHub runs the same ruff / pytest / mypy / secret-scan set. Do not place 
 
 1. **Selection quality** — Opening15 discretionary picks vs the live-desk UW flow + sit-2 / matching-ask / already-run rails. What to promote or skip on a $25k planning frame. Do not invent prints.
 2. **Risk** — live-card rails (overnight OK, 12:30 entry-cutoff only, ≥20% cash, qty=1). Multi-lift discussion after a working thesis, without silently rewriting gate math.
-3. **Expanded context gaps** — world news entitlement, `$VIX.X` often missing (macro **partial**), no dedicated FOMC/earnings calendar, no depth, Tradier XML-JSON oddities on account snapshots. Portfolio collector must fail closed (coverage **missing** or empty working-orders list with a reason) rather than crash `collect_context`.
+3. **Expanded context gaps** — world news entitlement, `$VIX.X` often missing (macro **partial**), dedicated earnings calendar still print-fields only, no depth, Tradier XML-JSON oddities on account snapshots. UW economic calendar / dark pool / screener / tide / congress are **optional** expanded LLM features (empty `data` = available with 0 rows; HTTP failure must not abort baseline tape). Portfolio collector must fail closed (coverage **missing** or empty working-orders list with a reason) rather than crash `collect_context`.
 4. **Schwab still holdings-first** — when Schwab OAuth lands it is a holdings/portfolio source, not a second live-order path. Until then, Tradier read-only snapshot is interim.
 5. **Architecture / WS safety** — Helsinki vs Grok Bot vs Opening15; ticks never submit; Grok outside the broker boundary. [WEBSOCKETS.md](WEBSOCKETS.md), [SAFETY.md](SAFETY.md).
 6. **Secrets posture** — zero credentials in the tree; `scripts/scan_secrets.py` + detect-secrets in CI.

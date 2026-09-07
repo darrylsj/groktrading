@@ -45,6 +45,10 @@ Category = Literal[
     "history",
     "portfolio",
     "depth",
+    "dark_pool",
+    "option_screener",
+    "market_tide",
+    "political",
 ]
 CoverageStatus = Literal["available", "partial", "missing", "delayed"]
 StageName = Literal[
@@ -66,6 +70,19 @@ CATEGORIES = {
     "history",
     "portfolio",
     "depth",
+    "dark_pool",
+    "option_screener",
+    "market_tide",
+    "political",
+}
+# Additive UW Opening15 LLM features. Missing here never blocks clean baseline tape
+# and does not force --allow-degraded (same rule as depth).
+OPTIONAL_CATEGORIES = {
+    "depth",
+    "dark_pool",
+    "option_screener",
+    "market_tide",
+    "political",
 }
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 T = TypeVar("T", bound=BaseModel)
@@ -147,7 +164,7 @@ class Context(Strict):
         if any(r.as_of > cutoff or r.received_at > cutoff for r in self.records):
             raise ValueError("selection context must be observed by 09:45 ET")
         if not allow_degraded and any(
-            c.status != "available" for c in self.coverage if c.category != "depth"
+            c.status != "available" for c in self.coverage if c.category not in OPTIONAL_CATEGORIES
         ):
             raise ValueError(
                 "expanded context incomplete; explicit degraded research mode required"

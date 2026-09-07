@@ -2,6 +2,9 @@
 
 Schwab OAuth is not connected. Portfolio snapshots are Tradier account
 balances/positions/orders (read-only) until Schwab lands. Depth is omitted.
+Macro/economic calendar uses UW GET /api/market/economic-calendar (Finnhub
+/calendar/economic is unused; our plan returns 403). Dark pool, option screener,
+market tide, and congress/insider slices are optional expanded LLM features.
 No order submit, preview, or invented endpoints.
 """
 
@@ -54,6 +57,65 @@ CHAIN_EXPIRATION_LIMIT = 3
 HISTORY_LOOKBACK_CALENDAR_DAYS = 45
 SOURCE_UW_HEADLINES = "https://api.unusualwhales.com/api/news/headlines"
 SOURCE_UW_TRADES = "https://api.unusualwhales.com/api/option-trades"
+SOURCE_UW_ECONOMIC_CALENDAR = "https://api.unusualwhales.com/api/market/economic-calendar"
+SOURCE_UW_DARKPOOL = "https://api.unusualwhales.com/api/darkpool"
+SOURCE_UW_SCREENER = "https://api.unusualwhales.com/api/screener/option-contracts"
+SOURCE_UW_MARKET_TIDE = "https://api.unusualwhales.com/api/market/market-tide"
+SOURCE_UW_CONGRESS = "https://api.unusualwhales.com/api/congress/recent-trades"
+SOURCE_UW_INSIDER = "https://api.unusualwhales.com/api/insider/transactions"
+DARKPOOL_ROWS_PER_SYMBOL = 15
+DARKPOOL_RECENT_ROWS = 15
+SCREENER_FETCH_LIMIT = 40
+SCREENER_PER_SYMBOL = 3
+TIDE_ROW_CAP = 12
+POLITICAL_FETCH_LIMIT = 100
+INSIDER_FETCH_LIMIT = 50
+DARKPOOL_FIELDS = (
+    "ticker",
+    "price",
+    "size",
+    "executed_at",
+    "volume",
+    "premium",
+    "nbbo_bid",
+    "nbbo_ask",
+)
+SCREENER_FIELDS = (
+    "ticker_symbol",
+    "option_symbol",
+    "type",
+    "strike",
+    "expiry",
+    "ask_side_volume",
+    "bid_side_volume",
+    "volume",
+    "open_interest",
+    "avg_price",
+    "premium",
+    "implied_volatility",
+)
+TIDE_FIELDS = ("timestamp", "date", "net_call_premium", "net_put_premium", "net_volume")
+CONGRESS_FIELDS = (
+    "ticker",
+    "txn_type",
+    "amounts",
+    "filed_at_date",
+    "transaction_date",
+    "name",
+    "reporter",
+    "member_type",
+    "issuer",
+)
+INSIDER_FIELDS = (
+    "ticker",
+    "ticker_symbol",
+    "transaction_date",
+    "transaction_code",
+    "owner_name",
+    "amount",
+    "price",
+    "value",
+)
 SOURCE_TRADIER_QUOTES = "https://api.tradier.com/v1/markets/quotes"
 SOURCE_TRADIER_CALENDAR = "https://api.tradier.com/v1/markets/calendar"
 SOURCE_TRADIER_HISTORY = "https://api.tradier.com/v1/markets/history"
@@ -506,13 +568,117 @@ def collect_macro(
     )
 
 
+def _economic_event_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Copy UW economic-calendar fields only. Do not invent actuals or prices."""
+    event = row.get("event")
+    if event in (None, ""):
+        return None
+    return {
+        "event": event,
+        "forecast": row.get("forecast"),
+        "prev": row.get("prev"),
+        "reported_period": row.get("reported_period"),
+        "time": row.get("time"),
+        "type": row.get("type"),
+    }
+
+
+def collect_economic_calendar(
+    *,
+    uw: ReadFeed,
+    clock: Clock,
+    directory: Path | None = None,
+) -> tuple[list[Evidence], Coverage]:
+    """Expanded-only UW macro calendar. Empty data is available; HTTP/auth is missing."""
+    try:
+        body = uw.get("/api/market/economic-calendar")
+        received = clock()
+    except ValueError as exc:
+        return [], Coverage(
+            category="calendar",
+            status="missing",
+            detail=f"UW economic calendar not entitled or failed ({exc})",
+        )
+    if directory is not None:
+        archived = body if isinstance(body, dict) else {"unexpected": True}
+        _write_raw(
+            directory,
+            "uw-economic-calendar.json",
+            {
+                "received_at": received.isoformat(),
+                "source_uri": SOURCE_UW_ECONOMIC_CALENDAR,
+                "body": _drop_secret_keys(archived),
+            },
+        )
+    if not isinstance(body, dict) or "data" not in body:
+        return [], Coverage(
+            category="calendar",
+            status="missing",
+            detail="UW economic calendar returned unexpected payload (no data array)",
+        )
+    raw_rows = body.get("data")
+    if raw_rows is None:
+        raw_rows = []
+    if not isinstance(raw_rows, list):
+        return [], Coverage(
+            category="calendar",
+            status="missing",
+            detail="UW economic calendar data was not a list",
+        )
+    events: list[dict[str, Any]] = []
+    skipped = 0
+    for row in raw_rows:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        parsed = _economic_event_row(row)
+        if parsed is None:
+            skipped += 1
+            continue
+        events.append(parsed)
+    status: CoverageStatus = "partial" if skipped else "available"
+    quiet = " (quiet session, empty data)" if not events else ""
+    record = Evidence(
+        evidence_id="calendar:uw-economic",
+        category="calendar",
+        symbols=[],
+        source="unusual_whales",
+        source_uri=SOURCE_UW_ECONOMIC_CALENDAR,
+        as_of=received,
+        received_at=received,
+        summary=_summary(f"UW economic calendar: {len(events)} events{quiet}"),
+        payload={
+            "event_count": len(events),
+            "skipped_rows": skipped,
+            "events": events,
+            "note": (
+                "Provider forecast/prev copied as-is; no invented actuals or prices. "
+                "Empty data is a valid quiet calendar, not missing coverage. "
+                "as_of is archive receipt, not future event occurrence."
+            ),
+            "finnhub_economic_calendar": "not_used_plan_returns_403",
+        },
+    )
+    return [record], Coverage(
+        category="calendar",
+        status=status,
+        detail=(
+            f"UW GET /api/market/economic-calendar: {len(events)} events, "
+            f"skipped_rows={skipped}. Empty data is available, not missing. "
+            "Finnhub /calendar/economic unused (403 on this plan)."
+        ),
+    )
+
+
 def collect_calendar(
     *,
     config: Config,
     session: date,
     tradier: ReadFeed,
+    uw: ReadFeed,
     flow_events: list[Event],
     clock: Clock,
+    directory: Path | None = None,
 ) -> tuple[list[Evidence], Coverage]:
     months = [(session.month, session.year)]
     nxt_month = 1 if session.month == 12 else session.month + 1
@@ -522,12 +688,6 @@ def collect_calendar(
     for month, year in months:
         days.extend(calendar_days(tradier, month, year))
     received = clock()
-    if not days:
-        return [], Coverage(
-            category="calendar",
-            status="missing",
-            detail="Tradier market calendar returned no days",
-        )
     match = next((row for row in days if row.get("date") == session.isoformat()), None)
     version = digest({"days": days, "months": months})
     records = [
@@ -594,13 +754,35 @@ def collect_calendar(
                 },
             )
         )
+    econ_records, econ = collect_economic_calendar(uw=uw, clock=clock, directory=directory)
+    records.extend(econ_records)
+    if not days and econ.status == "missing":
+        return [], Coverage(
+            category="calendar",
+            status="missing",
+            detail="Tradier market calendar returned no days; UW economic calendar missing",
+        )
+    if not days:
+        return records, Coverage(
+            category="calendar",
+            status="partial",
+            detail=(
+                "Tradier session calendar empty. "
+                + econ.detail
+                + " Dedicated earnings calendar is still print-fields only."
+            ),
+        )
+    status: CoverageStatus = "available"
+    if econ.status in {"missing", "partial"}:
+        status = "partial"
     return records, Coverage(
         category="calendar",
-        status="available",
+        status=status,
         detail=(
             "Tradier /markets/calendar archived with schedule_version separate from "
             f"session occurrence. Print earnings fields={len(earnings_hits)}. "
-            "No central-bank or dedicated earnings-calendar provider is wired."
+            + econ.detail
+            + " Dedicated earnings calendar remains print-fields only."
         ),
     )
 
@@ -996,6 +1178,381 @@ def collect_portfolio(
     )
 
 
+def _uw_data_rows(body: Any) -> list[dict[str, Any]]:
+    if not isinstance(body, dict) or "data" not in body:
+        raise ValueError("missing UW data array")
+    return as_rows(body.get("data"))
+
+
+def _pick_fields(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: row[key] for key in keys if key in row}
+
+
+def _row_ticker(row: dict[str, Any]) -> str:
+    for key in ("ticker_symbol", "ticker", "underlying_symbol", "symbol"):
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value).upper()
+    return ""
+
+
+def _archive_uw(directory: Path | None, name: str, received: datetime, uri: str, body: Any) -> None:
+    if directory is None:
+        return
+    archived = body if isinstance(body, dict) else {"unexpected": True}
+    _write_raw(
+        directory,
+        name,
+        {
+            "received_at": received.isoformat(),
+            "source_uri": uri,
+            "body": _drop_secret_keys(archived),
+        },
+    )
+
+
+def collect_dark_pool(
+    *,
+    config: Config,
+    uw: ReadFeed,
+    clock: Clock,
+    directory: Path | None = None,
+) -> tuple[list[Evidence], Coverage]:
+    """Per-symbol UW dark pool plus a small market-wide recent summary."""
+    records: list[Evidence] = []
+    missing: list[str] = []
+    for symbol in config.symbols:
+        try:
+            body = uw.get(f"/api/darkpool/{symbol}")
+            received = clock()
+            rows = _uw_data_rows(body)[:DARKPOOL_ROWS_PER_SYMBOL]
+        except ValueError:
+            missing.append(symbol)
+            continue
+        _archive_uw(
+            directory,
+            f"uw-darkpool-{symbol}.json",
+            received,
+            f"{SOURCE_UW_DARKPOOL}/{symbol}",
+            body,
+        )
+        prints = [_pick_fields(row, DARKPOOL_FIELDS) for row in rows]
+        records.append(
+            Evidence(
+                evidence_id=f"darkpool:{symbol}",
+                category="dark_pool",
+                symbols=[symbol],
+                source="unusual_whales",
+                source_uri=f"{SOURCE_UW_DARKPOOL}/{symbol}",
+                as_of=received,
+                received_at=received,
+                summary=_summary(
+                    f"{symbol} UW dark pool: {len(prints)} prints "
+                    f"(cap {DARKPOOL_ROWS_PER_SYMBOL})"
+                ),
+                payload={
+                    "print_count": len(prints),
+                    "row_cap": DARKPOOL_ROWS_PER_SYMBOL,
+                    "prints": prints,
+                    "note": "Provider prints copied as-is; no invented prices or levels.",
+                },
+            )
+        )
+    recent_note = "market-wide recent not fetched"
+    try:
+        recent_body = uw.get("/api/darkpool/recent", {"limit": DARKPOOL_RECENT_ROWS})
+        received = clock()
+        recent_rows = _uw_data_rows(recent_body)[:DARKPOOL_RECENT_ROWS]
+        _archive_uw(
+            directory,
+            "uw-darkpool-recent.json",
+            received,
+            f"{SOURCE_UW_DARKPOOL}/recent",
+            recent_body,
+        )
+        universe = set(config.symbols)
+        hits = [
+            _pick_fields(row, DARKPOOL_FIELDS)
+            for row in recent_rows
+            if _row_ticker(row) in universe
+        ]
+        others = sum(1 for row in recent_rows if _row_ticker(row) not in universe)
+        records.append(
+            Evidence(
+                evidence_id="darkpool:recent",
+                category="dark_pool",
+                symbols=sorted({_row_ticker(row) for row in hits if _row_ticker(row)}),
+                source="unusual_whales",
+                source_uri=f"{SOURCE_UW_DARKPOOL}/recent",
+                as_of=received,
+                received_at=received,
+                summary=_summary(
+                    f"UW dark pool recent: {len(hits)} universe prints, "
+                    f"{others} other tickers counted"
+                ),
+                payload={
+                    "universe_prints": hits,
+                    "other_print_count": others,
+                    "row_cap": DARKPOOL_RECENT_ROWS,
+                    "note": "Non-universe rows counted only; prices not copied.",
+                },
+            )
+        )
+        recent_note = f"recent universe={len(hits)} other={others}"
+    except ValueError as exc:
+        recent_note = f"market-wide recent failed ({exc})"
+    if not records:
+        return [], Coverage(
+            category="dark_pool",
+            status="missing",
+            detail=(
+                "UW dark pool unavailable. "
+                f"missing={missing or list(config.symbols)} {recent_note}"
+            ),
+        )
+    status: CoverageStatus = "partial" if missing else "available"
+    return records, Coverage(
+        category="dark_pool",
+        status=status,
+        detail=(
+            f"UW GET /api/darkpool/{{ticker}} for {len(config.symbols) - len(missing)}/"
+            f"{len(config.symbols)} names (cap {DARKPOOL_ROWS_PER_SYMBOL}/symbol). "
+            f"missing={missing or 'none'}. {recent_note}. Empty prints are available, not missing."
+        ),
+    )
+
+
+def collect_option_screener(
+    *,
+    config: Config,
+    uw: ReadFeed,
+    clock: Clock,
+    directory: Path | None = None,
+) -> tuple[list[Evidence], Coverage]:
+    """Hottest-contract slice filtered to the frozen 10 names. Keep payload small."""
+    try:
+        body = uw.get("/api/screener/option-contracts", {"limit": SCREENER_FETCH_LIMIT})
+        received = clock()
+    except ValueError as exc:
+        return [], Coverage(
+            category="option_screener",
+            status="missing",
+            detail=f"UW option screener not entitled or failed ({exc})",
+        )
+    _archive_uw(directory, "uw-option-screener.json", received, SOURCE_UW_SCREENER, body)
+    try:
+        rows = _uw_data_rows(body)
+    except ValueError:
+        return [], Coverage(
+            category="option_screener",
+            status="missing",
+            detail="UW option screener returned unexpected payload (no data array)",
+        )
+    universe = set(config.symbols)
+    by_symbol: dict[str, list[dict[str, Any]]] = {symbol: [] for symbol in config.symbols}
+    skipped = 0
+    other = 0
+    for row in rows:
+        ticker = _row_ticker(row)
+        if ticker not in universe:
+            other += 1
+            continue
+        if len(by_symbol[ticker]) >= SCREENER_PER_SYMBOL:
+            skipped += 1
+            continue
+        by_symbol[ticker].append(_pick_fields(row, SCREENER_FIELDS))
+    contracts = [item for rows_for in by_symbol.values() for item in rows_for]
+    record = Evidence(
+        evidence_id="screener:uw-option-contracts",
+        category="option_screener",
+        symbols=sorted({_row_ticker(item) for item in contracts if _row_ticker(item)}),
+        source="unusual_whales",
+        source_uri=SOURCE_UW_SCREENER,
+        as_of=received,
+        received_at=received,
+        summary=_summary(
+            f"UW option screener: {len(contracts)} universe contracts "
+            f"(fetch {SCREENER_FETCH_LIMIT}, cap {SCREENER_PER_SYMBOL}/name)"
+        ),
+        payload={
+            "contract_count": len(contracts),
+            "per_symbol": {symbol: by_symbol[symbol] for symbol in config.symbols},
+            "other_ticker_count": other,
+            "skipped_over_cap": skipped,
+            "note": (
+                "Market-wide screener filtered to packet.config.symbols. "
+                "Provider fields copied as-is; no invented prices or Greeks."
+            ),
+        },
+    )
+    return [record], Coverage(
+        category="option_screener",
+        status="available",
+        detail=(
+            f"UW GET /api/screener/option-contracts limit={SCREENER_FETCH_LIMIT}: "
+            f"{len(contracts)} universe contracts, other_tickers={other}. "
+            "Empty universe slice is available, not missing."
+        ),
+    )
+
+
+def collect_market_tide(
+    *,
+    uw: ReadFeed,
+    clock: Clock,
+    directory: Path | None = None,
+) -> tuple[list[Evidence], Coverage]:
+    """Session-level UW market tide once. Not per-symbol."""
+    try:
+        body = uw.get("/api/market/market-tide")
+        received = clock()
+    except ValueError as exc:
+        return [], Coverage(
+            category="market_tide",
+            status="missing",
+            detail=f"UW market tide not entitled or failed ({exc})",
+        )
+    _archive_uw(directory, "uw-market-tide.json", received, SOURCE_UW_MARKET_TIDE, body)
+    try:
+        rows = _uw_data_rows(body)
+    except ValueError:
+        return [], Coverage(
+            category="market_tide",
+            status="missing",
+            detail="UW market tide returned unexpected payload (no data array)",
+        )
+    ticks = [_pick_fields(row, TIDE_FIELDS) for row in rows[-TIDE_ROW_CAP:]]
+    record = Evidence(
+        evidence_id="macro:uw-market-tide",
+        category="market_tide",
+        symbols=[],
+        source="unusual_whales",
+        source_uri=SOURCE_UW_MARKET_TIDE,
+        as_of=received,
+        received_at=received,
+        summary=_summary(f"UW market tide: {len(ticks)} recent ticks (cap {TIDE_ROW_CAP})"),
+        payload={
+            "tick_count": len(ticks),
+            "row_cap": TIDE_ROW_CAP,
+            "ticks": ticks,
+            "note": (
+                "Session-level tape, not per-symbol. Provider net premium copied as-is; "
+                "no invented sentiment score."
+            ),
+        },
+    )
+    return [record], Coverage(
+        category="market_tide",
+        status="available",
+        detail=(
+            f"UW GET /api/market/market-tide once: {len(ticks)} ticks archived "
+            f"(cap {TIDE_ROW_CAP}). Empty data is available, not missing."
+        ),
+    )
+
+
+def collect_political(
+    *,
+    config: Config,
+    uw: ReadFeed,
+    clock: Clock,
+    directory: Path | None = None,
+) -> tuple[list[Evidence], Coverage]:
+    """Congress trades touching the 10 names; insider only if the official feed is cheap."""
+    universe = set(config.symbols)
+    records: list[Evidence] = []
+    notes: list[str] = []
+    try:
+        body = uw.get("/api/congress/recent-trades", {"limit": POLITICAL_FETCH_LIMIT})
+        received = clock()
+        _archive_uw(directory, "uw-congress-recent.json", received, SOURCE_UW_CONGRESS, body)
+        rows = [
+            _pick_fields(row, CONGRESS_FIELDS)
+            for row in _uw_data_rows(body)
+            if _row_ticker(row) in universe
+        ]
+        records.append(
+            Evidence(
+                evidence_id="political:uw-congress",
+                category="political",
+                symbols=sorted({_row_ticker(row) for row in rows if _row_ticker(row)}),
+                source="unusual_whales",
+                source_uri=SOURCE_UW_CONGRESS,
+                as_of=received,
+                received_at=received,
+                summary=_summary(
+                    f"UW congress trades touching universe: {len(rows)} rows"
+                ),
+                payload={
+                    "row_count": len(rows),
+                    "trades": rows,
+                    "note": (
+                        "Market-wide /api/congress/recent-trades filtered to "
+                        "packet.config.symbols. Amount ranges are provider text, not prices."
+                    ),
+                },
+            )
+        )
+        notes.append(f"congress universe rows={len(rows)}")
+    except ValueError as exc:
+        notes.append(f"congress failed ({exc})")
+    try:
+        insider_body = uw.get("/api/insider/transactions", {"limit": INSIDER_FETCH_LIMIT})
+        received = clock()
+        _archive_uw(
+            directory,
+            "uw-insider-transactions.json",
+            received,
+            SOURCE_UW_INSIDER,
+            insider_body,
+        )
+        insider_rows = [
+            _pick_fields(row, INSIDER_FIELDS)
+            for row in _uw_data_rows(insider_body)
+            if _row_ticker(row) in universe
+        ]
+        if insider_rows:
+            records.append(
+                Evidence(
+                    evidence_id="political:uw-insider",
+                    category="political",
+                    symbols=sorted({_row_ticker(row) for row in insider_rows if _row_ticker(row)}),
+                    source="unusual_whales",
+                    source_uri=SOURCE_UW_INSIDER,
+                    as_of=received,
+                    received_at=received,
+                    summary=_summary(
+                        f"UW insider transactions touching universe: {len(insider_rows)} rows"
+                    ),
+                    payload={
+                        "row_count": len(insider_rows),
+                        "transactions": insider_rows,
+                        "note": "Official /api/insider/transactions; provider fields only.",
+                    },
+                )
+            )
+            notes.append(f"insider universe rows={len(insider_rows)}")
+        else:
+            notes.append("insider returned 0 universe rows (skipped quietly)")
+    except ValueError as exc:
+        notes.append(f"insider unused ({exc})")
+    if not records:
+        return [], Coverage(
+            category="political",
+            status="missing",
+            detail="UW congress/insider unused or failed. " + "; ".join(notes),
+        )
+    return records, Coverage(
+        category="political",
+        status="available",
+        detail=(
+            "UW congress/insider filtered to the 10 configured symbols. "
+            + "; ".join(notes)
+            + ". Zero universe hits stay available, not fabricated."
+        ),
+    )
+
+
 def collect_depth() -> tuple[list[Evidence], Coverage]:
     return [], Coverage(
         category="depth",
@@ -1017,6 +1574,7 @@ def collect_context(
     packet: Packet | None = None,
     clock: Clock | None = None,
     frozen_at: datetime | None = None,
+    directory: Path | None = None,
 ) -> Context:
     tick = _clock(clock)
     if packet is not None:
@@ -1046,8 +1604,10 @@ def collect_context(
                 config=config,
                 session=session,
                 tradier=tradier,
+                uw=uw,
                 flow_events=flow_events,
                 clock=tick,
+                directory=directory,
             ),
         ),
         (
@@ -1065,6 +1625,28 @@ def collect_context(
             lambda: collect_portfolio(tradier=tradier, account_id=account_id, clock=tick),
         ),
         ("depth", collect_depth),
+        (
+            "dark_pool",
+            lambda: collect_dark_pool(
+                config=config, uw=uw, clock=tick, directory=directory
+            ),
+        ),
+        (
+            "option_screener",
+            lambda: collect_option_screener(
+                config=config, uw=uw, clock=tick, directory=directory
+            ),
+        ),
+        (
+            "market_tide",
+            lambda: collect_market_tide(uw=uw, clock=tick, directory=directory),
+        ),
+        (
+            "political",
+            lambda: collect_political(
+                config=config, uw=uw, clock=tick, directory=directory
+            ),
+        ),
     ]
     for category, collector in collectors:
         try:
@@ -1118,6 +1700,7 @@ def write_expanded_context(
         flow_events=flow_events,
         packet=packet,
         clock=clock,
+        directory=directory,
     )
     _write_raw(
         directory,

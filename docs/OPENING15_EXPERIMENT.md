@@ -170,7 +170,11 @@ python -m groktrading.research.cli report --output research-runs/2026-09-08
   Mandatory ten-stock coverage cannot contain a gap over 90 seconds. No post-cutoff stock
   snapshot enters the packet even if its last trade timestamp predates the cutoff.
 - Up to 100 preopen UW headlines per stock. This is bounded context, not exhaustive news or
-  a complete economic calendar. Earnings/date fields in print metadata remain available.
+  a complete earnings calendar. Earnings/date fields in print metadata remain available.
+  Expanded/optional collectors may also archive UW economic calendar, dark-pool prints
+  for the ten names, a small option-screener slice, and session-level market tide.
+  Those files are not part of the baseline tape. Finnhub `/calendar/economic` is unused
+  (403 on this plan). Empty UW `data` is recorded as available with 0 events.
 - Option NBBO, sizes, Greeks, IV, conditions, and underlying price are included where UW
   supplies them at each print. Missing fields remain unknown. There is no claim of every
   option quote update or full chains for contracts that never printed.
@@ -244,6 +248,7 @@ run: duplicate attempts compromise the frozen first decision.
   (optional `openai_responses` backend only)
 - [UW individual option trades](https://api.unusualwhales.com/docs/operations/PublicApi.OptionTradeController.index)
 - [UW news](https://api.unusualwhales.com/docs/operations/PublicApi.NewsController.headlines)
+- [UW skill / endpoint index](https://unusualwhales.com/skill.md) (dark pool, screener, market tide, congress)
 - [Tradier quotes](https://docs.tradier.com/reference/brokerage-api-markets-get-quotes)
 - [Tradier calendar](https://docs.tradier.com/reference/brokerage-api-markets-get-calendar)
 

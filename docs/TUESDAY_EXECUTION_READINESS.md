@@ -3,8 +3,11 @@
 **Tuesday 2026-09-08 is an operational paper pilot on the clean baseline
 (`python -m groktrading.research.cli run`). It is not `--allow-degraded`. It is not a
 claim of full expanded-strategy readiness.** Passing unit tests is not live entitlement
-proof. Schwab is still unconnected. The economic / FOMC / earnings calendar is still
-incomplete. Host credentials, requested-model access and scheduling have not been tested
+proof. Schwab is still unconnected. The dedicated earnings calendar is still
+print-fields only. UW economic calendar, dark pool, option screener, and market tide
+are **expanded/optional** Opening15 LLM context (not the Tuesday baseline tape).
+Finnhub `/calendar/economic` still returns 403 on this plan and is unused.
+Host credentials, requested-model access and scheduling have not been tested
 from this workspace. There is no live-order execution path in this experiment.
 
 Decision protocol (five **distinct real** paper sessions →
@@ -25,6 +28,13 @@ The Python collectors call data APIs using existing host credentials. Codex CLI 
 | --- | --- | --- |
 | `GET https://api.unusualwhales.com/api/option-trades` | Opening-window prints for the ten stocks, including UW tags/trade codes when present (kept as print / correction / cancellation). | 09:30–09:45 ET with capped-window bisection and one bounded last-minute recheck. UW-accessible tape, not independently reconciled OPRA. Empty tape fails closed. |
 | `GET https://api.unusualwhales.com/api/news/headlines` | Company headlines; revisions kept by story/version. Archive detail is the stored payload. | Preopen sample, up to 100 per stock. Official UW skill has **no** article-body endpoint. |
+| `GET https://api.unusualwhales.com/api/market/economic-calendar` | Macro/economic-release rows (`event`, `forecast`, `prev`, `reported_period`, `time`, `type`). | **Expanded context only.** Empty `data` (quiet weekend) is coverage **available** with 0 events. HTTP/auth failure is **missing** and does not abort baseline tape. Finnhub `/calendar/economic` unused (403 on this plan). |
+| `GET https://api.unusualwhales.com/api/darkpool/{ticker}` | Recent dark-pool prints for each of the 10 configured symbols (capped). | **Expanded/optional.** Missing names → `dark_pool` **partial**. Provider prices copied as-is; none invented. |
+| `GET https://api.unusualwhales.com/api/darkpool/recent` | Small market-wide recent summary; universe hits kept, other tickers counted only. | **Expanded/optional.** Failure of this extra call does not drop per-symbol prints. |
+| `GET https://api.unusualwhales.com/api/screener/option-contracts` | Hottest-contract slice filtered to the 10 names; payload capped per symbol. | **Expanded/optional.** Market-wide fetch + local filter. |
+| `GET https://api.unusualwhales.com/api/market/market-tide` | Session-level net call/put premium ticks (one call, last N ticks). | **Expanded/optional.** Not per-symbol. |
+| `GET https://api.unusualwhales.com/api/congress/recent-trades` | Politician trades touching the 10 symbols only. | **Expanded/optional.** No-universe-hits stay available, not fabricated. |
+| `GET https://api.unusualwhales.com/api/insider/transactions` | Official insider feed, filtered to the 10 names. | **Expanded/optional.** Empty universe slice is skipped quietly with a coverage note (`/api/insider/recent` is not used). |
 | `GET https://finnhub.io/api/v1/news?category=general` | World / broad-market headlines when `FINNHUB_API_KEY` is present and entitled. | Entitlement-gated. Unused, 401/403, or empty feed → `world_news` coverage **missing** (not fabricated). UW has no world-news path. |
 | `GET https://api.tradier.com/v1/markets/quotes` | Underlying, context, and macro snapshots (SPY/QQQ/sectors/`$VIX.X` when the production index is entitled). | Delayed quotes are labeled. Missing instruments (often `$VIX.X`) are listed; that makes macro `partial`. |
 | `GET https://api.tradier.com/v1/markets/calendar` | Regular-session gate plus versioned schedule archive. Publication/version is separate from session occurrence time. | Operational calendar, not a macro-release or central-bank feed. |
@@ -38,7 +48,7 @@ The Python collectors call data APIs using existing host credentials. Codex CLI 
 
 Source of truth: `src/groktrading/research/capture.py`, `collectors.py`, `codex_cli.py`, `opening15.py`, `evaluation.py`. Credential **names** only: `UW_API_TOKEN` / `UW_API_KEY`, `TRADIER_ACCESS_TOKEN`, optional `TRADIER_ACCOUNT_ID`, optional `FINNHUB_API_KEY`. Existing keys stay on the trading host.
 
-**Still missing / not claimed:** Schwab account OAuth, exchange depth, dedicated macro-release calendars, UW article bodies, independently reconciled OPRA, live broker orders.
+**Still missing / not claimed:** Schwab account OAuth, exchange depth, dedicated earnings calendar (print-fields only), UW article bodies, independently reconciled OPRA, live broker orders. Finnhub `/calendar/economic` remains 403 on this plan.
 
 ## What can actually run
 
@@ -95,7 +105,8 @@ an additive `baselines` block). Archive `packet.json`, `request.json`, `response
 
 Passing this repo's unit tests does **not** prove UW realtime entitlement, ten-stock
 completeness, Codex model access, or live broker connectivity. Schwab OAuth is not
-connected. Macro/economic calendars remain incomplete.
+connected. UW economic calendar / dark pool / screener / tide are expanded LLM
+features only; they do not change clean `research.cli run` baseline tape.
 
 ### Expanded (later paper days only; not Tuesday's claim)
 
@@ -112,6 +123,6 @@ python -m groktrading.research.cli capture --session 2026-09-08 --output researc
 python -m groktrading.research.cycle_cli select --packet research-runs/2026-09-08/packet.json --context research-runs/2026-09-08/context.json --memory research-runs/2026-09-08/memory.json --out research-runs/2026-09-08/selection
 ```
 
-Typical first-day gaps that force baseline or `--allow-degraded`: unused Finnhub (`world_news` missing), unused `TRADIER_ACCOUNT_ID` (`portfolio` missing), missing `$VIX.X` (macro `partial`). Depth is optional and stays `missing`.
+Typical first-day gaps that force baseline or `--allow-degraded`: unused Finnhub (`world_news` missing), unused `TRADIER_ACCOUNT_ID` (`portfolio` missing), missing `$VIX.X` (macro `partial`). Depth, dark pool, option screener, market tide, and political slices are **optional** and may stay `missing` without `--allow-degraded`.
 
 Do not present Tuesday as a world-news/portfolio-aware full-context experiment. Do not claim a recursive learning loop is already operating. Stages that never produce a decision write `failure-record.json` (no invented PnL). After five paper sessions, run `research.cli protocol` — `continue` is more paper, never live.
