@@ -19,6 +19,7 @@ from groktrading.research.collectors import (
     account_alias,
     archived_news_detail,
     collect_context,
+    collect_portfolio,
     write_expanded_context,
 )
 from groktrading.research.cycle import (
@@ -274,7 +275,9 @@ def test_collectors_fill_context_with_mocked_http(tmp_path: Path) -> None:
     by_cat = {entry.category: entry.status for entry in context.coverage}
     assert by_cat["company_news"] == "partial"
     assert by_cat["world_news"] == "available"
-    assert by_cat["macro"] == "partial"
+    macro = next(entry for entry in context.coverage if entry.category == "macro")
+    assert macro.status == "partial"
+    assert "$VIX.X" in macro.detail
     assert by_cat["calendar"] == "available"
     assert by_cat["option_chain"] == "available"
     assert by_cat["history"] == "available"
@@ -323,6 +326,200 @@ def test_world_news_and_portfolio_missing_when_unused() -> None:
     world = next(c.detail for c in context.coverage if c.category == "world_news")
     assert "Not fabricated" in world
     assert "Schwab" in next(c.detail for c in context.coverage if c.category == "portfolio")
+    uw.close()
+    tradier.close()
+
+
+class _AccountFeed:
+    """Minimal ReadFeed stand-in for portfolio payload-shape tests."""
+
+    def __init__(
+        self,
+        *,
+        balances: Any = None,
+        positions: Any = None,
+        orders: Any = None,
+    ) -> None:
+        self.balances = balances if balances is not None else {
+            "balances": {
+                "account_number": "SHOULD-NOT-APPEAR",
+                "total_cash": 1000,
+                "total_equity": 1200,
+                "account_type": "margin",
+                "margin": {"option_buying_power": 800},
+            }
+        }
+        self.positions = positions if positions is not None else {"positions": {"position": []}}
+        self.orders = orders
+
+    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        if path.endswith("/balances"):
+            return self.balances
+        if path.endswith("/positions"):
+            return self.positions
+        if path.endswith("/orders"):
+            return self.orders
+        raise ValueError("read endpoint not allowed")
+
+
+def _portfolio_clock() -> Any:
+    return _clock(datetime(2026, 9, 8, 13, 10, tzinfo=UTC))
+
+
+def test_portfolio_null_string_orders_is_empty_working() -> None:
+    """Tradier XML-JSON often emits {\"orders\": \"null\"}; that is an empty book, not a crash."""
+    records, coverage = collect_portfolio(
+        tradier=_AccountFeed(orders={"orders": "null"}),
+        account_id="RESEARCH1",
+        clock=_portfolio_clock(),
+    )
+    assert coverage.status == "available"
+    assert coverage.category == "portfolio"
+    assert "no working orders" in coverage.detail
+    assert records[0].payload["working_orders"] == []
+    blob = json.dumps(records[0].model_dump(mode="json"))
+    assert "SHOULD-NOT-APPEAR" not in blob
+    assert "RESEARCH1" not in blob
+    assert records[0].payload["account_alias"] == account_alias("RESEARCH1")
+    assert records[0].payload["account_alias"].startswith("acct-")
+
+
+def test_portfolio_mixed_order_rows_keep_dicts() -> None:
+    records, coverage = collect_portfolio(
+        tradier=_AccountFeed(
+            orders={
+                "orders": {
+                    "order": [
+                        "junk",
+                        {
+                            "symbol": "AAPL",
+                            "status": "open",
+                            "side": "buy",
+                            "quantity": 1,
+                            "type": "limit",
+                        },
+                    ]
+                }
+            }
+        ),
+        account_id="RESEARCH1",
+        clock=_portfolio_clock(),
+    )
+    assert coverage.status == "available"
+    assert records[0].payload["working_orders"] == [
+        {"symbol": "AAPL", "side": "buy", "quantity": 1, "status": "open", "type": "limit"}
+    ]
+
+
+def test_portfolio_string_order_rows_fail_closed() -> None:
+    """List-of-strings / unexpected order rows must not be treated as an empty book."""
+    records, coverage = collect_portfolio(
+        tradier=_AccountFeed(orders={"orders": {"order": ["open", "pending"]}}),
+        account_id="RESEARCH1",
+        clock=_portfolio_clock(),
+    )
+    assert records == []
+    assert coverage.status == "missing"
+    assert "orders unusable" in coverage.detail
+    assert "Working orders not assumed empty" in coverage.detail
+    assert "RESEARCH1" not in coverage.detail
+
+
+def test_collect_context_survives_crashing_orders_payload() -> None:
+    """Host crash: AttributeError on str.get from unexpected Tradier orders shapes."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/orders"):
+            return httpx.Response(200, json={"orders": {"order": ["open", "filled"]}})
+        return _handler(request)
+
+    uw = ReadFeed(
+        "https://api.unusualwhales.com",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    tradier = ReadFeed(
+        "https://api.tradier.com/v1",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    finnhub = FinnhubRest(
+        "test-only",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    uw.interval = tradier.interval = finnhub.interval = 0
+    start, _ = window(date(2026, 9, 8))
+    context = collect_context(
+        config=_config(),
+        session=date(2026, 9, 8),
+        uw=uw,
+        tradier=tradier,
+        finnhub=finnhub,
+        account_id="SECRETACCT99",
+        clock=_clock(start - timedelta(minutes=10)),
+    )
+    by_cat = {entry.category: entry.status for entry in context.coverage}
+    assert set(by_cat) == {
+        "company_news",
+        "world_news",
+        "macro",
+        "calendar",
+        "option_chain",
+        "history",
+        "portfolio",
+        "depth",
+    }
+    assert by_cat["portfolio"] == "missing"
+    portfolio = next(entry for entry in context.coverage if entry.category == "portfolio")
+    assert "orders unusable" in portfolio.detail
+    assert "Working orders not assumed empty" in portfolio.detail
+    assert by_cat["macro"] == "partial"
+    blob = json.dumps(context.model_dump(mode="json"))
+    assert "SECRETACCT99" not in blob
+    assert "account_number" not in blob
+    uw.close()
+    tradier.close()
+    finnhub.close()
+
+
+def test_collect_context_survives_orders_null_string_wrapper() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/orders"):
+            return httpx.Response(200, json={"orders": "null"})
+        return _handler(request)
+
+    uw = ReadFeed(
+        "https://api.unusualwhales.com",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    tradier = ReadFeed(
+        "https://api.tradier.com/v1",
+        "test-only",
+        120,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    uw.interval = tradier.interval = 0
+    start, _ = window(date(2026, 9, 8))
+    context = collect_context(
+        config=_config(),
+        session=date(2026, 9, 8),
+        uw=uw,
+        tradier=tradier,
+        finnhub=None,
+        account_id="SECRETACCT99",
+        clock=_clock(start - timedelta(minutes=10)),
+    )
+    portfolio = next(entry for entry in context.coverage if entry.category == "portfolio")
+    assert portfolio.status == "available"
+    record = next(item for item in context.records if item.category == "portfolio")
+    assert record.payload["working_orders"] == []
+    assert record.payload["account_alias"] == account_alias("SECRETACCT99")
+    blob = json.dumps(context.model_dump(mode="json"))
+    assert "SECRETACCT99" not in blob
     uw.close()
     tradier.close()
 

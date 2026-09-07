@@ -146,6 +146,54 @@ def re_secret_key(key: str) -> bool:
     )
 
 
+def _empty_tradier(value: Any) -> bool:
+    """Tradier XML-to-JSON often encodes missing nodes as null, \"null\", or []."""
+    return value is None or value == "" or value == "null" or value == []
+
+
+def _mapping(value: Any, *, label: str) -> dict[str, Any]:
+    if _empty_tradier(value):
+        return {}
+    if isinstance(value, dict):
+        return value
+    raise ValueError(f"unexpected Tradier {label} object")
+
+
+def _walk(body: Any, *keys: str, label: str) -> Any:
+    """Descend Tradier wrappers without calling .get on strings or lists."""
+    current: Any = body
+    for key in keys:
+        if _empty_tradier(current):
+            return None
+        if not isinstance(current, dict):
+            raise ValueError(f"unexpected Tradier {label} wrapper")
+        current = current.get(key)
+    return current
+
+
+def _dicts(value: Any, *, label: str) -> list[dict[str, Any]]:
+    """Normalize one-or-many Tradier rows. Never assume every element is a dict."""
+    if _empty_tradier(value):
+        return []
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        rows = [item for item in value if isinstance(item, dict)]
+        if value and not rows:
+            raise ValueError(f"unexpected Tradier {label} rows")
+        return rows
+    raise ValueError(f"unexpected Tradier {label} rows")
+
+
+def _nested_field(mapping: Any, *keys: str) -> Any:
+    current: Any = mapping
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
 def _write_raw(directory: Path, name: str, payload: dict[str, Any]) -> None:
     path = directory / "raw" / name
     if not path.exists():
@@ -740,14 +788,48 @@ def collect_portfolio(
         )
     received = clock()
     alias = account_alias(account_id)
-    balances = tradier.get(f"/accounts/{account_id}/balances")
-    positions = tradier.get(f"/accounts/{account_id}/positions")
-    orders = tradier.get(f"/accounts/{account_id}/orders")
-    bal = _drop_secret_keys((balances or {}).get("balances") or {})
-    pos_rows = as_rows(((positions or {}).get("positions") or {}).get("position"))
-    order_rows = as_rows(((orders or {}).get("orders") or {}).get("order"))
+    reasons: list[str] = []
+    bal: dict[str, Any] = {}
+    pos_rows: list[dict[str, Any]] = []
+    order_rows: list[dict[str, Any]] = []
+    try:
+        balances = tradier.get(f"/accounts/{account_id}/balances")
+        parsed = _drop_secret_keys(
+            _mapping(_walk(balances, "balances", label="balances"), label="balances")
+        )
+        if not isinstance(parsed, dict):
+            raise ValueError("unexpected Tradier balances object")
+        bal = parsed
+    except (ValueError, TypeError, AttributeError) as exc:
+        reasons.append(f"balances unusable ({exc})")
+        bal = {}
+    try:
+        positions = tradier.get(f"/accounts/{account_id}/positions")
+        pos_rows = _dicts(
+            _walk(positions, "positions", "position", label="positions"),
+            label="positions",
+        )
+    except (ValueError, TypeError, AttributeError) as exc:
+        reasons.append(f"positions unusable ({exc})")
+    try:
+        orders = tradier.get(f"/accounts/{account_id}/orders")
+        order_rows = _dicts(_walk(orders, "orders", "order", label="orders"), label="orders")
+    except (ValueError, TypeError, AttributeError) as exc:
+        reasons.append(f"orders unusable ({exc})")
+    if reasons:
+        return [], Coverage(
+            category="portfolio",
+            status="missing",
+            detail=(
+                "Tradier portfolio fail-closed: "
+                + "; ".join(reasons)
+                + ". Working orders not assumed empty."
+            ),
+        )
     working = []
     for row in order_rows:
+        if not isinstance(row, dict):
+            continue
         status = str(row.get("status") or "").lower()
         if status in {"filled", "canceled", "cancelled", "expired", "rejected"}:
             continue
@@ -772,6 +854,7 @@ def collect_portfolio(
             }
         )
         for row in pos_rows
+        if isinstance(row, dict)
     ]
     record = Evidence(
         evidence_id=f"portfolio:{alias}",
@@ -780,7 +863,7 @@ def collect_portfolio(
             {
                 str(item.get("symbol"))
                 for item in [*held, *working]
-                if item.get("symbol")
+                if isinstance(item, dict) and item.get("symbol")
             }
         ),
         source="tradier_production_interim_portfolio",
@@ -796,8 +879,8 @@ def collect_portfolio(
             "portfolio_source": "tradier_read_only_until_schwab_oauth",
             "cash": bal.get("total_cash") or bal.get("cash"),
             "equity": bal.get("total_equity") or bal.get("equity"),
-            "option_buying_power": (bal.get("margin") or {}).get("option_buying_power")
-            or (bal.get("pdt") or {}).get("option_buying_power")
+            "option_buying_power": _nested_field(bal, "margin", "option_buying_power")
+            or _nested_field(bal, "pdt", "option_buying_power")
             or bal.get("option_buying_power"),
             "account_type": bal.get("account_type"),
             "pending_orders_count": bal.get("pending_orders_count"),
@@ -812,6 +895,11 @@ def collect_portfolio(
         detail=(
             "Read-only Tradier balances/positions/orders. Account numbers replaced with "
             f"opaque alias {alias}. Schwab is not the portfolio source."
+            + (
+                " Empty or null orders payload treated as no working orders."
+                if not working
+                else ""
+            )
         ),
     )
 
@@ -889,11 +977,11 @@ def collect_context(
     for category, collector in collectors:
         try:
             collected, entry = collector()
-        except ValueError as exc:
+        except (ValueError, TypeError, AttributeError) as exc:
             collected, entry = [], Coverage(
                 category=category,
                 status="missing",
-                detail=f"collector fail-closed ({exc})",
+                detail=f"collector fail-closed ({type(exc).__name__}: {exc})",
             )
         records.extend(collected)
         coverage.append(entry)
