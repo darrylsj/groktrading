@@ -19,3 +19,7 @@ class WatchlistBoundError(FailClosedError):
 
 class LiveGatingError(FailClosedError):
     """Raised when live placement is requested without an explicit live path."""
+
+
+class SchwabAuthNotReady(FailClosedError):
+    """Schwab OAuth credentials or token file are missing; no live Schwab calls."""

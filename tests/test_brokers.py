@@ -12,6 +12,7 @@ from groktrading.brokers import (
     SCHWAB_VENUE_ID,
     RecordingBroker,
     RecordingOrderBroker,
+    SchwabAuthNotReady,
     SchwabBroker,
     TradierBroker,
     exit_venue,
@@ -234,14 +235,42 @@ def test_refuse_dual_fire_and_exits_follow_holding_venue() -> None:
         exit_venue("")
 
 
-def test_schwab_broker_oauth_not_ready_no_secrets() -> None:
+def test_schwab_broker_oauth_not_ready_no_secrets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
     assert "OAuth not ready" in SCHWAB_OAUTH_NOT_READY
     assert "secret" not in SCHWAB_OAUTH_NOT_READY.lower()
     assert "token" not in SCHWAB_OAUTH_NOT_READY.lower()
+    monkeypatch.delenv("SCHWAB_APP_KEY", raising=False)
+    monkeypatch.delenv("SCHWAB_APP_SECRET", raising=False)
+    monkeypatch.setenv("SCHWAB_TOKEN_PATH", str(tmp_path / "schwab_token.json"))
+    with pytest.raises(SchwabAuthNotReady, match="OAuth not ready") as missing:
+        SchwabBroker()
+    text = str(missing.value)
+    assert "SCHWAB_APP_KEY" in text
+    assert "Ready For Use" in text
+    assert "python -m groktrading.brokers.schwab_oauth" in text
+    with pytest.raises(SchwabAuthNotReady, match="constructor arguments"):
+        SchwabBroker(token="should-not-be-accepted")  # noqa: S106
+    with pytest.raises(SchwabAuthNotReady, match="OAuth not ready"):
+        require_schwab_ready()
+    broker = SchwabBroker.__new__(SchwabBroker)
+    with pytest.raises(NotImplementedError, match="OAuth not ready"):
+        broker.preview_option_order({})
+    with pytest.raises(NotImplementedError, match="OAuth not ready"):
+        broker.submit_option_order({})
+
+
+def test_schwab_broker_auth_ready_still_no_order_http(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    token = tmp_path / "schwab_token.json"
+    token.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("SCHWAB_APP_KEY", "placeholder-app-key")
+    monkeypatch.setenv("SCHWAB_APP_SECRET", "placeholder-app-secret")
+    monkeypatch.setenv("SCHWAB_TOKEN_PATH", str(token))
     with pytest.raises(NotImplementedError, match="OAuth not ready"):
         SchwabBroker()
-    with pytest.raises(NotImplementedError, match="OAuth not ready"):
-        SchwabBroker(token="should-not-be-accepted")  # noqa: S106
     with pytest.raises(NotImplementedError, match="OAuth not ready"):
         require_schwab_ready()
 

@@ -1,14 +1,24 @@
-"""SchwabBroker placeholder — OAuth not ready.
+"""SchwabBroker — OAuth scaffolding only; no live order or quote HTTP.
 
-Phase B/C will implement this after Schwab OAuth is Ready For Use.
-This module accepts no credentials, stores no secrets, and makes no
-network calls. Instantiation and every surface raise the same error.
+Construction fails closed without Ready For Use + env credentials + a local
+token file. Even when those are present, preview/submit/quote raise
+``NotImplementedError`` (Phase B/C). This module never accepts tokens as
+constructor arguments and never invents a token file.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
+from groktrading.brokers.schwab_oauth import (
+    CALLBACK_URL,
+    ENV_APP_KEY,
+    ENV_APP_SECRET,
+    ENV_TOKEN_PATH,
+    require_auth_ready,
+    stub_message,
+)
+from groktrading.errors import SchwabAuthNotReady
 from groktrading.models import AccountSnapshot, ClockSnapshot, OptionQuote
 
 SCHWAB_OAUTH_NOT_READY = (
@@ -18,13 +28,37 @@ SCHWAB_OAUTH_NOT_READY = (
 # Not on VenueId until Phase B. Documented so adapters do not invent a second id.
 SCHWAB_VENUE_ID: Literal["schwab"] = "schwab"
 
+_HELPER = "python -m groktrading.brokers.schwab_oauth"
+
+
+def _construction_refused(*args: object, **kwargs: object) -> SchwabAuthNotReady:
+    if args or kwargs:
+        return SchwabAuthNotReady(
+            f"{SCHWAB_OAUTH_NOT_READY}. SchwabBroker does not accept credentials "
+            f"or tokens as constructor arguments. Set {ENV_APP_KEY} / "
+            f"{ENV_APP_SECRET} (optional {ENV_TOKEN_PATH}), wait for Ready For Use, "
+            f"and run {_HELPER}."
+        )
+    return SchwabAuthNotReady(
+        f"{SCHWAB_OAUTH_NOT_READY}. Complete Schwab developer app Ready For Use, "
+        f"set {ENV_APP_KEY} and {ENV_APP_SECRET} (optional {ENV_TOKEN_PATH}), "
+        f"callback {CALLBACK_URL} (no trailing slash), then run {_HELPER}.\n"
+        f"{stub_message()}"
+    )
+
 
 class SchwabBroker:
-    """Unimplemented Schwab venue. Raises on construction. No secrets."""
+    """Unimplemented Schwab venue. Auth-not-ready or Phase B/C HTTP gap."""
 
     venue_id: Literal["schwab"] = SCHWAB_VENUE_ID
 
     def __init__(self, *args: object, **kwargs: object) -> None:
+        if args or kwargs:
+            raise _construction_refused(*args, **kwargs)
+        try:
+            require_auth_ready()
+        except SchwabAuthNotReady as exc:
+            raise _construction_refused() from exc
         raise NotImplementedError(SCHWAB_OAUTH_NOT_READY)
 
     def balances(self) -> AccountSnapshot:
@@ -56,7 +90,11 @@ class SchwabBroker:
 
 
 def require_schwab_ready() -> None:
-    """Factory hook for Phase B. Always refuses until OAuth Ready For Use."""
+    """Factory hook. Auth must be ready; order HTTP is still Phase B/C."""
+    try:
+        require_auth_ready()
+    except SchwabAuthNotReady as exc:
+        raise _construction_refused() from exc
     raise NotImplementedError(SCHWAB_OAUTH_NOT_READY)
 
 

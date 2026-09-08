@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Dual-broker Phase B-prep: Schwab OAuth helper (`groktrading.brokers.schwab_oauth`, `groktrading-schwab-oauth`) documents Ready For Use → env (`SCHWAB_APP_KEY` / `SCHWAB_APP_SECRET` / optional `SCHWAB_TOKEN_PATH`) → browser login at callback `https://127.0.0.1:8182` (no trailing slash) → local refresh token (`~/.config/groktrading/schwab_token.json`, never git). Missing credentials dry-run with an actionable stub (no browser hang, no invented token). Optional `schwab-py` wrap for `client_from_login_flow` / token refresh; 7-day re-auth reminder when the token file is absent. `SchwabBroker` still fails closed and cannot preview/submit. Note: [docs/DUAL_BROKER.md](docs/DUAL_BROKER.md), [`.env.example`](.env.example).
+
 ### Fixed
 
 - Opening15 macro collector requests Tradier VIX as `VIX`, then `I:VIX`, then `$VIX.X`, and marks VIX **available** only when `/markets/quotes` actually returns one of those tickers. Missing stays listed; no invented index print. History `as_of` is the last returned bar’s 16:00 ET, clamped to receipt, so a mid-session rehearsal for the next session no longer ValidationError-fails the whole history category. True Wednesday pre-open still uses the prior regular close.
