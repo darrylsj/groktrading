@@ -11,6 +11,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 from groktrading.research.evaluation import RANDOM_K_DRAWS, RANDOM_K_SEED
+from groktrading.research.universe import FIXED_K_VALUES
+
+REQUIRED_IDENTITY_FIELDS = (
+    "experiment_id",
+    "requested_model",
+    "recommend_backend",
+    "prompt_version",
+)
 
 REQUIRED_SESSIONS = 5
 KILL_MEAN_PERCENTILE = 40.0
@@ -37,18 +45,53 @@ def _scoreable(report: dict[str, Any]) -> bool:
     return report["selected_net_before_api_and_infra_usd"] is not None
 
 
+def _identity_value(report: dict[str, Any], key: str) -> Any:
+    arm = report.get("arm") or {}
+    value = report.get(key)
+    if value in (None, ""):
+        value = arm.get(key)
+    return value
+
+
 def _experiment_identity(report: dict[str, Any]) -> tuple[Any, ...]:
-    """Stable experiment fingerprint. Missing optional fields are None (must match)."""
+    """Arm/configuration fingerprint. Missing required fields are None (rejected)."""
+    arm = report.get("arm") or {}
     baselines = report.get("baselines") or {}
     random_k = baselines.get("random_k") or {}
+    hygiene = arm.get("hygiene") or {}
+    cost = arm.get("cost_config") or {}
+    fixed_values = baselines.get("fixed_k_values") or list(FIXED_K_VALUES)
     return (
-        report.get("experiment_id"),
-        report.get("requested_model"),
-        report.get("recommend_backend"),
-        report.get("prompt_version"),
+        _identity_value(report, "experiment_id"),
+        _identity_value(report, "requested_model"),
+        _identity_value(report, "recommend_backend"),
+        _identity_value(report, "prompt_version"),
+        arm.get("universe") or report.get("universe"),
+        hygiene.get("settings_hash"),
+        cost.get("commission_per_contract_side"),
+        cost.get("slippage_per_share"),
         random_k.get("seed"),
         random_k.get("draws"),
+        tuple(fixed_values),
     )
+
+
+def _missing_identity(report: dict[str, Any]) -> bool:
+    return any(_identity_value(report, key) in (None, "") for key in REQUIRED_IDENTITY_FIELDS)
+
+
+def _policy_percentile(report: dict[str, Any], k: Any, same_k: Any) -> Any:
+    """Same-K percentile when the model entered; predeclared fixed-K=1 when it abstained."""
+    if k and same_k is not None:
+        return same_k
+    if int(k or 0) == 0:
+        scorecards = (report.get("baselines") or {}).get("scorecards") or {}
+        policy = scorecards.get("policy_enter_or_abstain") or {}
+        if policy.get("policy_percentile") is not None:
+            return policy["policy_percentile"]
+        fixed = ((report.get("baselines") or {}).get("fixed_k") or {}).get("1") or {}
+        return (fixed.get("random_k") or {}).get("percentile_of_zero")
+    return same_k
 
 
 def _reject_invalid_inputs(reports: list[dict[str, Any]]) -> list[str]:
@@ -71,11 +114,20 @@ def _reject_invalid_inputs(reports: list[dict[str, Any]]) -> list[str]:
             "rejected: packet_hash values must be distinct; "
             "five copies of one day are not five sessions"
         )
+    if any(_missing_identity(report) for report in reports):
+        reasons.append(
+            "rejected: missing experiment identity "
+            "(experiment_id / requested_model / recommend_backend / prompt_version). "
+            "Tuesday packet-baseline and expanded select must not be inferred as equal."
+        )
+        return reasons
     identities = [_experiment_identity(report) for report in reports]
     if identities and len(set(identities)) != 1:
         reasons.append(
             "rejected: inconsistent experiment identity across the set "
-            "(experiment_id / model / backend / prompt_version / random-K seed and draws)"
+            "(experiment_id / model / backend / prompt_version / universe / "
+            "hygiene/cost config / random-K seed and draws / fixed-K arms). "
+            "Tuesday packet-only baseline must not pool with expanded select."
         )
     return reasons
 
@@ -84,14 +136,21 @@ def _session_metrics(report: dict[str, Any]) -> dict[str, Any]:
     baselines = report["baselines"]
     mechanical = baselines.get("mechanical_top_k_ask_side_premium") or {}
     random_k = baselines.get("random_k") or {}
+    k = baselines.get("k", report.get("selected_count"))
+    same_k = random_k.get("percentile")
     return {
         "session": report.get("session"),
         "packet_hash": report.get("packet_hash"),
+        "experiment_id": _identity_value(report, "experiment_id"),
+        "prompt_version": _identity_value(report, "prompt_version"),
         "model_net_usd": report["selected_net_before_api_and_infra_usd"],
         "mechanical_net_usd": mechanical.get("net_usd"),
-        "random_k_percentile": random_k.get("percentile"),
-        "k": baselines.get("k", report.get("selected_count")),
+        "random_k_percentile": same_k,
+        "selection_quality_percentile": same_k if k else None,
+        "policy_percentile": _policy_percentile(report, k, same_k),
+        "k": k,
         "abstain_net_usd": (baselines.get("abstain") or {}).get("net_usd", 0.0),
+        "incomplete_random_draws": random_k.get("incomplete_draws"),
     }
 
 
@@ -120,16 +179,17 @@ def decide_protocol(reports: list[dict[str, Any]]) -> dict[str, Any]:
         sum(float(item["mechanical_net_usd"]) for item in mechanical_known), 4
     )
     percentiles = [
-        float(item["random_k_percentile"])
+        float(item["policy_percentile"])
         for item in metrics
-        if item["random_k_percentile"] is not None
+        if item["policy_percentile"] is not None
     ]
     if (
         len(percentiles) < REQUIRED_SESSIONS
         or len(mechanical_known) < REQUIRED_SESSIONS
     ):
         reasons.append(
-            f"insufficient: need {REQUIRED_SESSIONS} known random-K percentiles and "
+            f"insufficient: need {REQUIRED_SESSIONS} known policy percentiles "
+            f"(same-K when K>0, predeclared fixed-K=1 when K=0) and "
             f"{REQUIRED_SESSIONS} mechanical nets; got {len(percentiles)} percentile(s) "
             f"and {len(mechanical_known)} mechanical mark(s). Do not kill or continue."
         )
@@ -145,8 +205,7 @@ def decide_protocol(reports: list[dict[str, Any]]) -> dict[str, Any]:
     losses_to_random = sum(
         1
         for item in metrics
-        if item["random_k_percentile"] is not None
-        and float(item["random_k_percentile"]) < 50
+        if item["policy_percentile"] is not None and float(item["policy_percentile"]) < 50
     )
 
     kill = False

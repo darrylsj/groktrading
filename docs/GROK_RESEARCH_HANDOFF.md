@@ -7,6 +7,7 @@ See [Tuesday execution readiness](TUESDAY_EXECUTION_READINESS.md) for the exact 
 ## Entry points
 
 - `src/groktrading/research/hygiene.py`: pre-LLM universe shortlist for expanded `select` (`candidates.json`, logged gates, budget-derived premium). Not used by Tuesday `research.cli run`.
+- `src/groktrading/research/universe.py`: hashed eligibility/evidence manifest for expanded select → evaluate/resolve (not used by Tuesday `research.cli run`).
 - `src/groktrading/research/cycle.py`: typed evidence manifest, archived retrieval, selection, resolver, bounded next-day memory, **typed `FailureRecord`**.
 - `src/groktrading/research/collectors.py`: Context adapters (UW / Tradier / optional Finnhub).
 - `src/groktrading/research/registry.py`: file-based prompt version registry (hash + proposed/shadow/accepted/rejected).
@@ -63,6 +64,8 @@ incomplete, fall back to baseline or add `--allow-degraded` and label gaps:
 ```bash
 python -m groktrading.research.cycle_cli memory --session 2026-09-08 --out /private/research/2026-09-08/memory.json
 python -m groktrading.research.cli capture --session 2026-09-08 --output /private/research/2026-09-08
+# If required coverage is incomplete after capture, do not re-run `research.cli run`
+# (packet.json is write-once). Continue with recommend + monitor, or --allow-degraded.
 python -m groktrading.research.cycle_cli select --packet /private/research/2026-09-08/packet.json --context /private/research/2026-09-08/context.json --memory /private/research/2026-09-08/memory.json --out /private/research/2026-09-08/selection
 python -m groktrading.research.cli monitor --session 2026-09-08 --output /private/research/2026-09-08/selection
 python -m groktrading.research.cli report --session 2026-09-08 --output /private/research/2026-09-08/selection

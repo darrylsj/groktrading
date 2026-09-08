@@ -266,6 +266,9 @@ def test_tuesday_launch_command_is_clean_baseline() -> None:
     assert "selector_v3 is a shadow prompt only" in plan["note"]
     assert "--shadow-v3" in " ".join(plan["shadow_compare"])
     assert "Do not promote v3" in plan["shadow_compare_note"]
+    assert "Do not re-run research.cli run after capture" in plan["fallback_after_capture"][0]
+    assert "research.cli recommend" in plan["fallback_after_capture"][1]
+    assert "research.cli monitor" in plan["fallback_after_capture"][2]
 
 
 def test_post_tuesday_day_plan_defaults_to_expanded_select() -> None:

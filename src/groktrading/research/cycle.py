@@ -22,8 +22,9 @@ from groktrading.research.codex_cli import (
     run_codex,
     subprocess_env,
 )
-from groktrading.research.hygiene import build_shortlist, shortlist_contracts
+from groktrading.research.hygiene import build_shortlist
 from groktrading.research.opening15 import (
+    EXPANDED_SELECT_EXPERIMENT_ID,
     Decision,
     Packet,
     canonical,
@@ -32,6 +33,11 @@ from groktrading.research.opening15 import (
     strict_schema,
     window,
     write_once,
+)
+from groktrading.research.universe import (
+    apply_eligibility,
+    build_shortlist_eligibility,
+    resolve_eligibility,
 )
 
 if TYPE_CHECKING:
@@ -597,7 +603,9 @@ def select(
             registry, shadow_version_id, session=packet.session
         )
     shortlist = build_shortlist(packet, context.records)
+    eligibility = build_shortlist_eligibility(packet, context.records, shortlist)
     write_once(directory / "candidates.json", shortlist)
+    write_once(directory / "eligibility.json", eligibility)
     write_once(
         directory / "cycle-input.json",
         {
@@ -605,6 +613,7 @@ def select(
             "context": context.model_dump(mode="json"),
             "memory": memory.model_dump(mode="json"),
             "degraded": allow_degraded,
+            "eligibility_hash": eligibility["manifest_hash"],
             "hygiene": {
                 "architecture": "gates_then_judgment",
                 "candidates_file": "candidates.json",
@@ -620,6 +629,14 @@ def select(
         "opening_packet": packet.compact(),
         "context_index": context.index(),
         "candidates": shortlist["candidates"],
+        "eligibility": {
+            "universe": eligibility["universe"],
+            "manifest_hash": eligibility["manifest_hash"],
+            "contracts": eligibility["contracts"],
+            "evidence_ids": eligibility["evidence_ids"],
+            "shortlist_only_contracts": eligibility["shortlist_only_contracts"],
+            "declared_before_inference": True,
+        },
         "hygiene": {
             "architecture": "gates_then_judgment",
             "budget": shortlist["budget"],
@@ -663,11 +680,7 @@ def select(
     )
     if now_utc() > deadline:
         raise ValueError("overall selection deadline exceeded")
-    selection.decision.validate_evidence(
-        packet,
-        allowed_contracts=shortlist_contracts(shortlist),
-        extra_evidence_ids={r.evidence_id for r in context.records},
-    )
+    apply_eligibility(selection.decision, packet, eligibility)
     context.retrieve(selection.context_citations)
     record = {
         "packet_hash": digest(packet.model_dump(mode="json")),
@@ -675,9 +688,12 @@ def select(
         "memory_hash": digest(memory.model_dump(mode="json")),
         "received_at": now_utc().isoformat(),
         "synthetic": False,
+        "experiment_id": EXPANDED_SELECT_EXPERIMENT_ID,
         "requested_model": cfg.model,
         "recommend_backend": "codex_cli",
         "prompt_version": prompt_version,
+        "eligibility": eligibility,
+        "eligibility_hash": eligibility["manifest_hash"],
         "decision": selection.decision.model_dump(mode="json"),
         "context_citations": selection.context_citations,
         "portfolio_assessment": selection.portfolio_assessment,
@@ -691,7 +707,7 @@ def select(
             memory=memory,
             directory=directory,
             payload=payload,
-            shortlist=shortlist,
+            eligibility=eligibility,
             cfg=cfg,
             runner=runner,
             deadline=deadline,
@@ -709,7 +725,7 @@ def _record_shadow_selection(
     memory: Memory,
     directory: Path,
     payload: dict[str, Any],
-    shortlist: dict[str, Any],
+    eligibility: dict[str, Any],
     cfg: Any,
     runner: CodexRun | None,
     deadline: datetime,
@@ -731,11 +747,7 @@ def _record_shadow_selection(
             cfg.max_input_bytes,
             runner,
         )
-        selection.decision.validate_evidence(
-            packet,
-            allowed_contracts=shortlist_contracts(shortlist),
-            extra_evidence_ids={r.evidence_id for r in context.records},
-        )
+        apply_eligibility(selection.decision, packet, eligibility)
         context.retrieve(selection.context_citations)
         shadow = {
             "status": "recorded",
@@ -744,11 +756,14 @@ def _record_shadow_selection(
             "memory_hash": digest(memory.model_dump(mode="json")),
             "received_at": now_utc().isoformat(),
             "synthetic": False,
+            "experiment_id": EXPANDED_SELECT_EXPERIMENT_ID,
             "requested_model": cfg.model,
             "recommend_backend": "codex_cli",
             "prompt_version": prompt_version,
             "role": "shadow",
             "active_prompt_version": active.get("prompt_version"),
+            "eligibility": eligibility,
+            "eligibility_hash": eligibility["manifest_hash"],
             "decision": selection.decision.model_dump(mode="json"),
             "context_citations": selection.context_citations,
             "portfolio_assessment": selection.portfolio_assessment,
@@ -791,12 +806,17 @@ def resolve(
     if at < close or outcome_context.session != packet.session or outcome_context.frozen_at > at:
         raise ValueError("resolver requires completed session and available evidence")
     parsed = Decision.model_validate(decision["decision"])
-    parsed.validate_evidence(packet)
+    eligibility = resolve_eligibility(packet, decision)
+    apply_eligibility(parsed, packet, eligibility)
+    eval_eligibility = evaluation.get("eligibility_hash")
+    if eval_eligibility and eval_eligibility != eligibility["manifest_hash"]:
+        raise ValueError("evaluation eligibility hash mismatch")
     outcomes = {f"outcome:{r['option_symbol']}": r for r in evaluation["rows"]}
     payload = {
         "original_decision": decision,
         "evaluation": evaluation,
         "opening_packet": packet.compact(),
+        "eligibility": eligibility,
         "outcome_ids": outcomes,
         "outcome_context": outcome_context.model_dump(mode="json"),
     }
@@ -817,6 +837,7 @@ def resolve(
         raise ValueError("resolver must review opportunity costs for all stocks")
     ids = (
         set(outcomes)
+        | set(eligibility["evidence_ids"])
         | {e.event_id for e in packet.events}
         | {e.evidence_id for e in outcome_context.records}
     )

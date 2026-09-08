@@ -3,9 +3,14 @@ Read the entire supplied opening tape, the prior-day memory, all context summari
 requested archived evidence. No fixed alpha recipe is prescribed. Find relationships and
 contradictions, not just large ask-side trades. Select up to three long options, or abstain.
 
-Use only contracts and trade evidence IDs present in opening_packet. Assess every stock.
+The legal comparison universe is declared in INPUT_JSON.eligibility before this prompt
+(contracts and evidence IDs, plus manifest_hash). candidates[] is the same hygiene-kept
+set. opening_packet is the frozen tape for reading prints; it is not the sole legal pick
+set when eligibility.universe is hygiene_shortlist. Use only those declared contracts and
+evidence IDs, or abstain. Assess every stock.
 Use context_citations for world/company news, macro, calendar, chain, history and portfolio
-records. Distinguish current holdings from exchange book depth; absent depth is unknown.
+records (IDs must be in the declared evidence set). Distinguish current holdings from
+exchange book depth; absent depth is unknown.
 Explain opportunity quality AND suitability alongside the existing positions/orders. Never
 assume planning capital is funded cash. Suggestions remain paper-only, not broker instructions.
 

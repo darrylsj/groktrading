@@ -37,12 +37,17 @@ missing exits do not).
    five times) are **`rejected`**, not a five-session block.
 2. **Not synthetic** — any `synthetic: true` evaluation → **`rejected`**. Demo /
    fixture packets cannot produce kill or continue.
-3. **Consistent experiment identity** — `experiment_id`, `requested_model`,
-   `recommend_backend`, `prompt_version`, and random-K `seed` / `draws` must match
-   across the set when present. Mixing arms → **`rejected`**.
-4. **Sufficient baselines** — kill/continue require **five known random-K
-   percentiles** and **five mechanical nets**. One known percentile (or a missing
-   mechanical mark) is **`insufficient`**, not continue.
+3. **Complete, consistent experiment identity** — `experiment_id`,
+   `requested_model`, `recommend_backend`, and `prompt_version` are **required**.
+   Missing values are **`rejected`** (they must not compare equal). Universe
+   (`packet_printed` vs `hygiene_shortlist`), hygiene/cost config, and random-K
+   `seed` / `draws` / predeclared fixed-K arms must match. Tuesday packet-only
+   baseline must not pool with expanded select.
+4. **Sufficient baselines** — kill/continue require **five known policy
+   percentiles** and **five mechanical nets**. Same-K random-K percentile is used
+   when the model entered (K>0). On abstain days (K=0) the predeclared fixed-K=1
+   arm scores always-flat vs random-1 so zero-trade days remain scoreable. A
+   missing policy percentile or mechanical mark is **`insufficient`**, not continue.
 
 Fewer than five scoreable sessions, or five sessions with incomplete baselines →
 **`insufficient`**. Do not kill, continue, or go live. Keep collecting paper
@@ -63,8 +68,8 @@ python -m groktrading.research.cli protocol \
 
 | Verdict | Meaning | What to do |
 | --- | --- | --- |
-| `insufficient` | Fewer than five scoreable paper sessions, or five sessions without a full set of known random-K percentiles and mechanical nets | Collect more complete paper sessions. Do not act. |
-| `rejected` | Duplicate sessions, synthetic evaluations, missing identity, or mixed experiment identity | Do not kill or continue. Supply five distinct real paper sessions from the same experiment. |
+| `insufficient` | Fewer than five scoreable paper sessions, or five sessions without a full set of known policy percentiles (same-K or fixed-K=1 on abstain) and mechanical nets | Collect more complete paper sessions. Do not act. |
+| `rejected` | Duplicate sessions, synthetic evaluations, missing identity, or mixed experiment identity (including Tue packet baseline mixed with expanded select) | Do not kill or continue. Supply five distinct real paper sessions from the same experiment. |
 | `kill` | Pre-registered stop rule matched | Stop this selector arm. Do **not** go live. Archive and review. |
 | `continue` | Pre-registered paper-progress rule matched | More **paper** sessions and/or a **wider paper universe** only. Never live. Never `--allow-degraded` as a live claim. |
 | `inconclusive` | Five complete scoreable sessions, neither kill nor continue | Stay paper-only. Do not treat mixed results as an edge. |
@@ -80,8 +85,8 @@ Registered constants live in `src/groktrading/research/protocol.py`:
 ### Continue (all, and not kill)
 
 1. Five distinct real (non-synthetic) scoreable sessions with consistent experiment identity
-2. Five known random-K percentiles and five mechanical nets
-3. Mean random-K percentile `≥ 60`
+2. Five known policy percentiles (same-K when K>0; fixed-K=1 when K=0) and five mechanical nets
+3. Mean policy percentile `≥ 60`
 4. Model five-session total net `>` mechanical five-session total
 5. Model five-session total net `> 0`
 
@@ -102,9 +107,10 @@ Computed on the same frozen packet and same 15:55 ET ask-in/bid-out marks:
 
 | Arm | Definition |
 | --- | --- |
-| Random-K | 1,000 seeded draws of K printed contracts (K = model enter count). Seed material is `20260908` plus `packet_hash`. Mechanical 300s / uncapped entry. Model net as a percentile rank of complete draws. |
+| Random-K (same-K) | 1,000 seeded draws of K declared-universe contracts (K = model enter count). Seed material is `20260908` plus `packet_hash`. Mechanical 300s / uncapped entry. Model net as a percentile rank of complete draws. Null when K=0; incomplete draws are reported and not treated as zeros. |
 | Mechanical top-K | Highest UW-tagged **ask-side** premium sums; same 15:55 ET exit. Side is never inferred from price vs NBBO. |
-| Abstain | Zero enters; net `0` |
+| Abstain / always-flat | Zero enters; net `0`. Policy scorecard compares the model's enter-or-abstain net to this arm. |
+| Fixed-K (1, 2, 3) | Predeclared comparison arms on the same universe and exit so abstain days remain scoreable. Fixed-K=1 `percentile_of_zero` is the policy percentile when K=0. |
 | Latency | Decision receipt minus packet `knowledge_cutoff`; each fill's entry minus decision receipt |
 
 These arms measure added value. They do not constrain the discretionary selector.

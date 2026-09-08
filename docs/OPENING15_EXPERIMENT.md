@@ -172,8 +172,10 @@ premium cap, DTE recorded on every row) and writes `candidates.json`; Codex sees
 curated shortlist, not the whole chain. The selector prompt is not given computable refuse
 rules — architecture is **gates then judgment**. Context still includes UW economic
 calendar, dark pool (per 10 names), option screener, market tide, and political slices.
-Inspect `context.json` coverage first. Fall back to baseline `research.cli run` or add
-`--allow-degraded` only if a **required** category is not `available`.
+Inspect `context.json` coverage first. If a **required** category is not `available`
+**after capture**, do not re-`run` (packet.json is write-once); continue with
+`research.cli recommend` then `monitor` on that directory, or add `--allow-degraded`
+on select. From-scratch fallback (no packet yet) remains baseline `research.cli run`.
 Tuesday itself stays on clean `research.cli run` (packet baseline; no shortlist).
 **selector_v3** is shadow-only: optional `--shadow-v3 --registry` writes
 `selection-shadow-v3.json` on the same packet and shortlist without swapping
@@ -271,6 +273,7 @@ independent experiments. This first Tuesday is an operational trial, not proof o
 | `raw/flow-*.json`, `raw/stocks-*.json` | Provider response pages, stock snapshots and receive times |
 | `packet.json` | Frozen validated evidence, coverage and limitations |
 | `candidates.json` | Expanded/select only: pre-LLM hygiene shortlist + structured rejects (not written by Tuesday `research.cli run`) |
+| `eligibility.json` | Expanded/select only: hashed legal contract/evidence-ID manifest carried into decision.json, monitor, evaluate, and resolve |
 | `selection-shadow-v3.json` | Optional expanded/select `--shadow-v3`: v3 Decision on the same packet/shortlist. Not active. Not Tuesday. |
 | `selection-shadow-compare.json` | Optional: both verdicts plus how to score vs `baselines.abstain` later. Do not promote v3. |
 | `request.json` | Exact prompt/config/input plus hashes, start time, backend, and `codex --version` |

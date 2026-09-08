@@ -24,6 +24,7 @@ def sample(tmp_path: Path) -> tuple[Packet, dict[str, Any], dict[str, Any]]:
     evaluation.update(
         packet_hash=decision["packet_hash"], decision_hash=digest(decision), synthetic=False
     )
+    evaluation.pop("eligibility_hash", None)
     return packet, decision, evaluation
 
 
@@ -579,6 +580,7 @@ def test_select_shadow_v3_writes_artifact_without_swapping_active(
         if schema is cycle.Selection:
             assert payload["candidates"]
             assert payload["hygiene"]["architecture"] == "gates_then_judgment"
+            assert payload["eligibility"]["declared_before_inference"] is True
             body = (
                 _abstain_decision(decision)
                 if name == "selector_v3.md"

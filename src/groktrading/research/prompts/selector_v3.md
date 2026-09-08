@@ -14,7 +14,9 @@ Do not encode computable refuse rules or numeric cutoffs. Those belong in logged
 hygiene, not this prompt. The shortlist is not a ranked alpha list; you may still
 abstain when candidates remain.
 
-Use only contracts present in `candidates` (or abstain). Assess every stock. Use
+The legal comparison universe is declared in INPUT_JSON.eligibility before this
+prompt. Use only contracts present in eligibility.contracts / `candidates` (or
+abstain). Cite only evidence IDs from that declared set. Assess every stock. Use
 context_citations for world/company news, macro, calendar, chain, history and
 portfolio records. Distinguish current holdings from exchange book depth; absent
 depth is unknown. Explain opportunity quality AND suitability alongside existing

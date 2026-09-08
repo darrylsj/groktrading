@@ -382,6 +382,9 @@ def test_select_writes_candidates_and_payload(
             assert "candidates" in payload
             assert payload["hygiene"]["architecture"] == "gates_then_judgment"
             assert payload["candidates"]
+            assert payload["eligibility"]["declared_before_inference"] is True
+            assert payload["eligibility"]["universe"] == "hygiene_shortlist"
+            assert payload["eligibility"]["contracts"]
             return schema(
                 decision=Decision.model_validate(decision["decision"]),
                 context_citations=["macro"],
@@ -401,6 +404,11 @@ def test_select_writes_candidates_and_payload(
     assert all("dte" in row and "gate" in row for row in artifact["rejects"])
     cycle_input = json.loads((tmp_path / "select/cycle-input.json").read_text())
     assert cycle_input["hygiene"]["candidates_file"] == "candidates.json"
+    assert cycle_input["eligibility_hash"]
+    assert (tmp_path / "select/eligibility.json").is_file()
+    selected = json.loads((tmp_path / "select/decision.json").read_text())
+    assert selected["experiment_id"] == "opening15-expanded-select"
+    assert selected["eligibility_hash"] == cycle_input["eligibility_hash"]
 
 
 def test_select_rejects_pick_outside_shortlist(
