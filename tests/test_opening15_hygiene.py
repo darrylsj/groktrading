@@ -146,6 +146,23 @@ def test_baseline_recommend_does_not_shortlist() -> None:
     assert "candidates.json" not in Path(research_cli.__file__).read_text()
 
 
+def test_tuesday_baseline_does_not_import_broker_protocol() -> None:
+    """Tue Opening15 packet path stays isolated from dual-broker execution."""
+    roots = [
+        Path("src/groktrading/research/cli.py"),
+        Path("src/groktrading/research/opening15.py"),
+        Path("src/groktrading/research/capture.py"),
+        Path("src/groktrading/research/collectors.py"),
+        Path("src/groktrading/research/evaluation.py"),
+    ]
+    for path in roots:
+        text = path.read_text(encoding="utf-8")
+        assert "groktrading.brokers" not in text, path
+        assert "TradierBroker" not in text, path
+        assert "SchwabBroker" not in text, path
+        assert "refuse_dual_fire" not in text, path
+
+
 def test_as_number_never_invents() -> None:
     assert as_number(None) is None
     assert as_number("") is None

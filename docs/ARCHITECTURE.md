@@ -81,6 +81,15 @@ Finnhub tape integration into an existing Tradier/UW tape is an **explicit opera
 
 The **LLM thesis / approve-skip** path consumes **assembled facts only**. It returns `approve` or `skip` plus a thesis. It must not invent prices, P&L, or fills, and it must not call Tradier or hold a broker client. After an `approve`, the **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for a **fresh OCC quote** and, when explicitly enabled, live orders.
 
+## Dual-broker (Phase A)
+
+Live/paper execution goes through a venue-aware `Broker` protocol
+([DUAL_BROKER.md](DUAL_BROKER.md)). Today the only implementer is
+`TradierBroker` (thin wrap of `feeds/tradier.py`). Schwab is a placeholder
+until OAuth is Ready For Use — no secrets, no live Schwab calls. A print is
+never dual-fired; exits follow the holding venue. **Opening15 Tuesday
+packet-only `research.cli run` does not use this protocol.**
+
 ## Safety invariants
 
 - WebSocket events never directly trigger live orders.

@@ -240,6 +240,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/feeds/finnhub.py` | WS parse, backoff, watchlist, health, REST probe |
 | `src/groktrading/feeds/unusual_whales.py` | Generic UW GET |
 | `src/groktrading/feeds/tradier.py` | Generic Tradier quotes/balances/clock/preview |
+| `src/groktrading/brokers/` | Venue-aware `Broker` protocol; `TradierBroker`; Schwab OAuth-not-ready stub |
+| `docs/DUAL_BROKER.md` | Dual-broker Phase A plan (no dual-fire; exits follow holding venue; Tue Opening15 untouched) |
 | `src/groktrading/gate.py` | Deterministic final gate |
 | `src/groktrading/quote_gate.py` | P0.1 production quote validation |
 | `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
