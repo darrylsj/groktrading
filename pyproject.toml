@@ -34,6 +34,9 @@ dev = [
 ws = [
   "websockets>=12,<16",
 ]
+schwab = [
+  "schwab-py>=1.4,<2",
+]
 
 [project.scripts]
 groktrading-opening15 = "groktrading.research.cli:main"
@@ -41,6 +44,7 @@ groktrading-research-cycle = "groktrading.research.cycle_cli:main"
 groktrading-finnhub-probe = "groktrading.cli:finnhub_probe_main"
 groktrading-finnhub-tape = "groktrading.cli:finnhub_tape_main"
 groktrading-tape = "groktrading.cli:tape_skeleton_main"
+groktrading-schwab-oauth = "groktrading.brokers.schwab_oauth:main"
 
 [project.urls]
 Documentation = "https://github.com/darrylsj/groktrading"

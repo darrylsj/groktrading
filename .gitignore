@@ -8,6 +8,8 @@
 id_rsa*
 secrets/
 /etc/
+schwab_token.json
+*schwab*token*.json
 
 # Python
 __pycache__/

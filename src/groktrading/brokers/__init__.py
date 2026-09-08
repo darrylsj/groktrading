@@ -1,7 +1,8 @@
 """Venue-aware broker adapters.
 
 Phase A: `Broker` protocol + `TradierBroker` + test `RecordingBroker`.
-`SchwabBroker` is an OAuth-not-ready placeholder (no secrets, no calls).
+`SchwabBroker` fails closed without OAuth tokens. Auth scaffolding lives in
+`schwab_oauth` (no live order/quote HTTP).
 
 Do not import this package from Opening15 `research.cli` / packet capture.
 """
@@ -22,6 +23,7 @@ from groktrading.brokers.schwab import (
     require_schwab_ready,
 )
 from groktrading.brokers.tradier import TradierBroker
+from groktrading.errors import SchwabAuthNotReady
 
 __all__ = [
     "PLANNED_SCHWAB_VENUE",
@@ -31,6 +33,7 @@ __all__ = [
     "OrderBroker",
     "RecordingBroker",
     "RecordingOrderBroker",
+    "SchwabAuthNotReady",
     "SchwabBroker",
     "TradierBroker",
     "VenueId",
