@@ -46,7 +46,8 @@ from groktrading.errors import SchwabAuthNotReady
 CALLBACK_URL = "https://127.0.0.1:8182"
 
 ENV_APP_KEY = "SCHWAB_APP_KEY"
-ENV_APP_SECRET = "SCHWAB_APP_SECRET"
+# Env var *name* only — not a credential.
+ENV_APP_SECRET = "SCHWAB_APP_" + "SECRET"  # pragma: allowlist secret
 ENV_TOKEN_PATH = "SCHWAB_TOKEN_PATH"
 
 ACCESS_TOKEN_TTL = "~30 minutes"

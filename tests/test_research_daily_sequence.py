@@ -180,6 +180,13 @@ def test_day_plan_sequence_creates_outcome_context_and_loads_failures(
     monkeypatch.setattr(
         "groktrading.research.collectors.optional_account_id", lambda: "RESEARCH1"
     )
+    # Outcome context must freeze before resolve's clock. Wall-clock now on
+    # session evening makes frozen_at > end+7h and fail-closes the resolver.
+    resolve_at = end + timedelta(hours=7)
+    monkeypatch.setattr(
+        "groktrading.research.collectors.now_utc",
+        lambda: end + timedelta(hours=6, minutes=40),
+    )
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -199,7 +206,7 @@ def test_day_plan_sequence_creates_outcome_context_and_loads_failures(
 
     Context.model_validate_json((root / "outcome-context.json").read_text())
 
-    monkeypatch.setattr(cycle, "now_utc", lambda: end + timedelta(hours=7))
+    monkeypatch.setattr(cycle, "now_utc", lambda: resolve_at)
     monkeypatch.setattr(
         "sys.argv",
         [

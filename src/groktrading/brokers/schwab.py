@@ -10,14 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from groktrading.brokers.schwab_oauth import (
-    CALLBACK_URL,
-    ENV_APP_KEY,
-    ENV_APP_SECRET,
-    ENV_TOKEN_PATH,
-    require_auth_ready,
-    stub_message,
-)
 from groktrading.errors import SchwabAuthNotReady
 from groktrading.models import AccountSnapshot, ClockSnapshot, OptionQuote
 
@@ -31,19 +23,27 @@ SCHWAB_VENUE_ID: Literal["schwab"] = "schwab"
 _HELPER = "python -m groktrading.brokers.schwab_oauth"
 
 
+def _oauth() -> Any:
+    from groktrading.brokers import schwab_oauth
+
+    return schwab_oauth
+
+
 def _construction_refused(*args: object, **kwargs: object) -> SchwabAuthNotReady:
+    oauth = _oauth()
     if args or kwargs:
         return SchwabAuthNotReady(
             f"{SCHWAB_OAUTH_NOT_READY}. SchwabBroker does not accept credentials "
-            f"or tokens as constructor arguments. Set {ENV_APP_KEY} / "
-            f"{ENV_APP_SECRET} (optional {ENV_TOKEN_PATH}), wait for Ready For Use, "
-            f"and run {_HELPER}."
+            f"or tokens as constructor arguments. Set {oauth.ENV_APP_KEY} / "
+            f"{oauth.ENV_APP_SECRET} (optional {oauth.ENV_TOKEN_PATH}), wait for "
+            f"Ready For Use, and run {_HELPER}."
         )
     return SchwabAuthNotReady(
         f"{SCHWAB_OAUTH_NOT_READY}. Complete Schwab developer app Ready For Use, "
-        f"set {ENV_APP_KEY} and {ENV_APP_SECRET} (optional {ENV_TOKEN_PATH}), "
-        f"callback {CALLBACK_URL} (no trailing slash), then run {_HELPER}.\n"
-        f"{stub_message()}"
+        f"set {oauth.ENV_APP_KEY} and {oauth.ENV_APP_SECRET} "
+        f"(optional {oauth.ENV_TOKEN_PATH}), callback {oauth.CALLBACK_URL} "
+        f"(no trailing slash), then run {_HELPER}.\n"
+        f"{oauth.stub_message()}"
     )
 
 
@@ -56,7 +56,7 @@ class SchwabBroker:
         if args or kwargs:
             raise _construction_refused(*args, **kwargs)
         try:
-            require_auth_ready()
+            _oauth().require_auth_ready()
         except SchwabAuthNotReady as exc:
             raise _construction_refused() from exc
         raise NotImplementedError(SCHWAB_OAUTH_NOT_READY)
@@ -92,7 +92,7 @@ class SchwabBroker:
 def require_schwab_ready() -> None:
     """Factory hook. Auth must be ready; order HTTP is still Phase B/C."""
     try:
-        require_auth_ready()
+        _oauth().require_auth_ready()
     except SchwabAuthNotReady as exc:
         raise _construction_refused() from exc
     raise NotImplementedError(SCHWAB_OAUTH_NOT_READY)

@@ -13,6 +13,7 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Fixed
 
+- Daily-sequence resolve test freezes collect-context `now_utc` before the resolver clock so a session-evening wall clock cannot make `frozen_at` newer than `end+7h`.
 - Opening15 macro collector requests Tradier VIX as `VIX`, then `I:VIX`, then `$VIX.X`, and marks VIX **available** only when `/markets/quotes` actually returns one of those tickers. Missing stays listed; no invented index print. History `as_of` is the last returned bar’s 16:00 ET, clamped to receipt, so a mid-session rehearsal for the next session no longer ValidationError-fails the whole history category. True Wednesday pre-open still uses the prior regular close.
 
 ### Added
