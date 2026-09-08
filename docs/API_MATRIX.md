@@ -45,7 +45,7 @@ Trading / preview: https://docs.tradier.com/docs/trading
 
 Used product surfaces (official):
 
-- Quotes (`/markets/quotes`)
+- Quotes (`/markets/quotes`). Opening15 macro VIX tries `VIX`, then `I:VIX`, then `$VIX.X`; coverage stays honest if none return.
 - Option chains (`/markets/options/chains` — confirm params in current docs)
 - Balances, positions, orders
 - Order **preview** (`preview=true` on create-order)

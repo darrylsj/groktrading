@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening15 macro collector requests Tradier VIX as `VIX`, then `I:VIX`, then `$VIX.X`, and marks VIX **available** only when `/markets/quotes` actually returns one of those tickers. Missing stays listed; no invented index print. History `as_of` is the last returned bar’s 16:00 ET, clamped to receipt, so a mid-session rehearsal for the next session no longer ValidationError-fails the whole history category. True Wednesday pre-open still uses the prior regular close.
+
 ### Added
 
 - Opening15 **selector_v3** as a **shadow** prompt + registry entry (`selector_v3.md`, seeded status `shadow`, parent `selector_v2`). Active default remains **selector_v2**. Deterministic refuses stay in hygiene pre-gates; the v3 prompt is judgment-only (thesis coherence, cite-or-abstain / hallucination detector). Expanded `cycle_cli select --shadow-v3 --registry` runs v3 on the same packet, hygiene shortlist, and retrieved IDs and writes `selection-shadow-v3.json` plus `selection-shadow-compare.json` without swapping active. Later score both artifacts vs `evaluation.json` `baselines.abstain` (always-flat, net 0). Tuesday clean baseline `research.cli run` is unchanged. v3 is not accepted/active and is not promoted. Paper research path only; no Helsinki/live orders.

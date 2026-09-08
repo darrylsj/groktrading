@@ -16,12 +16,18 @@ from groktrading.research.capture import (
 )
 from groktrading.research.cli import demo
 from groktrading.research.collectors import (
+    VIX_QUOTE_CANDIDATES,
     FinnhubRest,
     account_alias,
     archived_news_detail,
     collect_context,
     collect_economic_calendar,
+    collect_history,
+    collect_macro,
     collect_portfolio,
+    history_as_of,
+    macro_quote_symbols,
+    resolve_vix_quote,
     write_expanded_context,
 )
 from groktrading.research.cycle import (
@@ -32,7 +38,7 @@ from groktrading.research.cycle import (
     failure_from_exception,
     write_failure,
 )
-from groktrading.research.opening15 import Config, Event, Packet, window
+from groktrading.research.opening15 import NY, Config, Event, Packet, now_utc, window
 from groktrading.research.registry import freeze_active, propose, seed_registry, set_status
 
 
@@ -218,6 +224,7 @@ def _handler(request: httpx.Request) -> httpx.Response:
     if path.endswith("/markets/quotes"):
         rows = []
         for item in symbol.split(","):
+            # Historical Yahoo-style index ticker is often omitted; VIX / I:VIX may land.
             if item == "$VIX.X":
                 continue
             rows.append(
@@ -391,8 +398,9 @@ def test_collectors_fill_context_with_mocked_http(tmp_path: Path) -> None:
     assert by_cat["company_news"] == "partial"
     assert by_cat["world_news"] == "available"
     macro = next(entry for entry in context.coverage if entry.category == "macro")
-    assert macro.status == "partial"
-    assert "$VIX.X" in macro.detail
+    assert macro.status == "available"
+    assert "vix=VIX" in macro.detail
+    assert any(r.evidence_id == "macro:VIX" for r in context.records)
     assert by_cat["calendar"] == "available"
     assert by_cat["option_chain"] == "available"
     assert by_cat["history"] == "available"
@@ -598,7 +606,7 @@ def test_collect_context_survives_crashing_orders_payload() -> None:
     portfolio = next(entry for entry in context.coverage if entry.category == "portfolio")
     assert "orders unusable" in portfolio.detail
     assert "Working orders not assumed empty" in portfolio.detail
-    assert by_cat["macro"] == "partial"
+    assert by_cat["macro"] == "available"
     blob = json.dumps(context.model_dump(mode="json"))
     assert "SECRETACCT99" not in blob
     assert "account_number" not in blob
@@ -880,7 +888,7 @@ def test_optional_collectors_timeout_does_not_abort_baseline(tmp_path: Path) -> 
             uw=None,  # type: ignore[arg-type]
             tradier=None,  # type: ignore[arg-type]
             news_events=[],
-            deadline=datetime(2026, 9, 8, 13, 30, tzinfo=UTC),
+            deadline=now_utc() + timedelta(seconds=5),
         )
     finally:
         collectors.write_expanded_context = original  # type: ignore[method-assign]
@@ -1061,7 +1069,6 @@ def test_uw_expanded_http_failure_does_not_abort_baseline(tmp_path: Path) -> Non
         httpx.Client(transport=httpx.MockTransport(handler)),
     )
     uw.interval = tradier.interval = 0
-    start, _ = window(date(2026, 9, 8))
     from groktrading.research.capture import isolate_optional_collectors
 
     isolate_optional_collectors(
@@ -1071,7 +1078,7 @@ def test_uw_expanded_http_failure_does_not_abort_baseline(tmp_path: Path) -> Non
         uw=uw,
         tradier=tradier,
         news_events=[],
-        deadline=start,
+        deadline=now_utc() + timedelta(minutes=2),
     )
     assert not (tmp_path / "context-failed.json").exists()
     context = Context.model_validate_json((tmp_path / "context.json").read_text())
@@ -1122,3 +1129,195 @@ def test_optional_uw_categories_do_not_force_degraded(tmp_path: Path) -> None:
         ],
     )
     ctx.for_selection(packet, allow_degraded=False)
+
+
+class _MacroQuoteFeed:
+    """Stand-in Tradier quotes feed. Returns only symbols present in `available`."""
+
+    def __init__(self, available: dict[str, dict[str, Any]]) -> None:
+        self.available = available
+        self.requested: list[str] = []
+
+    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        if path != "/markets/quotes":
+            raise ValueError("read endpoint not allowed")
+        requested = [item for item in str((params or {}).get("symbols") or "").split(",") if item]
+        self.requested.extend(requested)
+        rows = []
+        for symbol in requested:
+            row = self.available.get(symbol)
+            if row is not None:
+                rows.append(row)
+        return {"quotes": {"quote": rows}}
+
+
+class _HistoryFeed:
+    """Stand-in Tradier calendar + daily history feed."""
+
+    def __init__(self, days: list[dict[str, Any]]) -> None:
+        self.days = days
+
+    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        if path == "/markets/calendar":
+            return _calendar_body()
+        if path == "/markets/history":
+            return {"history": {"day": self.days}}
+        raise ValueError("read endpoint not allowed")
+
+
+def _macro_quote_row(symbol: str, **extra: Any) -> dict[str, Any]:
+    row = {
+        "symbol": symbol,
+        "last": 16.2,
+        "bid": 16.1,
+        "ask": 16.3,
+        "delayed": False,
+        "trade_date": int(datetime(2026, 9, 8, 13, 10, tzinfo=UTC).timestamp() * 1000),
+    }
+    row.update(extra)
+    return row
+
+
+def _equity_macro_quotes() -> dict[str, dict[str, Any]]:
+    symbols = ["SPY", "QQQ", "XLK", "XLY", "IWM"]
+    return {symbol: _macro_quote_row(symbol, last=100) for symbol in symbols}
+
+
+def _macro_clock() -> Any:
+    return _clock(datetime(2026, 9, 8, 13, 10, tzinfo=UTC))
+
+
+def test_macro_quote_symbols_expand_vix_candidates() -> None:
+    assert macro_quote_symbols(["SPY", "VIX"]) == ["SPY", *VIX_QUOTE_CANDIDATES]
+    assert macro_quote_symbols(["$VIX.X", "QQQ"]) == ["QQQ", *VIX_QUOTE_CANDIDATES]
+    assert VIX_QUOTE_CANDIDATES == ("VIX", "I:VIX", "$VIX.X")
+
+
+def test_resolve_vix_quote_prefers_plain_vix() -> None:
+    rows = {
+        "$VIX.X": _macro_quote_row("$VIX.X"),
+        "VIX": _macro_quote_row("VIX"),
+        "I:VIX": _macro_quote_row("I:VIX"),
+    }
+    resolved = resolve_vix_quote(rows)
+    assert resolved is not None
+    assert resolved[0] == "VIX"
+    assert resolve_vix_quote({}) is None
+    only_index = resolve_vix_quote({"I:VIX": _macro_quote_row("I:VIX")})
+    assert only_index is not None and only_index[0] == "I:VIX"
+
+
+def test_collect_macro_marks_vix_available_when_tradier_returns_plain_vix() -> None:
+    feed = _MacroQuoteFeed({**_equity_macro_quotes(), "VIX": _macro_quote_row("VIX")})
+    records, coverage = collect_macro(config=_config(), tradier=feed, clock=_macro_clock())
+    assert coverage.status == "available"
+    assert "vix=VIX" in coverage.detail
+    assert "missing=none" in coverage.detail
+    vix = next(item for item in records if item.evidence_id == "macro:VIX")
+    assert vix.payload["resolved_symbol"] == "VIX"
+    assert vix.payload["quote"]["last"] == 16.2
+    assert "VIX" in feed.requested
+    assert "I:VIX" in feed.requested
+    assert "$VIX.X" in feed.requested
+
+
+def test_collect_macro_falls_back_to_i_vix() -> None:
+    feed = _MacroQuoteFeed({**_equity_macro_quotes(), "I:VIX": _macro_quote_row("I:VIX")})
+    records, coverage = collect_macro(config=_config(), tradier=feed, clock=_macro_clock())
+    assert coverage.status == "available"
+    assert "vix=I:VIX" in coverage.detail
+    assert any(item.evidence_id == "macro:I:VIX" for item in records)
+
+
+def test_collect_macro_falls_back_to_dollar_vix() -> None:
+    feed = _MacroQuoteFeed({**_equity_macro_quotes(), "$VIX.X": _macro_quote_row("$VIX.X")})
+    records, coverage = collect_macro(config=_config(), tradier=feed, clock=_macro_clock())
+    assert coverage.status == "available"
+    assert "vix=$VIX.X" in coverage.detail
+    assert any(item.evidence_id == "macro:$VIX.X" for item in records)
+
+
+def test_collect_macro_keeps_vix_missing_when_no_candidate_returns() -> None:
+    feed = _MacroQuoteFeed(_equity_macro_quotes())
+    records, coverage = collect_macro(config=_config(), tradier=feed, clock=_macro_clock())
+    assert coverage.status == "partial"
+    assert "missing=['VIX']" in coverage.detail
+    assert "vix_candidates=" in coverage.detail
+    assert not any(item.evidence_id.startswith("macro:VIX") for item in records)
+    assert not any(item.evidence_id == "macro:$VIX.X" for item in records)
+    assert all(item.payload["quote"]["symbol"] != "VIX" for item in records)
+
+
+def _history_bars(*days: str) -> list[dict[str, Any]]:
+    return [
+        {"date": day, "open": 10, "high": 11, "low": 9, "close": 10.5, "volume": 1000}
+        for day in days
+    ]
+
+
+def test_history_as_of_uses_known_close_on_true_wed_preopen() -> None:
+    received = datetime(2026, 9, 9, 9, 5, tzinfo=NY).astimezone(UTC)
+    prior = date(2026, 9, 8)
+    as_of = history_as_of(last_bar_date=prior, prior=prior, received=received)
+    expected = datetime(2026, 9, 8, 16, 0, tzinfo=NY).astimezone(UTC)
+    assert as_of == expected
+    assert as_of < received
+
+
+def test_history_as_of_clamps_when_prior_close_is_still_future() -> None:
+    received = datetime(2026, 9, 8, 14, 0, tzinfo=NY).astimezone(UTC)
+    prior = date(2026, 9, 8)
+    as_of = history_as_of(last_bar_date=prior, prior=prior, received=received)
+    assert as_of == received
+
+
+def test_collect_history_available_on_wed_preopen() -> None:
+    received = datetime(2026, 9, 9, 9, 5, tzinfo=NY)
+    feed = _HistoryFeed(_history_bars("2026-09-03", "2026-09-04", "2026-09-08"))
+    records, coverage = collect_history(
+        config=_config(),
+        session=date(2026, 9, 9),
+        tradier=feed,
+        clock=_clock(received),
+    )
+    assert coverage.status == "available"
+    hist = next(item for item in records if item.evidence_id == "history:AAPL")
+    assert hist.as_of == datetime(2026, 9, 8, 16, 0, tzinfo=NY).astimezone(UTC)
+    assert hist.payload["as_of_clamped_to_receipt"] is False
+    assert hist.payload["last_bar_date"] == "2026-09-08"
+    assert all(bar["date"] < "2026-09-09" for bar in hist.payload["bars"])
+
+
+def test_collect_history_mid_session_rehearsal_uses_known_close() -> None:
+    """Tue afternoon collecting Wed must not ValidationError the whole history category."""
+    received = datetime(2026, 9, 8, 14, 0, tzinfo=NY)
+    feed = _HistoryFeed(_history_bars("2026-09-03", "2026-09-04"))
+    records, coverage = collect_history(
+        config=_config(),
+        session=date(2026, 9, 9),
+        tradier=feed,
+        clock=_clock(received),
+    )
+    assert coverage.status == "available"
+    hist = next(item for item in records if item.evidence_id == "history:AAPL")
+    assert hist.as_of == datetime(2026, 9, 4, 16, 0, tzinfo=NY).astimezone(UTC)
+    assert hist.as_of < hist.received_at
+    assert hist.payload["as_of_clamped_to_receipt"] is False
+    assert hist.payload["prior_session"] == "2026-09-08"
+    assert hist.payload["last_bar_date"] == "2026-09-04"
+
+
+def test_collect_history_clamps_intraday_prior_bar_to_receipt() -> None:
+    received = datetime(2026, 9, 8, 14, 0, tzinfo=NY)
+    feed = _HistoryFeed(_history_bars("2026-09-04", "2026-09-08"))
+    records, coverage = collect_history(
+        config=_config(),
+        session=date(2026, 9, 9),
+        tradier=feed,
+        clock=_clock(received),
+    )
+    assert coverage.status == "available"
+    hist = next(item for item in records if item.evidence_id == "history:AAPL")
+    assert hist.as_of == received.astimezone(UTC)
+    assert hist.payload["as_of_clamped_to_receipt"] is True
+    assert hist.as_of <= hist.received_at

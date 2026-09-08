@@ -50,8 +50,12 @@ from groktrading.research.opening15 import (
 
 Clock = Callable[[], datetime]
 
-# Tradier production index symbol. Entitlement is not assumed; missing is labeled.
-DEFAULT_MACRO_SYMBOLS = ("SPY", "QQQ", "XLK", "XLY", "IWM", "$VIX.X")
+# Tradier /markets/quotes index tickers vary by entitlement and symbology.
+# Docs/KB name the cash index `VIX`; some vendors use `I:VIX`; older Yahoo-style
+# `$VIX.X` is still requested last. Use the first quote Tradier actually returns.
+# Never invent a VIX print if every candidate is absent.
+VIX_QUOTE_CANDIDATES = ("VIX", "I:VIX", "$VIX.X")
+DEFAULT_MACRO_SYMBOLS = ("SPY", "QQQ", "XLK", "XLY", "IWM", "VIX")
 MAX_WORLD_NEWS = 50
 CHAIN_EXPIRATION_LIMIT = 3
 HISTORY_LOOKBACK_CALENDAR_DAYS = 45
@@ -300,6 +304,63 @@ def _history_days(body: Any) -> list[dict[str, Any]]:
     return as_rows(((body or {}).get("history") or {}).get("day"))
 
 
+def _is_vix_alias(symbol: str) -> bool:
+    return symbol in VIX_QUOTE_CANDIDATES or symbol.upper() == "VIX"
+
+
+def macro_quote_symbols(required: list[str]) -> list[str]:
+    """Expand a logical VIX requirement into Tradier quote candidates."""
+    out: list[str] = []
+    seen: set[str] = set()
+    need_vix = False
+    for symbol in required:
+        if _is_vix_alias(symbol):
+            need_vix = True
+            continue
+        if symbol not in seen:
+            seen.add(symbol)
+            out.append(symbol)
+    if need_vix:
+        for candidate in VIX_QUOTE_CANDIDATES:
+            if candidate not in seen:
+                seen.add(candidate)
+                out.append(candidate)
+    return out
+
+
+def resolve_vix_quote(
+    by_symbol: dict[str, dict[str, Any]],
+) -> tuple[str, dict[str, Any]] | None:
+    """First candidate Tradier actually returned. None if all are absent."""
+    for candidate in VIX_QUOTE_CANDIDATES:
+        row = by_symbol.get(candidate)
+        if isinstance(row, dict):
+            return candidate, row
+    return None
+
+
+def session_close_as_of(day: date) -> datetime:
+    return datetime.combine(day, dt_time(16, 0), NY).astimezone(UTC)
+
+
+def history_as_of(
+    *,
+    last_bar_date: date | None,
+    prior: date,
+    received: datetime,
+) -> datetime:
+    """Known-close stamp for daily history: last returned bar's 16:00 ET.
+
+    Calendar `prior` 16:00 is still in the future when a mid-session rehearsal
+    collects tomorrow's context while today is open. Using the last bar we
+    actually have, then clamping to receipt, keeps Evidence valid without
+    inventing a close that has not occurred.
+    """
+    known_day = last_bar_date if last_bar_date is not None else prior
+    close_at = session_close_as_of(known_day)
+    return close_at if close_at <= received else received
+
+
 def _expirations(body: Any) -> list[str]:
     raw = ((body or {}).get("expirations") or {}).get("date")
     if raw is None:
@@ -501,9 +562,13 @@ def collect_macro(
     tradier: ReadFeed,
     clock: Clock,
 ) -> tuple[list[Evidence], Coverage]:
-    symbols = list(dict.fromkeys([*config.context_symbols, *DEFAULT_MACRO_SYMBOLS]))
+    required = list(dict.fromkeys([*config.context_symbols, *DEFAULT_MACRO_SYMBOLS]))
+    logical = [symbol for symbol in required if not _is_vix_alias(symbol)]
+    if any(_is_vix_alias(symbol) for symbol in required):
+        logical.append("VIX")
+    quote_symbols = macro_quote_symbols(required)
     try:
-        rows = quotes(tradier, symbols)
+        rows = quotes(tradier, quote_symbols)
         received = clock()
     except ValueError as exc:
         return [], Coverage(
@@ -515,17 +580,35 @@ def collect_macro(
     records: list[Evidence] = []
     missing: list[str] = []
     delayed: list[str] = []
-    for symbol in symbols:
-        row = by_symbol.get(symbol)
-        if row is None:
-            missing.append(symbol)
-            continue
+    vix_resolved: str | None = None
+    for symbol in logical:
+        if symbol == "VIX":
+            resolved = resolve_vix_quote(by_symbol)
+            if resolved is None:
+                missing.append("VIX")
+                continue
+            symbol, row = resolved
+            vix_resolved = symbol
+        else:
+            found = by_symbol.get(symbol)
+            if found is None:
+                missing.append(symbol)
+                continue
+            row = found
         if row.get("delayed") not in (None, False):
             delayed.append(symbol)
         trade_at = row.get("trade_date") or row.get("bid_date") or row.get("ask_date")
         as_of = stamp(trade_at) if trade_at not in (None, "", 0, "0") else received
         if as_of > received:
             as_of = received
+        payload: dict[str, Any] = {
+            "quote": row,
+            "missing_instrument": False,
+            "delayed": bool(row.get("delayed")),
+        }
+        if symbol in VIX_QUOTE_CANDIDATES:
+            payload["vix_candidates"] = list(VIX_QUOTE_CANDIDATES)
+            payload["resolved_symbol"] = symbol
         records.append(
             Evidence(
                 evidence_id=f"macro:{symbol}",
@@ -539,13 +622,7 @@ def collect_macro(
                     f"{symbol} last={row.get('last')} bid={row.get('bid')} ask={row.get('ask')} "
                     f"delayed={row.get('delayed')}"
                 ),
-                payload=_drop_secret_keys(
-                    {
-                        "quote": row,
-                        "missing_instrument": False,
-                        "delayed": bool(row.get("delayed")),
-                    }
-                ),
+                payload=_drop_secret_keys(payload),
             )
         )
     if not records:
@@ -557,12 +634,18 @@ def collect_macro(
     status: CoverageStatus = "available"
     if missing or delayed:
         status = "partial"
+    vix_note = ""
+    if vix_resolved:
+        vix_note = f" vix={vix_resolved}."
+    elif "VIX" in missing:
+        vix_note = f" vix_candidates={list(VIX_QUOTE_CANDIDATES)}."
     return records, Coverage(
         category="macro",
         status=status,
         detail=(
             f"Tradier quotes for {len(records)} macro symbols. "
-            f"missing={missing or 'none'} delayed={delayed or 'none'}. "
+            f"missing={missing or 'none'} delayed={delayed or 'none'}."
+            f"{vix_note} "
             "Rates/USD/commodities beyond these tickers are not fetched."
         ),
     )
@@ -988,32 +1071,47 @@ def collect_history(
         closes = [float(row["close"]) for row in days if row.get("close") not in (None, "")]
         volumes = [int(row["volume"]) for row in days if row.get("volume") not in (None, "")]
         last = days[-1]
-        records.append(
-            Evidence(
-                evidence_id=f"history:{symbol}",
-                category="history",
-                symbols=[symbol],
-                source="tradier_production",
-                source_uri=SOURCE_TRADIER_HISTORY,
-                    as_of=datetime.combine(prior, dt_time(16, 0), NY).astimezone(UTC),
-                received_at=received,
-                summary=_summary(
-                    f"{symbol} prior session {last.get('date')} close={last.get('close')} "
-                    f"volume={last.get('volume')}"
-                ),
-                payload={
-                    "prior_session": prior.isoformat(),
-                    "excluded_on_or_after": session.isoformat(),
-                    "prior_close": last.get("close"),
-                    "prior_volume": last.get("volume"),
-                    "realized_vol_daily_log_ann": _realized_vol(closes),
-                    "realized_vol_label": "sample_stdev_log_return_from_prior_daily_closes",
-                    "volume_mean": (sum(volumes) / len(volumes)) if volumes else None,
-                    "volume_mean_label": "daily_volume_proxy_not_opening_print_volume",
-                    "bars": days,
-                },
-            )
+        last_date_raw = str(last.get("date") or "")
+        try:
+            last_bar_date = date.fromisoformat(last_date_raw)
+        except ValueError:
+            last_bar_date = None
+        as_of = history_as_of(
+            last_bar_date=last_bar_date, prior=prior, received=received
         )
+        close_at = session_close_as_of(last_bar_date or prior)
+        try:
+            records.append(
+                Evidence(
+                    evidence_id=f"history:{symbol}",
+                    category="history",
+                    symbols=[symbol],
+                    source="tradier_production",
+                    source_uri=SOURCE_TRADIER_HISTORY,
+                    as_of=as_of,
+                    received_at=received,
+                    summary=_summary(
+                        f"{symbol} prior session {last.get('date')} close={last.get('close')} "
+                        f"volume={last.get('volume')}"
+                    ),
+                    payload={
+                        "prior_session": prior.isoformat(),
+                        "last_bar_date": last_date_raw,
+                        "excluded_on_or_after": session.isoformat(),
+                        "prior_close": last.get("close"),
+                        "prior_volume": last.get("volume"),
+                        "as_of_clamped_to_receipt": close_at > received,
+                        "realized_vol_daily_log_ann": _realized_vol(closes),
+                        "realized_vol_label": "sample_stdev_log_return_from_prior_daily_closes",
+                        "volume_mean": (sum(volumes) / len(volumes)) if volumes else None,
+                        "volume_mean_label": "daily_volume_proxy_not_opening_print_volume",
+                        "bars": days,
+                    },
+                )
+            )
+        except ValueError:
+            missing.append(symbol)
+            continue
     if not records:
         return [], Coverage(
             category="history",
