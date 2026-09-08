@@ -38,7 +38,7 @@ from groktrading.research.cycle import (
     failure_from_exception,
     write_failure,
 )
-from groktrading.research.opening15 import NY, Config, Event, Packet, window
+from groktrading.research.opening15 import NY, Config, Event, Packet, now_utc, window
 from groktrading.research.registry import freeze_active, propose, seed_registry, set_status
 
 
@@ -888,7 +888,7 @@ def test_optional_collectors_timeout_does_not_abort_baseline(tmp_path: Path) -> 
             uw=None,  # type: ignore[arg-type]
             tradier=None,  # type: ignore[arg-type]
             news_events=[],
-            deadline=datetime(2026, 9, 8, 13, 30, tzinfo=UTC),
+            deadline=now_utc() + timedelta(seconds=5),
         )
     finally:
         collectors.write_expanded_context = original  # type: ignore[method-assign]
@@ -1069,7 +1069,6 @@ def test_uw_expanded_http_failure_does_not_abort_baseline(tmp_path: Path) -> Non
         httpx.Client(transport=httpx.MockTransport(handler)),
     )
     uw.interval = tradier.interval = 0
-    start, _ = window(date(2026, 9, 8))
     from groktrading.research.capture import isolate_optional_collectors
 
     isolate_optional_collectors(
@@ -1079,7 +1078,7 @@ def test_uw_expanded_http_failure_does_not_abort_baseline(tmp_path: Path) -> Non
         uw=uw,
         tradier=tradier,
         news_events=[],
-        deadline=start,
+        deadline=now_utc() + timedelta(minutes=2),
     )
     assert not (tmp_path / "context-failed.json").exists()
     context = Context.model_validate_json((tmp_path / "context.json").read_text())

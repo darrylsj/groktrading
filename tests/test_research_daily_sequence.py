@@ -30,6 +30,7 @@ def test_day_plan_sequence_creates_outcome_context_and_loads_failures(
     fixture = json.loads((tmp_path / "demo/decision.json").read_text())
     fixture.update(packet_hash=digest(packet.model_dump(mode="json")), synthetic=False)
     start, end = window(packet.session)
+    preopen = start - timedelta(minutes=10)
     root = tmp_path / "2026-09-08"
     root.mkdir()
     (root / "packet.json").write_text(json.dumps(packet.model_dump(mode="json")))
@@ -49,11 +50,12 @@ def test_day_plan_sequence_creates_outcome_context_and_loads_failures(
     expected_run = "research.cli run --session 2026-09-08 --output " + root.as_posix()
     assert plan["baseline"][-1].endswith(expected_run)
 
-    write_registry(root / "prompt-registry.json", seed_registry())
+    write_registry(root / "prompt-registry.json", seed_registry(preopen))
     ctx = context(packet)
     (root / "context.json").write_text(json.dumps(ctx.model_dump(mode="json")))
 
-    monkeypatch.setattr(cycle, "now_utc", lambda: start - timedelta(minutes=10))
+    monkeypatch.setattr(cycle, "now_utc", lambda: preopen)
+    monkeypatch.setattr(cycle_cli, "now_utc", lambda: preopen)
     monkeypatch.setattr(
         "sys.argv",
         ["cycle_cli", "memory", "--session", "2026-09-08", "--out", str(root / "memory.json")],

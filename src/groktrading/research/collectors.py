@@ -590,10 +590,11 @@ def collect_macro(
             symbol, row = resolved
             vix_resolved = symbol
         else:
-            row = by_symbol.get(symbol)
-            if row is None:
+            found = by_symbol.get(symbol)
+            if found is None:
                 missing.append(symbol)
                 continue
+            row = found
         if row.get("delayed") not in (None, False):
             delayed.append(symbol)
         trade_at = row.get("trade_date") or row.get("bid_date") or row.get("ask_date")
