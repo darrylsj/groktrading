@@ -192,6 +192,8 @@ Docs: https://finnhub.io/docs/api
 
 Surfaces used conceptually: **quotes, chains, balances, positions, orders, preview, clock, account events**.
 
+Opening15 macro VIX is requested as **`VIX`**, then **`I:VIX`**, then **`$VIX.X`**. Coverage is available only when Tradier returns one of those; the collector does not invent an index print. Sandbox has **no indices**.
+
 Sandbox (official market-data / FAQ docs): **~15-minute delayed** data, **no market-data stream**, **no Greeks**, **no indices**, **no tick timesales**; **account-event streaming is available**. **Production NBBO is pricing truth.**
 
 Docs: https://docs.tradier.com/docs/endpoints
