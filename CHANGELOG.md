@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Helsinki **sensor farm** P0 (package helpers; not a host deploy): append-only UW **flow ledger** (`groktrading.flow_ledger`, SQLite WAL) with `append_row` / `iter_recent` / `purge_older_than`; `sit_match` emit stays fail-closed on `executed_at` ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s). Tradier **account-events** parse/reconnect/backoff (`feeds/account_events.py`) records fills/cancels as **position truth** (stale `in_position` after flatten) and never places orders; example unit `groktrading-account-events.service` is files-only. **Box** cold-rotate deny-list + 7–14 day keep-hot + delete guard (`groktrading.box_rotate`, `scripts/box_cold_rotate.py`) — never upload `.env`/tokens; delete only after `--verified` or `--confirm-delete`. README / WEBSOCKETS / DEPLOY / OBSERVED_DEPLOYMENT / `install_helsinki.sh` notes: always-on listen vs Grok decide; hot ledger vs Box `daily/YYYY-MM-DD/`; Grok Update Computer does not rebuild Helsinki. After merge, deploy/restart Helsinki units separately. No live Tradier in CI; no credentials.
+
 ### Fixed
 
 - `sit_match` webhooks now fail closed on Unusual Whales print age: `executed_at` must parse (ISO-8601 `Z` or offset) and be ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable `executed_at` does not ping. Stale UW `option-trades` rows that linger in the rolling feed (debounce is still ~90s per OCC) no longer re-wake the desk after live Tradier ask has moved. Payload and candidates carry `executed_at`. Package emitter (`SignedWebhookSender`) and Grok inbox (`WebhookInbox`) share the gate. `ws_tape.py` is **not** in this tree and is **not** copied by `install_helsinki.sh` — after merge, an operator must apply the same check in the live Helsinki sit_match branch and **restart `trading-desk-tape`**. Tradier quote/order gates are unchanged. No live orders; no credentials.

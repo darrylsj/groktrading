@@ -105,4 +105,4 @@ Env files on a host: **root-owned, mode 0600**. Examples under `deploy/examples/
 
 ## This cloud agent
 
-Must not deploy to, SSH to, or restart Helsinki systemd units. Helsinki deploy of this hardening is a **follow-up**: copy `ws_tape` debounce/idempotency later; apply `sit_match` `executed_at` freshness (`SIT_MATCH_MAX_AGE_SEC`, default 60s) on the live tape; the operator must authorize any restart.
+Must not deploy to, SSH to, or restart Helsinki systemd units. Helsinki deploy of this hardening is a **follow-up**: copy `ws_tape` debounce/idempotency later; apply `sit_match` `executed_at` freshness (`SIT_MATCH_MAX_AGE_SEC`, default 60s) on the live tape; wire account-events / flow ledger / Box rotate only after an operator authorizes any restart. **Grok Update Computer does not rebuild Helsinki.**

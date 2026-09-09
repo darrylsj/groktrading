@@ -9,6 +9,7 @@ legacy Helsinki. They are not a live deployment and must not contain tokens.
 | `env/trading-desk.env.example` | Observed `/opt/trading-desk/.env` **key names** (`TRADIER_*`, `UW_API_KEY`, `TAPE_OUT`, `FLOW_SEC`). `YOUR_*` only. See [REBUILD_NEW_PROVIDER.md](../../docs/REBUILD_NEW_PROVIDER.md). |
 | `systemd/groktrading-finnhub.service` | Package Finnhub tape unit (`groktrading-finnhub-tape`). |
 | `systemd/groktrading-tape.service` | Package tape **skeleton** (`groktrading-tape`). **Not** `ws_tape.py`. |
+| `systemd/groktrading-account-events.service` | Tradier account-events **position truth** (never orders). Files only; not enabled by the installer. |
 | `systemd/webhook.env.conf` | Drop-in that loads `/etc/trading-desk/grok-webhook.env`. |
 
 Default unit names are `groktrading-*`. Observed live names are

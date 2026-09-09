@@ -96,6 +96,12 @@ def test_script_encodes_hard_rules() -> None:
         "ws_tape.py",
         "SIT_MATCH_MAX_AGE_SEC",
         "groktrading.sit_match",
+        "sensor farm",
+        "FLOW_LEDGER_PATH",
+        "account-events",
+        "box_cold_rotate",
+        "Grok Update Computer",
+        "STATE_DIR/ledger",
     ):
         assert needle in text, needle
 
@@ -114,6 +120,12 @@ def test_trading_desk_env_example_matches_observed_key_names() -> None:
         assert f"{key}=YOUR_" in text, key
     assert "SIT_MATCH_MAX_AGE_SEC" in text
     assert "60" in text
+    assert "FLOW_LEDGER_PATH" in text
+    assert "FLOW_LEDGER_KEEP_HOT_DAYS" in text
+    assert "BOX_ROTATE_KEEP_HOT_DAYS" in text
+    assert "BOX_ARCHIVE_PARENT" in text
+    assert "ACCOUNT_EVENTS_ENABLED" in text
+    assert "sensor farm" in text.lower()
     assert "AKIA" not in text
     for line in text.splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
@@ -142,6 +154,8 @@ def test_rebuild_new_provider_runbook_covers_operator_path() -> None:
         "not a deployment",
         "SIT_MATCH_MAX_AGE_SEC",
         "trading-desk-tape",
+        "sensor farm",
+        "Grok Update Computer",
     ):
         assert needle in text, needle
 
@@ -150,12 +164,16 @@ def test_example_units_are_package_named_and_secret_free() -> None:
     systemd = ROOT / "deploy" / "examples" / "systemd"
     finnhub = (systemd / "groktrading-finnhub.service").read_text(encoding="utf-8")
     tape = (systemd / "groktrading-tape.service").read_text(encoding="utf-8")
+    account = (systemd / "groktrading-account-events.service").read_text(encoding="utf-8")
     assert "groktrading-finnhub-tape" in finnhub
     assert "groktrading-tape" in tape
     assert "package_tape_skeleton.json" in tape
     assert "NOT trading-desk-tape.service" in tape
     assert "ws_tape.py" in tape
-    for text in (finnhub, tape):
+    assert "groktrading-account-events" in account
+    assert "never places orders" in account.lower()
+    assert "position truth" in account.lower()
+    for text in (finnhub, tape, account):
         assert "YOUR_" not in text
         assert "token=" not in text.lower()
         assert "GROKTRADING_LIVE_EXPLICITLY_ENABLED=true" not in text

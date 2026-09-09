@@ -53,6 +53,10 @@ Merging the Finnhub tape into the existing Tradier/UW `live_tape.json` is an **e
 
 Account-event WebSockets report broker session events. They are **not** a submit path. Sandbox market data is ~15-minute delayed. **Production NBBO is pricing truth.**
 
+**Position truth (package helper):** `feeds/account_events.py` parses `order` / `heartbeat` frames, reconnects with the same 1s ×2 / 60s cap as Finnhub, and updates a local symbol set so **`in_position` does not stay stale after flatten**. Material events (fill, partial, cancel, reject, expire) can signal webhook consumers to refresh. Missing symbol on a material event → fail-closed **REST refresh** flag. The helper **never** calls preview/submit. Example unit: `deploy/examples/systemd/groktrading-account-events.service` (installer copies the file; does **not** enable/start it). Live `ws_tape.py` is still host-owned.
+
+Helsinki **sensor farm**: always-on listen; **Grok Bot decides**. Hot UW rows live in `groktrading.flow_ledger` (7–14 days). Cold packs rotate to Box (`docs/BOX_ARCHIVE.md`). `sit_match` emission still requires `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s).
+
 ## Why WebSocket events never place live orders
 
 Three independent locks (code, not prose):
@@ -171,4 +175,5 @@ sequenceDiagram
 - [ ] Final gate rechecks **fresh Tradier production** quotes (not the tick that woke the loop).
 - [ ] Webhook event set and flags match the live card (`entry_cutoff_only_no_flatten`, `auto_flatten: false`).
 - [ ] Reconnect/backoff, TTL fail-closed, HMAC, and AH/weekend digest coalesce are described without host secrets.
+- [ ] Account-events documented as **position truth**, not a submit path.
 - [ ] No credentials, webhook URLs, or live account tokens appear in this page.

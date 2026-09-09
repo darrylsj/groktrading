@@ -18,6 +18,15 @@
 #   - Never replace live trading-desk-*.service unless the operator opts in.
 #   - sit_match freshness is groktrading.sit_match (executed_at ≤ 60s default).
 #     This script does not copy ws_tape.py; operator restart is required.
+#   - Helsinki is a sensor farm + append-only research DB: always-on listen,
+#     no LLM on the host, Grok Bot is the only decide/submit path.
+#   - Hot ledger (7–14 days) under STATE_DIR/ledger; Box cold-rotate of
+#     closed day packs. Never upload .env / tokens / credentials.
+#   - Account-events WS is position truth only (fixes stale in_position).
+#     The example unit is installed as files only — not enabled/started.
+#   - Reinstall must not clobber dest-only ws_tape.py or live env files.
+#     Merging this repo does not rebuild Helsinki. Grok Update Computer
+#     does not rebuild Helsinki. Operator SSH + systemd restart is required.
 #
 # Usage (as root):
 #   sudo ./scripts/install_helsinki.sh
@@ -58,6 +67,7 @@ DRY_RUN=0
 
 PACKAGE_FINNHUB_UNIT="groktrading-finnhub.service"
 PACKAGE_TAPE_UNIT="groktrading-tape.service"
+PACKAGE_ACCOUNT_EVENTS_UNIT="groktrading-account-events.service"
 LEGACY_FINNHUB_UNIT="trading-desk-finnhub.service"
 LEGACY_TAPE_UNIT="trading-desk-tape.service"
 
@@ -120,6 +130,15 @@ This installer never embeds or overwrites ws_tape.py. sit_match freshness
 the package (groktrading.sit_match). After merge, an operator must apply
 that gate in the live Helsinki sit_match branch and restart
 trading-desk-tape.
+
+Helsinki sensor farm (package helpers; host-owned live tape unchanged):
+  - Flow ledger: groktrading.flow_ledger (SQLite under STATE_DIR/ledger)
+  - Account-events: groktrading-account-events.service (files only; not
+    enabled/started). Position truth; WS never places orders.
+  - Box cold-rotate: scripts/box_cold_rotate.py — deny-list .env/tokens;
+    delete only after verified upload or --confirm-delete.
+  - Grok Update Computer does not rebuild Helsinki. SSH/systemd on the
+    host after merge. No LLM on Helsinki. No 10k universe spray.
 
 This installer never prints or requires API tokens.
 EOF
@@ -273,6 +292,7 @@ ensure_service_user() {
 ensure_dirs() {
   run install -d -m 0755 "${INSTALL_ROOT}"
   run install -d -m 0755 "${STATE_DIR}"
+  run install -d -m 0750 "${STATE_DIR}/ledger"
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "dry-run: would create ${ETC_DIR} mode 0700 (never overwrite *.env)"
     return 0
@@ -287,6 +307,8 @@ ensure_dirs() {
   if [[ "${DRY_RUN}" -ne 1 ]]; then
     chown "${SERVICE_USER}:${SERVICE_GROUP}" "${STATE_DIR}"
     chmod 0750 "${STATE_DIR}"
+    chown "${SERVICE_USER}:${SERVICE_GROUP}" "${STATE_DIR}/ledger"
+    chmod 0750 "${STATE_DIR}/ledger"
   fi
 }
 
@@ -474,6 +496,7 @@ Plan
   service user:   ${SERVICE_USER}:${SERVICE_GROUP}
   finnhub unit:   $(finnhub_unit_name)
   tape unit:      $(tape_unit_name)
+  account-events: ${PACKAGE_ACCOUNT_EVENTS_UNIT} (files only; not enabled/started)
   enable:         $([[ "${ENABLE}" -eq 1 ]] && echo yes || echo no)
   start:          $([[ "${START}" -eq 1 ]] && echo yes || echo no)
   adopt-legacy:   $([[ "${ADOPT_LEGACY_NAMES}" -eq 1 ]] && echo yes || echo no)
@@ -506,6 +529,15 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
   3. Review units (package names unless you passed --adopt-legacy-names):
        systemctl cat $(finnhub_unit_name)
        systemctl cat $(tape_unit_name)
+       systemctl cat ${PACKAGE_ACCOUNT_EVENTS_UNIT}
+     Account-events is installed as files only. Enable it only after
+     ACCOUNT_EVENTS_ENABLED=1 and a host-wired recv (position truth; no orders).
+
+  3b. Hot ledger / Box cold-rotate (no secrets):
+       FLOW_LEDGER_PATH=${STATE_DIR}/ledger/uw_flow.sqlite
+       python scripts/box_cold_rotate.py --src ${STATE_DIR}/ledger --dry-run
+       Closed day packs older than 7–14 days → Box daily/YYYY-MM-DD/.
+       Never upload .env / tokens. Delete only after --verified or --confirm-delete.
 
   4. Enable without starting:
        sudo ${SCRIPT_PATH} --enable
@@ -564,6 +596,7 @@ main() {
   ensure_venv_and_package
   install_unit_file "groktrading-finnhub.service" "$(finnhub_unit_name)"
   install_unit_file "groktrading-tape.service" "$(tape_unit_name)"
+  install_unit_file "groktrading-account-events.service" "${PACKAGE_ACCOUNT_EVENTS_UNIT}"
   install_webhook_dropin
   maybe_daemon_reload
   maybe_enable_start

@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from groktrading.feeds.account_events import NEVER_ORDERS_NOTE, AccountEventStreamState
 from groktrading.feeds.finnhub import (
     FINNHUB_REST_BASE,
     FinnhubStreamState,
@@ -105,6 +106,57 @@ def tape_skeleton_main(argv: list[str] | None = None) -> int:
         ),
     }
     write_json_atomic(Path(args.output), doc)
+    return 0
+
+
+def _account_events_enabled(env: dict[str, str] | None = None) -> bool:
+    source = os.environ if env is None else env
+    return str(source.get("ACCOUNT_EVENTS_ENABLED", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def account_events_main(argv: list[str] | None = None) -> int:
+    """Write position-truth state. Never connects to Tradier. Never places orders.
+
+    ``--listen`` stays resident and rewrites state. Live WS recv is host-wired
+    through ``ReconnectingAccountEventsClient`` — this CLI does not open a
+    Tradier socket (CI / default install stay offline).
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Tradier account-events position-truth helper. "
+            "WebSocket never places orders. This CLI does not submit."
+        )
+    )
+    parser.add_argument("--state", default="account_events.json")
+    parser.add_argument(
+        "--listen",
+        action="store_true",
+        help="Stay resident and rewrite state. Still does not open Tradier.",
+    )
+    args = parser.parse_args(argv)
+    enabled = _account_events_enabled()
+    state = AccountEventStreamState()
+    doc = state.state_document()
+    doc["mode"] = "signals_only"
+    doc["account_events_enabled"] = enabled
+    doc["listen_requested"] = bool(args.listen)
+    doc["live_socket"] = False
+    doc["note"] = NEVER_ORDERS_NOTE
+    write_json_atomic(Path(args.state), doc)
+    if not args.listen:
+        return 0
+    if not enabled:
+        return 0
+    # Enabled listen still refuses an implicit live Tradier connect.
+    print(
+        "account-events: ACCOUNT_EVENTS_ENABLED=1; package CLI still will not "
+        "open a Tradier socket. Wire ReconnectingAccountEventsClient on the host.",
+        file=sys.stderr,
+    )
     return 0
 
 

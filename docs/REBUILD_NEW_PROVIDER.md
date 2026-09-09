@@ -207,6 +207,11 @@ Do **not** point `INSTALL_ROOT` at `/opt/trading-desk` unless you pass
 `sit_match` freshness (`executed_at` ≤ `SIT_MATCH_MAX_AGE_SEC`, default 60s)
 is in `groktrading.sit_match`; copy that check into the live tape sit_match
 branch when you migrate `ws_tape.py`, then restart `trading-desk-tape`.
+Helsinki remains a **sensor farm** (always-on listen; Grok decides). Reinstall
+must keep: hot ledger under `/var/lib/trading-desk/ledger` (7–14 days), Box
+cold-rotate deny-list ([BOX_ARCHIVE.md](BOX_ARCHIVE.md)), and account-events
+as **position truth** only. `ws_tape.py` stays dest-only.
+**Grok Update Computer does not rebuild Helsinki.**
 
 ## D. Secret copy matrix
 

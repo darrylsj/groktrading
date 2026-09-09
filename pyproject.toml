@@ -45,6 +45,7 @@ groktrading-finnhub-probe = "groktrading.cli:finnhub_probe_main"
 groktrading-finnhub-tape = "groktrading.cli:finnhub_tape_main"
 groktrading-tape = "groktrading.cli:tape_skeleton_main"
 groktrading-schwab-oauth = "groktrading.brokers.schwab_oauth:main"
+groktrading-account-events = "groktrading.cli:account_events_main"
 
 [project.urls]
 Documentation = "https://github.com/darrylsj/groktrading"

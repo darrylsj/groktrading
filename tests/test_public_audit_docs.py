@@ -35,6 +35,18 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
     ):
         assert needle in head, needle
     assert "Live orders are never placed by default" in text
+    for needle in (
+        "Helsinki sensor farm",
+        "always-on listen",
+        "Grok Bot only",
+        "Box Trading Desk Archive",
+        "SIT_MATCH_MAX_AGE_SEC",
+        "position truth",
+        "Grok Update Computer does not rebuild Helsinki",
+        "flow_ledger",
+        "account_events",
+    ):
+        assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
     assert "Tradier live cash on the order of **$600**" not in text
 
@@ -63,6 +75,9 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "weekend",
         "sequenceDiagram",
         "preview",
+        "position truth",
+        "account_events",
+        "flow_ledger",
     ):
         assert needle in text, needle
 

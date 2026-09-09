@@ -21,3 +21,4 @@ def load(name: str, relative: str):
 
 
 scan_secrets = load("scan_secrets", "scripts/scan_secrets.py")
+box_cold_rotate_script = load("box_cold_rotate_script", "scripts/box_cold_rotate.py")
