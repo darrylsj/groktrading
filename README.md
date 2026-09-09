@@ -61,6 +61,37 @@ Verified 2026-09-05 SSH map (authoritative ops context, not a claim this commit 
 
 GitHub `main` was `e297a0af…` at map time. Package hardening ships here first. Copy debounce/idempotency onto Helsinki only after an **operator-authorized** restart.
 
+## Helsinki sensor farm
+
+Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is
+**always-on listen** with API keys on the host. It is **not** a decision engine
+and it is **not** an order router.
+
+| Role | Who |
+| --- | --- |
+| Listen / normalize / freshness / filter / signed webhook | **Helsinki** (no LLM) |
+| Decide / place orders | **Grok Bot only** |
+| Hot research window | SQLite / day packs on limited disk (**7–14 days**) |
+| Cold history | **Box Trading Desk Archive** (`daily/YYYY-MM-DD/…`, no secrets) |
+
+- **No LLM on Helsinki.** No 10k-universe spray. **WebSocket → orders is forbidden.**
+- **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
+  `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
+  emit. Package: `groktrading.sit_match`. Ledger may still **store** stale
+  prints for research (`groktrading.flow_ledger`).
+- **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
+  fills/cancels keep `in_position` honest after flatten. Never a submit path.
+  Package helper: `groktrading.feeds.account_events`. Example unit
+  `groktrading-account-events.service` is **files only** (not enabled by
+  `install_helsinki.sh`).
+- **Box cold-rotate:** `scripts/box_cold_rotate.py` + [docs/BOX_ARCHIVE.md](docs/BOX_ARCHIVE.md).
+  Deny-list blocks `.env` / tokens / credentials. Delete only after verified
+  upload or `--confirm-delete`.
+- **Recovery:** SSH + systemd on the host. **Merging this repo does not
+  deploy Helsinki.** **Grok Update Computer does not rebuild Helsinki.**
+  After merge, an operator must copy helpers into the live tape if needed and
+  restart `trading-desk-*` units separately. `ws_tape.py` stays host-owned.
+
 ## Architecture
 
 ![GrokTrading architecture](docs/groktrading-architecture.png)
@@ -246,8 +277,12 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/quote_gate.py` | P0.1 production quote validation |
 | `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
 | `src/groktrading/idempotency.py` | Durable inbox/outbox (SQLite WAL) |
+| `src/groktrading/flow_ledger.py` | Append-only UW flow ledger (SQLite); sit_match emit stays fail-closed |
+| `src/groktrading/feeds/account_events.py` | Tradier account-events parse/backoff; position truth; never orders |
+| `src/groktrading/box_rotate.py` | Box cold-rotate deny-list + 7–14d keep-hot + delete guard |
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
 | `docs/WEBSOCKETS.md` | Auditor WS/webhook map (Finnhub ≠ option NBBO; WS never orders) |
+| `docs/BOX_ARCHIVE.md` | Hot ledger vs Box `daily/YYYY-MM-DD/` cold archive |
 | `docs/OPENAI_AUDIT_BRIEF.md` | What to review / what not to change / $25k YOLO ask |
 | `docs/CLAUDE_AUDIT.md` | External Claude audit: live card, Opening15 paper path, APIs, local tests |
 | `src/groktrading/llm.py` | Decision protocol (approve/skip only) |

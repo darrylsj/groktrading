@@ -1,0 +1,32 @@
+# Example package account-events unit (position truth only).
+# Installed as groktrading-account-events.service (files only).
+# The installer does NOT enable or start this unit by default.
+# This is NOT a live order path. WebSocket never places orders.
+# Purpose: keep local in_position honest after flatten / cancel / fill.
+# Grok Bot is the only place that decides or submits.
+# Set ACCOUNT_EVENTS_ENABLED=1 in the env file after the operator wires
+# ReconnectingAccountEventsClient on the host. This package CLI does not
+# open a Tradier socket (no live Tradier in CI; no implicit connect).
+# Do not embed tokens in this file.
+
+[Unit]
+Description=GrokTrading Tradier account-events (position truth; never orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=-/etc/trading-desk/groktrading.env
+EnvironmentFile=-/etc/trading-desk/tradier-live.env
+EnvironmentFile=-/etc/trading-desk/tradier-sandbox.env
+ExecStart=/opt/groktrading/.venv/bin/groktrading-account-events --state /var/lib/trading-desk/account_events.json --listen
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

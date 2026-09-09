@@ -9,6 +9,8 @@ Fail closed: missing or unparseable ``executed_at`` must not emit or consume a
 ``sit_match``. Age must be ≤ ``SIT_MATCH_MAX_AGE_SEC`` (default 60). This module
 is the in-repo source of truth for that gate. Apply the same check in the live
 ``ws_tape`` sit_match branch; ``install_helsinki.sh`` does not copy ``ws_tape.py``.
+The append-only flow ledger (``groktrading.flow_ledger``) may store stale
+prints for research; emission still uses this gate.
 
 Does not change Tradier quote / order gates.
 """

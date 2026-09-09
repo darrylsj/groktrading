@@ -72,6 +72,16 @@ The package exposes `groktrading-finnhub-tape` and `groktrading-tape`.
 legacy `/opt/trading-desk/ws_tape.py`. Wiring UW + Tradier into a live tape
 and merging Finnhub ticks into that tape remain **separate operator steps**.
 
+**Helsinki sensor farm (package, not auto-deploy):** always-on listen; no LLM on
+the host; **Grok Bot is the only decide/submit path**. Hot ledger
+(`groktrading.flow_ledger`) under `/var/lib/trading-desk/ledger` (7–14 days).
+Closed day packs rotate to Box Trading Desk Archive
+([BOX_ARCHIVE.md](BOX_ARCHIVE.md)). Account-events unit
+`groktrading-account-events.service` is installed as **files only** — position
+truth, **WS never places orders**. `install_helsinki.sh` does not enable or
+start that unit. **Grok Update Computer does not rebuild Helsinki**; after
+merge, SSH and restart live units yourself.
+
 **`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than
 `SIT_MATCH_MAX_AGE_SEC` (default 60s) and puts `executed_at` on the webhook
@@ -225,6 +235,7 @@ cutover flags above.
 ## Related
 
 - Different-provider full rebuild: [REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md)
+- Box cold archive: [BOX_ARCHIVE.md](BOX_ARCHIVE.md)
 - Examples: [deploy/examples](../deploy/examples)
 - Permissions: [deploy/examples/PERMISSIONS.md](../deploy/examples/PERMISSIONS.md)
 - Operating model: [OPERATING_MODEL.md](OPERATING_MODEL.md)
