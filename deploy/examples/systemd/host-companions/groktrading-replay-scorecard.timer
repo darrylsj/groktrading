@@ -1,0 +1,12 @@
+# Daily after US cash close: 21:10 UTC = 2:10pm PT (PDT) / 1:10pm PT (PST).
+
+[Unit]
+Description=Daily GrokTrading replay scorecard after close (21:10 UTC)
+
+[Timer]
+OnCalendar=*-*-* 21:10:00 UTC
+Persistent=true
+Unit=groktrading-replay-scorecard.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,25 @@
+# Companion UW option-trades -> hot flow ledger.
+# Does NOT place orders or emit webhooks. Does NOT modify trading-desk-tape sit_match.
+# FLOW_LEDGER_PATH is non-secret. Never embed tokens in this unit.
+
+[Unit]
+Description=GrokTrading UW flow ledger companion (append-only; never orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=/opt/trading-desk/.env
+Environment=FLOW_LEDGER_PATH=/var/lib/trading-desk/ledger/uw_flow.sqlite
+Environment=FLOW_LEDGER_POLL_SEC=8
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/flow_ledger_companion.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

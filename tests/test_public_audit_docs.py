@@ -49,6 +49,8 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
         "tide_state",
         "UW_WS_URL",
         "wire companion units",
+        "host-companions",
+        "emit_sit_match=False",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.

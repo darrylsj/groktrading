@@ -1,0 +1,25 @@
+# Host companion: RTH UW option-screener snapshot → screener_state.json.
+# rth_only=True (library no-ops write outside RTH). Never sit_match spray.
+
+[Unit]
+Description=GrokTrading UW screener companion (RTH snapshot; never orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=/opt/trading-desk/.env
+EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+Environment=SCREENER_STATE_PATH=/var/lib/trading-desk/state/screener_state.json
+Environment=SCREENER_POLL_SEC=600
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/screener_companion.py
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

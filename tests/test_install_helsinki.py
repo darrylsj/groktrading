@@ -107,6 +107,8 @@ def test_script_encodes_hard_rules() -> None:
         "UW_WS_URL",
         "Merge ≠ Helsinki",
         "companion units",
+        "host-companions",
+        "emit_sit_match=False",
     ):
         assert needle in text, needle
 
@@ -181,7 +183,29 @@ def test_example_units_are_package_named_and_secret_free() -> None:
     assert "groktrading-account-events" in account
     assert "never places orders" in account.lower()
     assert "position truth" in account.lower()
-    for text in (finnhub, tape, account):
+    companions = ROOT / "deploy" / "examples" / "systemd" / "host-companions"
+    companion_texts = [
+        (companions / name).read_text(encoding="utf-8")
+        for name in (
+            "groktrading-flow-ledger.service",
+            "groktrading-flow-alerts.service",
+            "groktrading-tide.service",
+            "groktrading-screener.service",
+            "groktrading-quote-interest.service",
+            "groktrading-replay-scorecard.service",
+            "groktrading-replay-scorecard.timer",
+        )
+    ]
+    assert "emit_sit_match=False" in companion_texts[1]
+    assert "no Grok webhook" in companion_texts[1]
+    assert "scripts/flow_ledger_companion.py" in companion_texts[0]
+    install_text = SCRIPT.read_text(encoding="utf-8")
+    assert "scripts/flow_alerts_companion.py" not in install_text
+    assert "host-companions" in install_text
+    assert "does not copy, enable, or start" in install_text
+    for text in (finnhub, tape, account, *companion_texts):
         assert "YOUR_" not in text
         assert "token=" not in text.lower()
         assert "GROKTRADING_LIVE_EXPLICITLY_ENABLED=true" not in text
+        assert "Authorization: Bearer" not in text
+        assert "Bearer ey" not in text

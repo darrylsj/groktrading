@@ -1,0 +1,16 @@
+# One-shot: deterministic replay scorecard over hot flow ledger. No PnL. No network.
+
+[Unit]
+Description=GrokTrading flow-ledger replay scorecard (one-shot; never orders)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=-/opt/trading-desk/.env
+ExecStart=/opt/groktrading/.venv/bin/groktrading-replay-scorecard --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite --output /var/lib/trading-desk/state/replay_scorecard.json
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

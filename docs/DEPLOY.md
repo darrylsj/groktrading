@@ -85,9 +85,19 @@ start that unit. **Do not auto-start account-events.**
 tide/net-prem state (`STATE_DIR/tide_state.json`), Tradier quote interest
 (host must wire `ws_tape.py`), thin RTH screener snapshot, shadow minute-marks,
 `UW_WS_URL` probe (fail-closed if unset), Finnhub watch widen, replay
-scorecard CLI. **Merge ≠ Helsinki restart.** Wire companion units yourself;
-the installer does not enable them. **Grok Update Computer does not rebuild
-Helsinki**; after merge, SSH and restart live units yourself.
+scorecard CLI. Package CLIs are **offline skeletons**.
+
+**Host companions (repo artifacts; operator-wired):** live **urllib**
+pollers matching Helsinki 2026-09-08 in `scripts/` (`UrllibHttp`, not httpx)
+plus example units under
+[`deploy/examples/systemd/host-companions/`](../deploy/examples/systemd/host-companions/).
+urllib GETs do not follow redirects. **`install_helsinki.sh` does not copy,
+enable, or start those units.**
+**Merge ≠ Helsinki restart.** Account-events stays **files-only / disabled**.
+Companions keep **`emit_sit_match=False`**. Flow-alerts material is local
+JSONL only (no Grok webhook). Authorization Bearer is runtime env only.
+**Grok Update Computer does not rebuild Helsinki**; after merge, SSH and
+restart live units yourself.
 
 **`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than

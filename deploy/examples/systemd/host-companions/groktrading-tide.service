@@ -1,0 +1,27 @@
+# Host companion: UW market-tide (+ optional TIDE_NET_PREM_SYMBOLS) → tide_state.json.
+# Calls write_tide_state. Never places orders. Never sit_match spray.
+
+[Unit]
+Description=GrokTrading UW tide/net-prem companion (host poll; never orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=/opt/trading-desk/.env
+EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+Environment=TIDE_STATE_PATH=/var/lib/trading-desk/state/tide_state.json
+Environment=TIDE_POLL_SEC=180
+# Optional comma list; library caps symbols. Empty = tide only.
+# Environment=TIDE_NET_PREM_SYMBOLS=SPY
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/tide_companion.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
