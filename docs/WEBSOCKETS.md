@@ -32,7 +32,7 @@ Helsinki observation (not this commit): `trading-desk-finnhub` writes `finnhub_t
 - Unusual Whales **REST options flow** (ask-side prints, premium, volume, OI as published).
 - Tradier **production** quotes / balances / positions / orders / clock used by the tape writer.
 - Writes `live_tape.json`.
-- **This is not** the package `groktrading-tape` skeleton (`package_tape_skeleton.json`). `ws_tape.py` is **not** in this git tree.
+- **This is not** the package `groktrading-tape` skeleton (`package_tape_skeleton.json`). `ws_tape.py` is **not** in this git tree. `sit_match` freshness lives in `groktrading.sit_match` (package emitter + inbox). After merge, an operator must apply the same gate in the live Helsinki `ws_tape` sit_match branch and restart `trading-desk-tape`. `install_helsinki.sh` does not copy or replace `ws_tape.py`.
 
 ### Package `feeds/` (reference, injectable, fail-closed)
 
@@ -71,7 +71,7 @@ Helsinki pushes **material events only**. No LLM polling.
 
 | Event | Meaning on the live card |
 | --- | --- |
-| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip |
+| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/`executed_at` older than the cap → **do not emit**. Payload includes `executed_at`. 90s per-OCC debounce is not a freshness gate — stale UW rows can linger for hours. |
 | `in_position` | Broker already holds the OCC / underlying — do not spray a second entry |
 | `cash_up` | 12:30 PT **entry-cutoff** notice. Flag: `entry_cutoff_only_no_flatten`. Existing overnight longs stay. |
 | `day_win_target` | Informational. `auto_flatten: false` — **not** a liquidation trigger |
@@ -97,6 +97,7 @@ Helsinki’s `finnhub_adapter.py` is the live writer; this module is the referen
 - Candidate TTL expiry → `TTL_EXPIRED`.
 - Stale or missing Tradier production quote fields → quote-gate reasons (missing fields, delayed, sandbox, OCC mismatch, future timestamps, wide spread, no-chase).
 - Timeouts on UW/Tradier/Finnhub HTTP **fail closed** (no guessed series, no guessed NBBO).
+- **`sit_match` print age (emitter + inbox):** `groktrading.sit_match` requires `executed_at` and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60). This is **not** a Tradier order-gate change. Webhooks now carry `executed_at` so a consumer can reject stale facts the same way. Helsinki `ws_tape.py` must apply this before POST; merging this repo does not restart the host.
 
 ### Signed webhook
 

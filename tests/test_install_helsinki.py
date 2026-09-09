@@ -94,6 +94,8 @@ def test_script_encodes_hard_rules() -> None:
         "/opt/groktrading",
         "/opt/trading-desk",
         "ws_tape.py",
+        "SIT_MATCH_MAX_AGE_SEC",
+        "groktrading.sit_match",
     ):
         assert needle in text, needle
 
@@ -110,6 +112,8 @@ def test_trading_desk_env_example_matches_observed_key_names() -> None:
         "FLOW_SEC",
     ):
         assert f"{key}=YOUR_" in text, key
+    assert "SIT_MATCH_MAX_AGE_SEC" in text
+    assert "60" in text
     assert "AKIA" not in text
     for line in text.splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
@@ -136,6 +140,8 @@ def test_rebuild_new_provider_runbook_covers_operator_path() -> None:
         "Finnhub ≠ option NBBO",
         "WebSocket never places orders",
         "not a deployment",
+        "SIT_MATCH_MAX_AGE_SEC",
+        "trading-desk-tape",
     ):
         assert needle in text, needle
 

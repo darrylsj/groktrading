@@ -204,6 +204,9 @@ If you will also run the **legacy** tree (required for today’s behavior),
 create the dest dir **empty** and copy scripts in [E](#e-code-migration-options).
 Do **not** point `INSTALL_ROOT` at `/opt/trading-desk` unless you pass
 `--allow-legacy-root` and understand that still does not port `ws_tape.py`.
+`sit_match` freshness (`executed_at` ≤ `SIT_MATCH_MAX_AGE_SEC`, default 60s)
+is in `groktrading.sit_match`; copy that check into the live tape sit_match
+branch when you migrate `ws_tape.py`, then restart `trading-desk-tape`.
 
 ## D. Secret copy matrix
 

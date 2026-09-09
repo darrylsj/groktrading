@@ -28,6 +28,11 @@
     "already_run": { "type": "boolean" },
     "created_ts": { "type": "string", "format": "date-time" },
     "ttl_seconds": { "type": "number", "exclusiveMinimum": 0 },
-    "from_websocket": { "type": "boolean" }
+    "from_websocket": { "type": "boolean" },
+    "executed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "UW option-trades print time. Required on sit_match webhooks; age ≤ SIT_MATCH_MAX_AGE_SEC."
+    }
   }
 }

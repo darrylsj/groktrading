@@ -16,6 +16,8 @@
 #   - Default = install files only. --enable and --start are explicit.
 #   - Never silently overwrite live /opt/trading-desk scripts.
 #   - Never replace live trading-desk-*.service unless the operator opts in.
+#   - sit_match freshness is groktrading.sit_match (executed_at ≤ 60s default).
+#     This script does not copy ws_tape.py; operator restart is required.
 #
 # Usage (as root):
 #   sudo ./scripts/install_helsinki.sh
@@ -113,6 +115,11 @@ Environment (safe defaults):
 The package does not expose a CLI equivalent to legacy ws_tape.py /
 tape_poller.py. groktrading-tape writes a signals-only skeleton only.
 Migrating the live UW+Tradier tape is a separate operator step.
+This installer never embeds or overwrites ws_tape.py. sit_match freshness
+(SIT_MATCH_MAX_AGE_SEC, default 60s, executed_at on the payload) lives in
+the package (groktrading.sit_match). After merge, an operator must apply
+that gate in the live Helsinki sit_match branch and restart
+trading-desk-tape.
 
 This installer never prints or requires API tokens.
 EOF
