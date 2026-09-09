@@ -136,7 +136,8 @@ def draft_from_uw_row(
         _first(payload, "ticker", "underlying", "ticker_symbol"), "ticker"
     ).upper()
     occ = _require_text(
-        _first(payload, "occ", "option_symbol", "option_chain_id"), "occ"
+        _first(payload, "occ", "option_symbol", "option_chain_id", "option_chain"),
+        "occ",
     ).upper()
     print_px = _require_price(
         _first(payload, "print", "price", "trade_price", "avg_price"), "print"

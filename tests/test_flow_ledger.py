@@ -81,6 +81,29 @@ def test_flow_alerts_source_and_uw_aliases() -> None:
     assert row.raw_digest == flow_digest(payload)
 
 
+def test_flow_alerts_append_row_maps_option_chain() -> None:
+    """Live UW flow-alerts rows use option_chain (not occ / option_symbol / option_chain_id)."""
+    payload = {
+        "option_chain": "spxw260930p07500000",
+        "created_at": "2026-09-09T16:29:50Z",
+        "ticker": "SPXW",
+        "price": "1.25",
+        "ask": "1.30",
+        "type": "Puts",
+    }
+    ledger = FlowLedger(":memory:", clock=FrozenClock(NOW))
+    row = ledger.append_row(payload, source="flow-alerts")
+    assert row.source == "flow-alerts"
+    assert row.occ == "SPXW260930P07500000"
+    assert row.ticker == "SPXW"
+    assert row.print == "1.25"
+    assert row.nbbo_ask == "1.30"
+    assert row.option_type == "put"
+    stored = list(ledger.iter_recent(limit=5, source="flow-alerts"))
+    assert len(stored) == 1
+    assert stored[0].occ == "SPXW260930P07500000"
+
+
 def test_append_fail_closed_on_bad_clock_or_source() -> None:
     with pytest.raises(FlowLedgerError):
         draft_from_uw_row(_sample(executed_at="not-a-time"), ingested_at=NOW)

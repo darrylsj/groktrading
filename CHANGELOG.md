@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- Flow ledger maps live UW **flow-alerts** OCC from `option_chain` (e.g. `SPXW260930P07500000`) in addition to `occ` / `option_symbol` / `option_chain_id`. Companion polls no longer store `0` with `FlowLedgerError: missing_occ`. sit_match emit is unchanged; account-events stays off. No live network in CI.
+
 ### Added
 
 - Helsinki **sensor farm** P1 + P2 (package helpers; **not** a host deploy or auto-restart): UW **flow-alerts** poller (`feeds/flow_alerts.py`, 15–30s) appends `source=flow-alerts` and emits material only on a **new alert id**; sit_match-shaped rows reuse `sit_match` freshness. Slow **tide + optional net-prem** writer (`feeds/tide_state.py`, 1–5 min) → `tide_state.json`. Bounded **Tradier quote interest** (`feeds/quote_subscribe.py`, max 40, drop idle) — live `ws_tape.py` stays host-owned. Thin **RTH screener snapshot** (`feeds/screener_snapshot.py`, 5–15 min) does **not** spray `sit_match`. **Shadow minute-marks** (`feeds/shadow_marks.py`) poll Tradier quotes for an OCC book; no orders. **`UW_WS_URL` probe stub** (`feeds/uw_ws.py`) fail-closes if unset and does not invent a subscribe protocol. **Finnhub watch widen** (cap 16–40) + overnight `/company-news` for those symbols only (Finnhub ≠ option NBBO). **Replay scorecard** (`replay_scorecard.py`) counts first-print / already-run / stale-filtered; `pnl` is always null. CLIs are offline skeletons. README / WEBSOCKETS / DEPLOY / env knobs: merge ≠ Helsinki restart; wire companion units separately; do not auto-start account-events. No live network in CI; no credentials.
