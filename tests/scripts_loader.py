@@ -22,3 +22,9 @@ def load(name: str, relative: str):
 
 scan_secrets = load("scan_secrets", "scripts/scan_secrets.py")
 box_cold_rotate_script = load("box_cold_rotate_script", "scripts/box_cold_rotate.py")
+helsinki_http = load("helsinki_http", "scripts/helsinki_http.py")
+flow_ledger_companion = load("flow_ledger_companion", "scripts/flow_ledger_companion.py")
+flow_alerts_companion = load("flow_alerts_companion", "scripts/flow_alerts_companion.py")
+tide_companion = load("tide_companion", "scripts/tide_companion.py")
+screener_companion = load("screener_companion", "scripts/screener_companion.py")
+quote_interest_companion = load("quote_interest_companion", "scripts/quote_interest_companion.py")

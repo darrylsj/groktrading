@@ -63,7 +63,7 @@ Account-event WebSockets report broker session events. They are **not** a submit
 
 Helsinki **sensor farm**: always-on listen; **Grok Bot decides**. Hot UW rows live in `groktrading.flow_ledger` (7–14 days). Cold packs rotate to Box (`docs/BOX_ARCHIVE.md`). `sit_match` emission still requires `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s).
 
-**P0 is merged** (flow ledger, account-events helper, Box rotate, sit_match freshness). **P1/P2 landed as package helpers** — not a claim they are running on live Helsinki. **Merging this repo does not restart Helsinki.** Companion pollers (flow-alerts, tide, screener, shadow marks) must be **wired by the operator** into host units. Live `ws_tape.py` stays host-owned: the quote interest helper only maintains a symbol set. The replay scorecard reads the hot ledger and optional marks; it never invents PnL.
+**P0 is merged** (flow ledger, account-events helper, Box rotate, sit_match freshness). **P1/P2 landed as package helpers** — package CLIs are offline skeletons, not a claim they are running on live Helsinki. **Merging this repo does not restart Helsinki.** Host companion scripts live under `scripts/` with example units in `deploy/examples/systemd/host-companions/`. They are **operator-wired**; `install_helsinki.sh` does **not** enable them. **`emit_sit_match=False`.** Flow-alerts does **not** fire a webhook firehose by default. Account-events stays **files-only / disabled**. Live `ws_tape.py` stays host-owned: the quote interest helper only maintains a symbol set. shadow marks stay package-only. The replay scorecard reads the hot ledger and optional marks; it never invents PnL.
 
 **UW WebSocket:** if the plan supports it, set `UW_WS_URL` (typically `wss://api.unusualwhales.com/socket`) and fetch the live channel catalog (`feeds/uw_ws.py` documents the URL). Unset → fail-closed. This package does not invent subscribe frames.
 
@@ -187,6 +187,6 @@ sequenceDiagram
 - [ ] Webhook event set and flags match the live card (`entry_cutoff_only_no_flatten`, `auto_flatten: false`).
 - [ ] Reconnect/backoff, TTL fail-closed, HMAC, and AH/weekend digest coalesce are described without host secrets.
 - [ ] Account-events documented as **position truth**, not a submit path.
-- [ ] P1/P2 helpers documented as **package-only**; merge ≠ Helsinki restart.
+- [ ] P1/P2 helpers documented as **package-only**; host companions are **operator-wired**; merge ≠ Helsinki restart.
 - [ ] `UW_WS_URL` fail-closed if unset; no invented socket protocol.
 - [ ] No credentials, webhook URLs, or live account tokens appear in this page.

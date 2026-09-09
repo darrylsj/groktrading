@@ -72,18 +72,18 @@ include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-pythonpath = ["src", "tests"]
+pythonpath = ["src", "tests", "scripts"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["groktrading", "helpers"]
+known-first-party = ["groktrading", "helpers", "helsinki_http"]
 
 [tool.mypy]
 python_version = "3.11"

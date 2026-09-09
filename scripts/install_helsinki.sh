@@ -24,6 +24,9 @@
 #     closed day packs. Never upload .env / tokens / credentials.
 #   - Account-events WS is position truth only (fixes stale in_position).
 #     The example unit is installed as files only — not enabled/started.
+#   - Host companions under deploy/examples/systemd/host-companions/ are
+#     operator-wired only. This installer does not copy, enable, or start
+#     them. emit_sit_match=False. No webhook firehose from flow-alerts.
 #   - Reinstall must not clobber dest-only ws_tape.py or live env files.
 #     Merging this repo does not rebuild Helsinki. Grok Update Computer
 #     does not rebuild Helsinki. Operator SSH + systemd restart is required.
@@ -139,7 +142,11 @@ Helsinki sensor farm (package helpers; host-owned live tape unchanged):
   - P1/P2 package helpers (flow-alerts, tide_state, quote interest,
     screener snapshot, shadow marks, UW_WS_URL probe, Finnhub widen,
     replay scorecard) are not installed as live units. Merge ≠ Helsinki
-    restart. Wire companion units separately. Live ws_tape.py is host-owned.
+    restart. Wire companion units separately. Host companion examples:
+    deploy/examples/systemd/host-companions/ (operator-wired only;
+    this installer does not copy, enable, or start them).
+    emit_sit_match=False. No webhook firehose from flow-alerts.
+    Live ws_tape.py is host-owned.
   - Box cold-rotate: scripts/box_cold_rotate.py — deny-list .env/tokens;
     delete only after verified upload or --confirm-delete.
   - Grok Update Computer does not rebuild Helsinki. SSH/systemd on the
@@ -537,8 +544,12 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
        systemctl cat ${PACKAGE_ACCOUNT_EVENTS_UNIT}
      Account-events is installed as files only. Enable it only after
      ACCOUNT_EVENTS_ENABLED=1 and a host-wired recv (position truth; no orders).
-     Do not auto-start account-events. P1/P2 companions (flow-alerts, tide,
-     screener, shadow marks) are package CLIs only — wire units separately.
+     Do not auto-start account-events. P1/P2 package CLIs stay offline
+     skeletons. Host companions (flow-ledger, flow-alerts, tide, screener,
+     quote-interest, replay-scorecard) are examples under
+     deploy/examples/systemd/host-companions/ — wire them yourself.
+     This installer does not copy, enable, or start those units.
+     emit_sit_match=False. No webhook firehose from flow-alerts by default.
      Merge ≠ Helsinki restart. Live ws_tape.py stays host-owned.
 
   3b. Hot ledger / Box cold-rotate (no secrets):

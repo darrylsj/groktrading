@@ -1,0 +1,26 @@
+# Example host companion unit. NOT installed or enabled by install_helsinki.sh.
+# Operator-wired only. Merge ≠ Helsinki restart.
+# Account-events stays files-only / disabled.
+# Live ws_tape.py is host-owned. This unit never opens a Tradier socket.
+# emit_sit_match=False. Never places orders. Do not embed tokens.
+
+[Unit]
+Description=GrokTrading host companion: Tradier quote interest from flow ledger
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=-/etc/trading-desk/groktrading.env
+EnvironmentFile=-/etc/trading-desk/tradier-live.env
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/quote_interest_companion.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

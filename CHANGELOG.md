@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Helsinki **host companions** as first-class repo artifacts (secret-free): live pollers `scripts/helsinki_http.py`, `flow_ledger_companion.py`, `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`, `quote_interest_companion.py` (executable). Example units under `deploy/examples/systemd/host-companions/` (flow-ledger, flow-alerts, tide, screener, quote-interest, replay-scorecard service + timer). **`install_helsinki.sh` does not copy, enable, or start them.** Operator-wired only. **Merge ≠ Helsinki restart.** Account-events stays files-only / disabled. **`emit_sit_match=False`.** No webhook firehose from flow-alerts by default. Authorization Bearer is runtime env only. Never-orders comments preserved. No live network in CI; no credentials.
+
 ### Fixed
 
 - Flow ledger maps live UW **flow-alerts** OCC from `option_chain` (e.g. `SPXW260930P07500000`) in addition to `occ` / `option_symbol` / `option_chain_id`. Companion polls no longer store `0` with `FlowLedgerError: missing_occ`. sit_match emit is unchanged; account-events stays off. No live network in CI.

@@ -81,7 +81,15 @@ and it is **not** an order router.
   **new alert id**), tide + optional net-prem `tide_state.json`, bounded Tradier quote
   interest, thin RTH screener snapshot, shadow minute-marks, `UW_WS_URL`
   probe stub, Finnhub watch widen + overnight news, replay scorecard
-  skeleton. Not a claim these processes are live on Helsinki.
+  skeleton. Package CLIs stay **offline skeletons**.
+- **Host companions (repo artifacts, operator-wired):** live pollers under
+  `scripts/` (`helsinki_http.py`, `flow_ledger_companion.py`,
+  `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`,
+  `quote_interest_companion.py`) plus example units in
+  `deploy/examples/systemd/host-companions/`. **`install_helsinki.sh` does
+  not copy, enable, or start them.** **emit_sit_match=False.** No webhook
+  firehose from flow-alerts by default. Authorization Bearer is runtime env
+  only. Not a claim these processes are live on Helsinki.
 - **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
   emit. Package: `groktrading.sit_match`. Ledger may still **store** stale
@@ -98,7 +106,9 @@ and it is **not** an order router.
 - **Recovery:** SSH + systemd on the host. **Merging this repo does not
   deploy Helsinki** and does **not** restart live units. **Grok Update Computer does not rebuild Helsinki.** After merge, an operator must copy
   helpers into the live tape if needed and **wire companion units
-  separately**. `ws_tape.py` stays host-owned.
+  separately** (copy `deploy/examples/systemd/host-companions/` yourself).
+  `ws_tape.py` stays host-owned. Account-events stays **files-only /
+  disabled**. **Merge ≠ Helsinki restart.**
 
 ## Architecture
 
@@ -293,6 +303,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/feeds/shadow_marks.py` | P2 shadow minute-marks (quotes only; no orders) |
 | `src/groktrading/feeds/uw_ws.py` | P2 `UW_WS_URL` probe stub; fail-closed if unset; no invented protocol |
 | `src/groktrading/replay_scorecard.py` | P2 ledger replay counts (first-print / already-run / stale); no PnL |
+| `scripts/*_companion.py` | Host live pollers (secret-free). Operator-wired; not auto-enabled |
+| `deploy/examples/systemd/host-companions/` | Example companion units + replay-scorecard timer (not installer-managed) |
 | `src/groktrading/feeds/account_events.py` | Tradier account-events parse/backoff; position truth; never orders |
 | `src/groktrading/box_rotate.py` | Box cold-rotate deny-list + 7–14d keep-hot + delete guard |
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |

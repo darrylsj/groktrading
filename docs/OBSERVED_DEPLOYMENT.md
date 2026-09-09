@@ -30,7 +30,10 @@ interest, screener snapshot, shadow marks, UW_WS probe, Finnhub widen,
 replay scorecard) ship as helpers here. Observed host still has no `.git`
 under `/opt/trading-desk` and still does not run this commit until an
 operator cutover. **Merging this repo does not restart Helsinki.** Wire
-companion units separately. **Grok Update Computer does not rebuild Helsinki.**
+companion units separately (`deploy/examples/systemd/host-companions/` —
+not auto-enabled). Account-events stays files-only / disabled.
+`emit_sit_match=False`. No webhook firehose from flow-alerts by default.
+**Grok Update Computer does not rebuild Helsinki.**
 
 ## What was observed
 
