@@ -75,22 +75,30 @@ and it is **not** an order router.
 | Cold history | **Box Trading Desk Archive** (`daily/YYYY-MM-DD/…`, no secrets) |
 
 - **No LLM on Helsinki.** No 10k-universe spray. **WebSocket → orders is forbidden.**
+- **P0 (merged):** append-only `flow_ledger`, Tradier **account-events**
+  position-truth helper, Box cold-rotate, `sit_match` freshness (#24/#25).
+- **P1/P2 (this package):** helpers only — UW **flow-alerts** poller (emit on
+  **new alert id**), tide + optional net-prem `tide_state.json`, bounded Tradier quote
+  interest, thin RTH screener snapshot, shadow minute-marks, `UW_WS_URL`
+  probe stub, Finnhub watch widen + overnight news, replay scorecard
+  skeleton. Not a claim these processes are live on Helsinki.
 - **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
   emit. Package: `groktrading.sit_match`. Ledger may still **store** stale
-  prints for research (`groktrading.flow_ledger`).
+  prints for research (`groktrading.flow_ledger`). Flow-alerts reuse the same
+  gate when a row is sit_match-shaped.
 - **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
   fills/cancels keep `in_position` honest after flatten. Never a submit path.
   Package helper: `groktrading.feeds.account_events`. Example unit
   `groktrading-account-events.service` is **files only** (not enabled by
-  `install_helsinki.sh`).
+  `install_helsinki.sh`). Do **not** auto-start it.
 - **Box cold-rotate:** `scripts/box_cold_rotate.py` + [docs/BOX_ARCHIVE.md](docs/BOX_ARCHIVE.md).
   Deny-list blocks `.env` / tokens / credentials. Delete only after verified
   upload or `--confirm-delete`.
 - **Recovery:** SSH + systemd on the host. **Merging this repo does not
-  deploy Helsinki.** **Grok Update Computer does not rebuild Helsinki.**
-  After merge, an operator must copy helpers into the live tape if needed and
-  restart `trading-desk-*` units separately. `ws_tape.py` stays host-owned.
+  deploy Helsinki** and does **not** restart live units. **Grok Update Computer does not rebuild Helsinki.** After merge, an operator must copy
+  helpers into the live tape if needed and **wire companion units
+  separately**. `ws_tape.py` stays host-owned.
 
 ## Architecture
 
@@ -278,6 +286,13 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
 | `src/groktrading/idempotency.py` | Durable inbox/outbox (SQLite WAL) |
 | `src/groktrading/flow_ledger.py` | Append-only UW flow ledger (SQLite); sit_match emit stays fail-closed |
+| `src/groktrading/feeds/flow_alerts.py` | P1 UW flow-alerts poller; emit on new alert id only |
+| `src/groktrading/feeds/tide_state.py` | P1 market-tide + optional net-prem → `tide_state.json` |
+| `src/groktrading/feeds/quote_subscribe.py` | P1 bounded Tradier quote interest; `ws_tape.py` is host-owned |
+| `src/groktrading/feeds/screener_snapshot.py` | P1 thin RTH screener snapshot; no sit_match spray |
+| `src/groktrading/feeds/shadow_marks.py` | P2 shadow minute-marks (quotes only; no orders) |
+| `src/groktrading/feeds/uw_ws.py` | P2 `UW_WS_URL` probe stub; fail-closed if unset; no invented protocol |
+| `src/groktrading/replay_scorecard.py` | P2 ledger replay counts (first-print / already-run / stale); no PnL |
 | `src/groktrading/feeds/account_events.py` | Tradier account-events parse/backoff; position truth; never orders |
 | `src/groktrading/box_rotate.py` | Box cold-rotate deny-list + 7–14d keep-hot + delete guard |
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |

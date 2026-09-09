@@ -46,6 +46,13 @@ groktrading-finnhub-tape = "groktrading.cli:finnhub_tape_main"
 groktrading-tape = "groktrading.cli:tape_skeleton_main"
 groktrading-schwab-oauth = "groktrading.brokers.schwab_oauth:main"
 groktrading-account-events = "groktrading.cli:account_events_main"
+groktrading-flow-alerts = "groktrading.cli:flow_alerts_main"
+groktrading-tide = "groktrading.cli:tide_state_main"
+groktrading-quote-interest = "groktrading.cli:quote_interest_main"
+groktrading-screener = "groktrading.cli:screener_snapshot_main"
+groktrading-shadow-marks = "groktrading.cli:shadow_marks_main"
+groktrading-uw-ws-probe = "groktrading.cli:uw_ws_probe_main"
+groktrading-replay-scorecard = "groktrading.cli:replay_scorecard_main"
 
 [project.urls]
 Documentation = "https://github.com/darrylsj/groktrading"

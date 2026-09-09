@@ -66,12 +66,12 @@ def test_append_iter_recent_and_digest_idempotent(tmp_path) -> None:  # type: ig
 
 def test_flow_alerts_source_and_uw_aliases() -> None:
     payload = {
-        "timestamp": "2026-09-09T16:29:50Z",
-        "underlying": "spy",
-        "option_symbol": "SPY260903C00600000",
-        "price": "2.50",
+        "created_at": "2026-09-09T16:29:50Z",
+        "ticker_symbol": "spy",
+        "option_chain_id": "SPY260903C00600000",
+        "avg_price": "2.50",
         "ask": "2.55",
-        "put_call": "C",
+        "type": "Calls",
     }
     row = draft_from_uw_row(payload, ingested_at=NOW, source="flow-alerts")
     assert row.ticker == "SPY"

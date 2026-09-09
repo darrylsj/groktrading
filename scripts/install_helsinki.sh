@@ -135,6 +135,11 @@ Helsinki sensor farm (package helpers; host-owned live tape unchanged):
   - Flow ledger: groktrading.flow_ledger (SQLite under STATE_DIR/ledger)
   - Account-events: groktrading-account-events.service (files only; not
     enabled/started). Position truth; WS never places orders.
+    Do not auto-start account-events.
+  - P1/P2 package helpers (flow-alerts, tide_state, quote interest,
+    screener snapshot, shadow marks, UW_WS_URL probe, Finnhub widen,
+    replay scorecard) are not installed as live units. Merge ≠ Helsinki
+    restart. Wire companion units separately. Live ws_tape.py is host-owned.
   - Box cold-rotate: scripts/box_cold_rotate.py — deny-list .env/tokens;
     delete only after verified upload or --confirm-delete.
   - Grok Update Computer does not rebuild Helsinki. SSH/systemd on the
@@ -532,6 +537,9 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
        systemctl cat ${PACKAGE_ACCOUNT_EVENTS_UNIT}
      Account-events is installed as files only. Enable it only after
      ACCOUNT_EVENTS_ENABLED=1 and a host-wired recv (position truth; no orders).
+     Do not auto-start account-events. P1/P2 companions (flow-alerts, tide,
+     screener, shadow marks) are package CLIs only — wire units separately.
+     Merge ≠ Helsinki restart. Live ws_tape.py stays host-owned.
 
   3b. Hot ledger / Box cold-rotate (no secrets):
        FLOW_LEDGER_PATH=${STATE_DIR}/ledger/uw_flow.sqlite

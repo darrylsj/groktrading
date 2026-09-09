@@ -94,9 +94,9 @@ def _require_price(value: object, field: str) -> str:
 
 def _require_option_type(value: object) -> Literal["call", "put"]:
     text = _require_text(value, "option_type").lower()
-    if text in {"c", "call"}:
+    if text in {"c", "call", "calls"}:
         return "call"
-    if text in {"p", "put"}:
+    if text in {"p", "put", "puts"}:
         return "put"
     raise FlowLedgerError("invalid_option_type")
 
@@ -127,12 +127,20 @@ def draft_from_uw_row(
     Required: parseable ``executed_at``, ticker, OCC, print, nbbo ask, call/put.
     Does not invent missing fields. Stale ``executed_at`` is allowed to store.
     """
-    executed = parse_executed_at(_first(payload, "executed_at", "timestamp"))
+    executed = parse_executed_at(
+        _first(payload, "executed_at", "timestamp", "created_at")
+    )
     if executed is None:
         raise FlowLedgerError("sit_match_missing_or_unparseable_executed_at")
-    ticker = _require_text(_first(payload, "ticker", "underlying"), "ticker").upper()
-    occ = _require_text(_first(payload, "occ", "option_symbol"), "occ").upper()
-    print_px = _require_price(_first(payload, "print", "price", "trade_price"), "print")
+    ticker = _require_text(
+        _first(payload, "ticker", "underlying", "ticker_symbol"), "ticker"
+    ).upper()
+    occ = _require_text(
+        _first(payload, "occ", "option_symbol", "option_chain_id"), "occ"
+    ).upper()
+    print_px = _require_price(
+        _first(payload, "print", "price", "trade_price", "avg_price"), "print"
+    )
     ask = _require_price(_first(payload, "nbbo_ask", "ask"), "nbbo_ask")
     option_type = _require_option_type(_first(payload, "option_type", "put_call", "type"))
     src = _require_source(source)

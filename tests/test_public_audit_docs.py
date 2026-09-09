@@ -45,6 +45,10 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
         "Grok Update Computer does not rebuild Helsinki",
         "flow_ledger",
         "account_events",
+        "flow-alerts",
+        "tide_state",
+        "UW_WS_URL",
+        "wire companion units",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -78,6 +82,11 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "position truth",
         "account_events",
         "flow_ledger",
+        "flow-alerts",
+        "UW_WS_URL",
+        "quote interest",
+        "shadow marks",
+        "replay scorecard",
     ):
         assert needle in text, needle
 

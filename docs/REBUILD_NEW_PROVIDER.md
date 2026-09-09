@@ -35,6 +35,12 @@ until package parity exists. Integrating Finnhub ticks into the Tradier/UW
 tape remains an **explicit remaining deployment step**
 ([OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md)).
 
+P1/P2 sensor-farm helpers (flow-alerts, tide_state, quote interest, screener,
+shadow marks, UW_WS_URL probe) are **package CLIs**. Merging this repo does
+not restart Helsinki. Wire companion units separately. `UW_WS_URL` unset
+fail-closes; do not invent a socket protocol. Do not auto-start
+account-events.
+
 ## Hard rules (do not weaken)
 
 | Rule | Meaning |

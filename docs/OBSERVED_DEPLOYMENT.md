@@ -24,11 +24,13 @@ Package hardening (quote gate, final gate, order FSM, durable idempotency, `sit_
 The installer default remains `/opt/groktrading` + `groktrading-*.service`. Running it with defaults must not overwrite `/opt/trading-desk` or `trading-desk-*.service`.
 
 **Sensor farm intent (package, not observed as already deployed):** Helsinki
-listens; Grok decides. Hot UW ledger + Box cold archive + Tradier
-account-events for **position truth** (stale `in_position` after flatten) ship
-as helpers here. Observed host still has no `.git` under `/opt/trading-desk`
-and still does not run this commit until an operator cutover. **Grok Update
-Computer does not rebuild Helsinki.**
+listens; Grok decides. **P0** (flow ledger, account-events, Box rotate,
+sit_match freshness) and **P1/P2** (flow-alerts, tide/net-prem, quote
+interest, screener snapshot, shadow marks, UW_WS probe, Finnhub widen,
+replay scorecard) ship as helpers here. Observed host still has no `.git`
+under `/opt/trading-desk` and still does not run this commit until an
+operator cutover. **Merging this repo does not restart Helsinki.** Wire
+companion units separately. **Grok Update Computer does not rebuild Helsinki.**
 
 ## What was observed
 
