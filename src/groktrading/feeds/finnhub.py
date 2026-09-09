@@ -21,9 +21,17 @@ from groktrading.timeutil import UTC, as_utc, is_stale
 FINNHUB_WS_URL = "wss://ws.finnhub.io"
 FINNHUB_REST_BASE = "https://finnhub.io/api/v1"
 DEFAULT_WATCHLIST_BOUND = 16
+WATCH_WIDEN_CAP_LO = 16
+WATCH_WIDEN_CAP_HI = 40
+DEFAULT_WATCH_WIDEN_CAP = 32
+DEFAULT_NEWS_PER_SYMBOL = 5
 DEFAULT_BACKOFF_BASE = 1.0
 DEFAULT_BACKOFF_FACTOR = 2.0
 DEFAULT_BACKOFF_MAX = 60.0
+FINNHUB_NOT_NBBO_NOTE = (
+    "Finnhub is stock last prints / company news only. Not option NBBO. "
+    "Never gate option limits on Finnhub ticks. Never places orders."
+)
 
 
 class Clock(Protocol):
@@ -38,7 +46,7 @@ class UtcClock:
 class HttpProbe(Protocol):
     def get_json(
         self, url: str, headers: dict[str, str] | None = None
-    ) -> tuple[int, dict[str, Any]]:
+    ) -> tuple[int, Any]:
         ...
 
 
@@ -57,6 +65,59 @@ class FinnhubWatchlist:
 
     def subscribe_messages(self) -> list[str]:
         return [json.dumps({"type": "subscribe", "symbol": symbol}) for symbol in self.symbols]
+
+
+def clamp_watch_widen_cap(cap: int) -> int:
+    if cap < WATCH_WIDEN_CAP_LO:
+        return WATCH_WIDEN_CAP_LO
+    if cap > WATCH_WIDEN_CAP_HI:
+        return WATCH_WIDEN_CAP_HI
+    return cap
+
+
+def widen_watchlist(
+    watch: FinnhubWatchlist,
+    extras: Iterable[str],
+    *,
+    cap: int = DEFAULT_WATCH_WIDEN_CAP,
+) -> list[str]:
+    """Bounded expand for open-risk / fresh-flow names. Cap 16–40.
+
+    Raises the watch bound up to ``cap`` (clamped). Existing names stay.
+    Extra symbols that do not fit are skipped (not an error).
+    """
+    limit = clamp_watch_widen_cap(cap)
+    if watch.bound < limit:
+        watch.bound = limit
+    added: list[str] = []
+    for raw in extras:
+        symbol = str(raw).strip().upper()
+        if not symbol or symbol in watch.symbols:
+            continue
+        if len(watch.symbols) >= watch.bound:
+            break
+        watch.symbols.append(symbol)
+        added.append(symbol)
+    return added
+
+
+def widen_for_risk_and_flow(
+    watch: FinnhubWatchlist,
+    *,
+    open_risk: Iterable[str] = (),
+    fresh_flow: Iterable[str] = (),
+    cap: int = DEFAULT_WATCH_WIDEN_CAP,
+) -> list[str]:
+    """Open-risk names first, then fresh-flow underlyings. Same 16–40 cap."""
+    extras: list[str] = []
+    seen: set[str] = {s.upper() for s in watch.symbols}
+    for raw in list(open_risk) + list(fresh_flow):
+        symbol = str(raw).strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        extras.append(symbol)
+    return widen_watchlist(watch, extras, cap=cap)
 
 
 def backoff_seconds(
@@ -180,6 +241,92 @@ def probe_quote(
     except TimeoutError as exc:
         raise TimeoutFailClosedError(timeout_note) from exc
     return status, body
+
+
+def probe_company_news(
+    http: HttpProbe,
+    symbol: str,
+    *,
+    token: str,
+    from_date: str,
+    to_date: str,
+    timeout_note: str = "timeout",
+) -> tuple[int, list[dict[str, Any]]]:
+    """Documented ``GET /company-news``. Not option NBBO. Token not persisted."""
+    url = (
+        f"{FINNHUB_REST_BASE}/company-news?symbol={symbol}"
+        f"&from={from_date}&to={to_date}"
+    )
+    try:
+        status, body = http.get_json(url, headers={"X-Finnhub-Token": token})
+    except TimeoutError as exc:
+        raise TimeoutFailClosedError(timeout_note) from exc
+    rows: list[dict[str, Any]] = []
+    if isinstance(body, list):
+        rows = [row for row in body if isinstance(row, dict)]
+    elif isinstance(body, dict):
+        data = body.get("data")
+        if isinstance(data, list):
+            rows = [row for row in data if isinstance(row, dict)]
+    return status, rows
+
+
+def overnight_news_batch(
+    http: HttpProbe,
+    symbols: Iterable[str],
+    *,
+    token: str,
+    from_date: str,
+    to_date: str,
+    cap: int = DEFAULT_WATCH_WIDEN_CAP,
+    per_symbol: int = DEFAULT_NEWS_PER_SYMBOL,
+) -> dict[str, Any]:
+    """Company-news REST for the widened watch only. No 10k spray.
+
+    Finnhub ≠ option NBBO. Timeouts fail closed for that symbol (skip).
+    """
+    limit = clamp_watch_widen_cap(cap)
+    names: list[str] = []
+    for raw in symbols:
+        symbol = str(raw).strip().upper()
+        if not symbol or symbol in names:
+            continue
+        names.append(symbol)
+        if len(names) >= limit:
+            break
+    by_symbol: dict[str, list[dict[str, Any]]] = {}
+    errors: dict[str, str] = {}
+    for symbol in names:
+        try:
+            status, rows = probe_company_news(
+                http, symbol, token=token, from_date=from_date, to_date=to_date
+            )
+        except TimeoutFailClosedError as exc:
+            errors[symbol] = str(exc)
+            continue
+        if status >= 400:
+            errors[symbol] = f"finnhub_news_http_{status}"
+            continue
+        slim: list[dict[str, Any]] = []
+        for row in rows[:per_symbol]:
+            item: dict[str, Any] = {}
+            for key in ("datetime", "headline", "source", "id"):
+                if row.get(key) not in (None, ""):
+                    item[key] = row[key]
+            if item:
+                slim.append(item)
+        by_symbol[symbol] = slim
+    return {
+        "source": "finnhub_company_news",
+        "note": FINNHUB_NOT_NBBO_NOTE,
+        "from": from_date,
+        "to": to_date,
+        "symbols": names,
+        "news": by_symbol,
+        "errors": errors,
+        "places_orders": False,
+        "option_nbbo": False,
+    }
 
 
 class ReconnectingFinnhubClient:

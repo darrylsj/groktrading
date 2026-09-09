@@ -102,6 +102,11 @@ def test_script_encodes_hard_rules() -> None:
         "box_cold_rotate",
         "Grok Update Computer",
         "STATE_DIR/ledger",
+        "flow-alerts",
+        "tide_state",
+        "UW_WS_URL",
+        "Merge ≠ Helsinki",
+        "companion units",
     ):
         assert needle in text, needle
 
@@ -125,6 +130,9 @@ def test_trading_desk_env_example_matches_observed_key_names() -> None:
     assert "BOX_ROTATE_KEEP_HOT_DAYS" in text
     assert "BOX_ARCHIVE_PARENT" in text
     assert "ACCOUNT_EVENTS_ENABLED" in text
+    assert "FLOW_ALERTS_POLL_SEC" in text
+    assert "TIDE_POLL_SEC" in text
+    assert "UW_WS_URL" in text
     assert "sensor farm" in text.lower()
     assert "AKIA" not in text
     for line in text.splitlines():

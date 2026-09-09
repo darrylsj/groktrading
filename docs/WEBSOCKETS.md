@@ -38,9 +38,15 @@ Helsinki observation (not this commit): `trading-desk-finnhub` writes `finnhub_t
 
 | Module | Role |
 | --- | --- |
-| `feeds/finnhub.py` | WS parse, reconnect/backoff, bounded watchlist, freshness/health, REST probe. Tape note: *stock last prints only; not option NBBO; never triggers live orders.* |
-| `feeds/unusual_whales.py` | Generic UW GET. Caller supplies a documented path. Timeouts fail closed. |
+| `feeds/finnhub.py` | WS parse, reconnect/backoff, bounded watchlist, freshness/health, REST probe, **watch widen** (cap 16–40) + overnight `/company-news` batch for those symbols only. Tape note: *stock last prints only; not option NBBO; never triggers live orders.* |
+| `feeds/unusual_whales.py` | Generic UW GET. Caller supplies a documented path. Timeouts fail closed. Documented P1 paths: `/api/option-trades/flow-alerts`, `/api/market/market-tide`, `/api/screener/option-contracts`, `/api/stock/{ticker}/net-prem-ticks`. |
 | `feeds/tradier.py` | Generic Tradier quotes / balances / clock / preview. Timeouts and stale data fail closed. |
+| `feeds/flow_alerts.py` | REST poller (15–30s). Append `source=flow-alerts`. Material emit only on a **new alert id**. |
+| `feeds/tide_state.py` | Slow (1–5 min) tide / optional net-prem → `tide_state.json`. No LLM. |
+| `feeds/quote_subscribe.py` | Bounded (max 40) Tradier **interest set** when a fresh sit/flow print appears. Drop idle names. **Does not open** the market stream. |
+| `feeds/screener_snapshot.py` | Optional 5–15 min RTH screener snapshot. **Does not** spray `sit_match`. |
+| `feeds/shadow_marks.py` | Minute-cadence Tradier quote marks for a shadow OCC book. No orders. |
+| `feeds/uw_ws.py` | `UW_WS_URL` probe stub. Fail-closed if unset. Does **not** invent a subscribe protocol or open a socket. |
 
 Merging the Finnhub tape into the existing Tradier/UW `live_tape.json` is an **explicit remaining operator step**. This repo does not perform it.
 
@@ -56,6 +62,10 @@ Account-event WebSockets report broker session events. They are **not** a submit
 **Position truth (package helper):** `feeds/account_events.py` parses `order` / `heartbeat` frames, reconnects with the same 1s ×2 / 60s cap as Finnhub, and updates a local symbol set so **`in_position` does not stay stale after flatten**. Material events (fill, partial, cancel, reject, expire) can signal webhook consumers to refresh. Missing symbol on a material event → fail-closed **REST refresh** flag. The helper **never** calls preview/submit. Example unit: `deploy/examples/systemd/groktrading-account-events.service` (installer copies the file; does **not** enable/start it). Live `ws_tape.py` is still host-owned.
 
 Helsinki **sensor farm**: always-on listen; **Grok Bot decides**. Hot UW rows live in `groktrading.flow_ledger` (7–14 days). Cold packs rotate to Box (`docs/BOX_ARCHIVE.md`). `sit_match` emission still requires `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s).
+
+**P0 is merged** (flow ledger, account-events helper, Box rotate, sit_match freshness). **P1/P2 landed as package helpers** — not a claim they are running on live Helsinki. **Merging this repo does not restart Helsinki.** Companion pollers (flow-alerts, tide, screener, shadow marks) must be **wired by the operator** into host units. Live `ws_tape.py` stays host-owned: the quote interest helper only maintains a symbol set. The replay scorecard reads the hot ledger and optional marks; it never invents PnL.
+
+**UW WebSocket:** if the plan supports it, set `UW_WS_URL` (typically `wss://api.unusualwhales.com/socket`) and fetch the live channel catalog (`feeds/uw_ws.py` documents the URL). Unset → fail-closed. This package does not invent subscribe frames.
 
 ## Why WebSocket events never place live orders
 
@@ -90,6 +100,7 @@ Helsinki pushes **material events only**. No LLM polling.
 
 - Backoff: base **1s**, factor **2**, cap **60s** (`backoff_seconds`).
 - Watchlist bound default **16** symbols (`WatchlistBoundError` if exceeded).
+- **Widen helper:** raise the bound up to a **16–40** cap for open-risk / fresh-flow names (`widen_for_risk_and_flow`). Overnight REST `/company-news` is batched for **those symbols only**. Finnhub ≠ option NBBO.
 - `FinnhubStreamState.freshness_ttl_seconds` default **30s**.
 - Health is **stale** if disconnected or last event older than TTL. Stale/disconnected is **fail-closed** for any downstream use of that tape as “fresh.”
 - Unknown WS `type` values parse to an empty trade list (not an invented print).
@@ -176,4 +187,6 @@ sequenceDiagram
 - [ ] Webhook event set and flags match the live card (`entry_cutoff_only_no_flatten`, `auto_flatten: false`).
 - [ ] Reconnect/backoff, TTL fail-closed, HMAC, and AH/weekend digest coalesce are described without host secrets.
 - [ ] Account-events documented as **position truth**, not a submit path.
+- [ ] P1/P2 helpers documented as **package-only**; merge ≠ Helsinki restart.
+- [ ] `UW_WS_URL` fail-closed if unset; no invented socket protocol.
 - [ ] No credentials, webhook URLs, or live account tokens appear in this page.

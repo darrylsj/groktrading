@@ -79,8 +79,15 @@ Closed day packs rotate to Box Trading Desk Archive
 ([BOX_ARCHIVE.md](BOX_ARCHIVE.md)). Account-events unit
 `groktrading-account-events.service` is installed as **files only** — position
 truth, **WS never places orders**. `install_helsinki.sh` does not enable or
-start that unit. **Grok Update Computer does not rebuild Helsinki**; after
-merge, SSH and restart live units yourself.
+start that unit. **Do not auto-start account-events.**
+
+**P1/P2 package helpers (not live Helsinki processes):** flow-alerts poller,
+tide/net-prem state (`STATE_DIR/tide_state.json`), Tradier quote interest
+(host must wire `ws_tape.py`), thin RTH screener snapshot, shadow minute-marks,
+`UW_WS_URL` probe (fail-closed if unset), Finnhub watch widen, replay
+scorecard CLI. **Merge ≠ Helsinki restart.** Wire companion units yourself;
+the installer does not enable them. **Grok Update Computer does not rebuild
+Helsinki**; after merge, SSH and restart live units yourself.
 
 **`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than

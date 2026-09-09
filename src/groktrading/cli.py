@@ -18,8 +18,51 @@ from groktrading.feeds.finnhub import (
     FinnhubWatchlist,
     probe_quote,
 )
+from groktrading.feeds.flow_alerts import (
+    DEFAULT_FLOW_ALERTS_POLL_SEC,
+)
+from groktrading.feeds.flow_alerts import (
+    NEVER_ORDERS_NOTE as FLOW_ALERTS_NOTE,
+)
+from groktrading.feeds.flow_alerts import (
+    state_document as flow_alerts_state_document,
+)
+from groktrading.feeds.quote_subscribe import (
+    NEVER_ORDERS_NOTE as QUOTE_INTEREST_NOTE,
+)
+from groktrading.feeds.quote_subscribe import (
+    TradierQuoteInterest,
+)
+from groktrading.feeds.screener_snapshot import (
+    DEFAULT_SCREENER_POLL_SEC,
+)
+from groktrading.feeds.screener_snapshot import (
+    NEVER_ORDERS_NOTE as SCREENER_NOTE,
+)
+from groktrading.feeds.shadow_marks import (
+    DEFAULT_SHADOW_MARK_SEC,
+    marks_document,
+)
+from groktrading.feeds.shadow_marks import (
+    NEVER_ORDERS_NOTE as SHADOW_NOTE,
+)
+from groktrading.feeds.tide_state import (
+    DEFAULT_TIDE_POLL_SEC,
+)
+from groktrading.feeds.tide_state import (
+    NEVER_ORDERS_NOTE as TIDE_NOTE,
+)
+from groktrading.feeds.uw_ws import (
+    NEVER_ORDERS_NOTE as UW_WS_NOTE,
+)
+from groktrading.feeds.uw_ws import (
+    probe_document,
+    probe_uw_ws,
+)
+from groktrading.flow_ledger import FlowLedger
 from groktrading.io_atomic import write_json_atomic
 from groktrading.redaction import redact_mapping
+from groktrading.replay_scorecard import scorecard
 from groktrading.timeutil import UTC
 
 
@@ -157,6 +200,154 @@ def account_events_main(argv: list[str] | None = None) -> int:
         "open a Tradier socket. Wire ReconnectingAccountEventsClient on the host.",
         file=sys.stderr,
     )
+    return 0
+
+
+def flow_alerts_main(argv: list[str] | None = None) -> int:
+    """Write flow-alerts helper state. Does not poll UW. Never places orders."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "UW flow-alerts poller helper skeleton. "
+            "Host wires poll_flow_alerts. Never places orders."
+        )
+    )
+    parser.add_argument("--state", default="flow_alerts.json")
+    args = parser.parse_args(argv)
+    now = datetime.now(tz=UTC)
+    doc = flow_alerts_state_document(None, now=now, seen_count=0)
+    doc["mode"] = "signals_only"
+    doc["live_http"] = False
+    doc["cadence_sec"] = DEFAULT_FLOW_ALERTS_POLL_SEC
+    doc["note"] = FLOW_ALERTS_NOTE
+    write_json_atomic(Path(args.state), doc)
+    return 0
+
+
+def tide_state_main(argv: list[str] | None = None) -> int:
+    """Write an empty tide_state skeleton. Does not call UW."""
+    parser = argparse.ArgumentParser(
+        description="UW market-tide / net-prem state skeleton. Never places orders."
+    )
+    parser.add_argument("--state", default="tide_state.json")
+    args = parser.parse_args(argv)
+    now = datetime.now(tz=UTC)
+    doc = {
+        "source": "uw_market_tide",
+        "note": TIDE_NOTE,
+        "as_of": now.isoformat(),
+        "cadence_sec": DEFAULT_TIDE_POLL_SEC,
+        "ticks": [],
+        "net_prem": {},
+        "places_orders": False,
+        "emits_sit_match": False,
+        "live_http": False,
+        "mode": "signals_only",
+    }
+    write_json_atomic(Path(args.state), doc)
+    return 0
+
+
+def quote_interest_main(argv: list[str] | None = None) -> int:
+    """Write Tradier quote-interest state. Does not open a market WS."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Tradier quote interest helper. Live ws_tape.py is host-owned. "
+            "WebSocket never places orders."
+        )
+    )
+    parser.add_argument("--state", default="quote_interest.json")
+    args = parser.parse_args(argv)
+    interest = TradierQuoteInterest()
+    doc = interest.state_document()
+    doc["mode"] = "signals_only"
+    doc["note"] = QUOTE_INTEREST_NOTE
+    write_json_atomic(Path(args.state), doc)
+    return 0
+
+
+def screener_snapshot_main(argv: list[str] | None = None) -> int:
+    """Write a screener snapshot skeleton. Does not poll UW or emit sit_match."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "UW option-screener snapshot skeleton. "
+            "Do not spray sit_match. Never places orders."
+        )
+    )
+    parser.add_argument("--state", default="screener_state.json")
+    args = parser.parse_args(argv)
+    now = datetime.now(tz=UTC)
+    doc = {
+        "source": "uw_option_screener",
+        "note": SCREENER_NOTE,
+        "as_of": now.isoformat(),
+        "cadence_sec": DEFAULT_SCREENER_POLL_SEC,
+        "rth": False,
+        "wrote": False,
+        "rows": [],
+        "emits_sit_match": False,
+        "places_orders": False,
+        "live_http": False,
+        "mode": "signals_only",
+    }
+    write_json_atomic(Path(args.state), doc)
+    return 0
+
+
+def shadow_marks_main(argv: list[str] | None = None) -> int:
+    """Write a shadow-mark book skeleton. Does not quote Tradier or submit."""
+    parser = argparse.ArgumentParser(
+        description="Shadow minute-mark helper skeleton. Never places orders."
+    )
+    parser.add_argument("--state", default="shadow_marks.json")
+    args = parser.parse_args(argv)
+    now = datetime.now(tz=UTC)
+    doc = marks_document([], now=now, occ_count=0)
+    doc["mode"] = "signals_only"
+    doc["cadence_sec"] = DEFAULT_SHADOW_MARK_SEC
+    doc["live_http"] = False
+    doc["note"] = SHADOW_NOTE
+    write_json_atomic(Path(args.state), doc)
+    return 0
+
+
+def uw_ws_probe_main(argv: list[str] | None = None) -> int:
+    """Inspect UW_WS_URL. Fail-closed if unset. Never opens a socket."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "UW WebSocket probe stub. Fail-closed if UW_WS_URL is unset. "
+            "Does not invent a subscribe protocol. Does not connect."
+        )
+    )
+    parser.add_argument("--state", default="uw_ws_probe.json")
+    args = parser.parse_args(argv)
+    probe = probe_uw_ws(dict(os.environ))
+    doc = probe_document(probe)
+    doc["mode"] = "signals_only"
+    doc["note"] = UW_WS_NOTE
+    write_json_atomic(Path(args.state), doc)
+    return 0 if probe.ok else 2
+
+
+def replay_scorecard_main(argv: list[str] | None = None) -> int:
+    """Read a local flow ledger and write a deterministic scorecard. No PnL."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Replay scorecard over a local flow ledger. "
+            "Counts only. No invented PnL. No network."
+        )
+    )
+    parser.add_argument("--ledger", required=True)
+    parser.add_argument("--output", default="replay_scorecard.json")
+    parser.add_argument("--already-run", default="", help="Comma-separated OCC list")
+    args = parser.parse_args(argv)
+    ledger_path = Path(args.ledger)
+    if not ledger_path.is_file() and str(ledger_path) != ":memory:":
+        print(f"ledger not found: {ledger_path}", file=sys.stderr)
+        return 2
+    already = [p for p in args.already_run.split(",") if p.strip()]
+    now = datetime.now(tz=UTC)
+    card = scorecard(FlowLedger(ledger_path), now=now, already_run_occs=already)
+    write_json_atomic(Path(args.output), card.document())
     return 0
 
 
