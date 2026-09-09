@@ -49,6 +49,8 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "never place live orders",
         "fresh Tradier production",
         "sit_match",
+        "executed_at",
+        "SIT_MATCH_MAX_AGE_SEC",
         "in_position",
         "cash_up",
         "entry_cutoff_only_no_flatten",

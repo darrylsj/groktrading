@@ -72,6 +72,13 @@ The package exposes `groktrading-finnhub-tape` and `groktrading-tape`.
 legacy `/opt/trading-desk/ws_tape.py`. Wiring UW + Tradier into a live tape
 and merging Finnhub ticks into that tape remain **separate operator steps**.
 
+**`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
+fail-closes when UW `executed_at` is missing/unparseable or older than
+`SIT_MATCH_MAX_AGE_SEC` (default 60s) and puts `executed_at` on the webhook
+payload. The installer still does **not** embed or overwrite `ws_tape.py`.
+An operator must patch the live Helsinki sit_match branch the same way and
+**restart `trading-desk-tape`** (this repo must not do that restart).
+
 ---
 
 ## A. Brand-new Ubuntu-like VPS

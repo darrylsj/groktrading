@@ -7,6 +7,10 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- `sit_match` webhooks now fail closed on Unusual Whales print age: `executed_at` must parse (ISO-8601 `Z` or offset) and be ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable `executed_at` does not ping. Stale UW `option-trades` rows that linger in the rolling feed (debounce is still ~90s per OCC) no longer re-wake the desk after live Tradier ask has moved. Payload and candidates carry `executed_at`. Package emitter (`SignedWebhookSender`) and Grok inbox (`WebhookInbox`) share the gate. `ws_tape.py` is **not** in this tree and is **not** copied by `install_helsinki.sh` — after merge, an operator must apply the same check in the live Helsinki sit_match branch and **restart `trading-desk-tape`**. Tradier quote/order gates are unchanged. No live orders; no credentials.
+
 ### Added
 
 - Dual-broker Phase B-prep: Schwab OAuth helper (`groktrading.brokers.schwab_oauth`, `groktrading-schwab-oauth`) documents Ready For Use → env (`SCHWAB_APP_KEY` / `SCHWAB_APP_SECRET` / optional `SCHWAB_TOKEN_PATH`) → browser login at callback `https://127.0.0.1:8182` (no trailing slash) → local refresh token (`~/.config/groktrading/schwab_token.json`, never git). Missing credentials dry-run with an actionable stub (no browser hang, no invented token). Optional `schwab-py` wrap for `client_from_login_flow` / token refresh; 7-day re-auth reminder when the token file is absent. `SchwabBroker` still fails closed and cannot preview/submit. Note: [docs/DUAL_BROKER.md](docs/DUAL_BROKER.md), [`.env.example`](.env.example).

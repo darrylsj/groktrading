@@ -98,6 +98,7 @@ class Candidate(StrictModel):
     created_ts: datetime
     ttl_seconds: float = Field(gt=0, default=15.0)
     from_websocket: bool = False
+    executed_at: datetime | None = None
 
 
 class AccountSnapshot(StrictModel):
@@ -176,6 +177,7 @@ class AssembledFacts(StrictModel):
     flow_notes: list[str] = Field(default_factory=list)
     news_headlines: list[str] = Field(default_factory=list)
     as_of: datetime
+    executed_at: datetime | None = None
 
 
 class WebhookEnvelope(StrictModel):

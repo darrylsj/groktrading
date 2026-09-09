@@ -19,6 +19,11 @@ from typing import Any, Protocol
 
 from groktrading.idempotency import DurableIdempotency
 from groktrading.redaction import redact_mapping
+from groktrading.sit_match import (
+    SIT_MATCH_EVENT,
+    attach_executed_at,
+    evaluate_sit_match_payload,
+)
 from groktrading.timeutil import UTC, as_utc
 
 DEFAULT_COOLDOWN = timedelta(seconds=5)
@@ -80,10 +85,21 @@ class SignedWebhookSender:
         event_type: str = "facts",
     ) -> WebhookSendResult:
         now = as_utc(self.clock.now())
+        outbound = payload
+        if event_type == SIT_MATCH_EVENT:
+            freshness = evaluate_sit_match_payload(payload, now)
+            if not freshness.allow:
+                return WebhookSendResult(
+                    sent=False,
+                    status_code=None,
+                    idempotency_key=idempotency_key,
+                    skipped_reason=freshness.reason,
+                )
+            outbound = attach_executed_at(payload, freshness)
         if self.store is not None:
             decision = self.store.claim_outbox(
                 idempotency_key,
-                payload,
+                outbound,
                 event_type,
                 now,
                 clock_state=self.clock_state,
@@ -112,7 +128,7 @@ class SignedWebhookSender:
                     idempotency_key=idempotency_key,
                     skipped_reason="cooldown",
                 )
-        body = canonical_json(payload)
+        body = canonical_json(outbound)
         signature = sign_body(self.secret, body)
         headers = {
             "Content-Type": "application/json",
@@ -130,7 +146,7 @@ class SignedWebhookSender:
             status_code=status,
             idempotency_key=idempotency_key,
             signature_hex=signature,
-            redacted_body=redact_mapping(payload),
+            redacted_body=redact_mapping(outbound),
         )
 
 
@@ -148,6 +164,10 @@ class WebhookInbox:
         now: datetime,
         clock_state: str | None = None,
     ) -> bool:
+        if event_type == SIT_MATCH_EVENT:
+            freshness = evaluate_sit_match_payload(payload, as_utc(now))
+            if not freshness.allow:
+                return False
         return self.store.claim_inbox(
             idempotency_key, payload, event_type, now, clock_state=clock_state
         ).accept
