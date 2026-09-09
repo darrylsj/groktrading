@@ -1,15 +1,11 @@
-# Example host companion timer. NOT installed or enabled by install_helsinki.sh.
-# Operator-wired only. Merge ≠ Helsinki restart.
-# Account-events stays files-only / disabled.
-# After-close counts only. Persistent=false (no catch-up spray). Never places orders.
+# Daily after US cash close: 21:10 UTC = 2:10pm PT (PDT) / 1:10pm PT (PST).
 
 [Unit]
-Description=GrokTrading host companion: weekday replay scorecard after the close
+Description=Daily GrokTrading replay scorecard after close (21:10 UTC)
 
 [Timer]
-OnCalendar=Mon-Fri 16:20:00 America/New_York
-AccuracySec=1min
-Persistent=false
+OnCalendar=*-*-* 21:10:00 UTC
+Persistent=true
 Unit=groktrading-replay-scorecard.service
 
 [Install]

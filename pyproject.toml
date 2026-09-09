@@ -82,6 +82,15 @@ src = ["src", "tests", "scripts"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+# Helsinki 2026-09-08 companion bodies stay urllib-identical; do not restyle them.
+[tool.ruff.lint.per-file-ignores]
+"scripts/helsinki_http.py" = ["UP041"]
+"scripts/flow_ledger_companion.py" = ["E501", "UP017"]
+"scripts/flow_alerts_companion.py" = ["I001", "UP017"]
+"scripts/tide_companion.py" = ["I001", "UP017"]
+"scripts/screener_companion.py" = ["I001", "UP017"]
+"scripts/quote_interest_companion.py" = ["UP017"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["groktrading", "helpers", "helsinki_http"]
 

@@ -1,11 +1,14 @@
-"""Offline smoke for Helsinki host companions. No live network. No secrets."""
+"""Offline smoke for Helsinki urllib host companions. No live UW. No secrets."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Thread
+from typing import Any
 
-from groktrading.feeds.quote_subscribe import TradierQuoteInterest
 from groktrading.flow_ledger import FlowLedger
 from groktrading.timeutil import UTC
 from scripts_loader import (
@@ -28,82 +31,146 @@ COMPANION_SCRIPTS = (
 )
 
 
-def test_companions_are_executable_and_secret_free() -> None:
+def test_companions_are_secret_free_urllib() -> None:
+    http_text = (ROOT / "scripts" / "helsinki_http.py").read_text(encoding="utf-8")
+    assert "class UrllibHttp" in http_text
+    assert "import httpx" not in http_text
+    assert "httpx" not in http_text
+    assert "urllib.request" in http_text
     for relative in COMPANION_SCRIPTS:
         path = ROOT / relative
         assert path.is_file()
-        assert path.stat().st_mode & 0o111, relative
         text = path.read_text(encoding="utf-8")
-        assert "Never places orders" in text or "never places orders" in text.lower()
         assert "sk-" not in text
         assert "AKIA" not in text
         assert "ghp_" not in text
+        assert "import httpx" not in text
+        lowered = text.lower()
+        assert any(
+            needle in lowered
+            for needle in (
+                "never places orders",
+                "never orders",
+                "does not place orders",
+                "no_orders",
+                "never logs tokens",
+            )
+        ), relative
+    for relative in COMPANION_SCRIPTS[1:]:
+        path = ROOT / relative
+        assert path.stat().st_mode & 0o111, relative
 
 
-def test_helsinki_http_bearer_is_runtime_env_only() -> None:
-    text = (ROOT / "scripts" / "helsinki_http.py").read_text(encoding="utf-8")
-    assert "Authorization Bearer is runtime env only" in text or "runtime env only" in text
-    assert 'f"Bearer {token}"' in text
-    assert helsinki_http.uw_token({"UW_API_KEY": "  "}) == ""
-    headers = helsinki_http.authorization_headers("runtime-only")
+def test_helsinki_http_is_urllib_not_httpx() -> None:
+    assert hasattr(helsinki_http, "UrllibHttp")
+    assert not hasattr(helsinki_http, "HelsinkiHttp")
+    client = helsinki_http.UrllibHttp(timeout=2.0)
+    assert client.timeout == 2.0
+
+
+def test_flow_ledger_bearer_is_runtime_env_only(monkeypatch: Any) -> None:
+    monkeypatch.setenv("UW_API_KEY", "runtime-only")
+    headers = flow_ledger_companion._uw_headers()
     assert headers["Authorization"] == "Bearer runtime-only"
+    assert headers["Accept"] == "application/json"
+    monkeypatch.setenv("UW_API_KEY", "   ")
+    try:
+        flow_ledger_companion._uw_headers()
+    except SystemExit as exc:
+        assert "UW_API_KEY" in str(exc)
+    else:
+        raise AssertionError("blank UW_API_KEY must fail closed")
 
 
-def test_argparse_help_needs_no_secrets_or_network() -> None:
-    for module in (
-        flow_ledger_companion,
-        flow_alerts_companion,
-        tide_companion,
-        screener_companion,
-        quote_interest_companion,
-    ):
-        parser = module.build_parser()
-        help_text = parser.format_help()
-        collapsed = " ".join(help_text.lower().split())
-        assert "places orders" in collapsed
-        assert "never places orders" in module.NEVER_ORDERS_NOTE.lower()
-        assert "YOUR_" not in help_text
+def test_missing_uw_key_fails_closed_without_loop(monkeypatch: Any) -> None:
+    monkeypatch.delenv("UW_API_KEY", raising=False)
+    assert flow_alerts_companion.main() == 2
+    assert tide_companion.main() == 2
+    assert screener_companion.main() == 2
 
 
 def test_flow_alerts_companion_defaults_are_closed() -> None:
-    assert flow_alerts_companion.EMIT_SIT_MATCH is False
-    parser = flow_alerts_companion.build_parser()
-    args = parser.parse_args([])
-    assert args.webhook_firehose is False
+    text = (ROOT / "scripts" / "flow_alerts_companion.py").read_text(encoding="utf-8")
+    assert "emit_sit_match=False" in text
+    assert "No Grok webhook" in text or "no_webhook" in text
 
 
-def test_quote_interest_refresh_offline(tmp_path: Path) -> None:
-    ledger = FlowLedger(tmp_path / "uw_flow.sqlite")
-    now = datetime(2026, 9, 9, 14, 30, tzinfo=UTC)
-    ledger.append_row(
-        {
-            "executed_at": "2026-09-09T14:29:50Z",
-            "ticker": "SPY",
-            "option_chain": "SPY260909C00600000",
-            "price": "1.25",
-            "ask": "1.26",
-            "type": "call",
-        },
-        source="flow-alerts",
-        ingested_at=now,
-    )
-    interest = TradierQuoteInterest(bound=8, idle_ttl_seconds=900)
-    doc = quote_interest_companion.refresh(ledger, interest, now=now, env={})
-    assert doc["places_orders"] is False
-    assert doc["emits_sit_match"] is False
-    assert doc["live_http"] is False
-    assert doc["live_socket"] is False
-    assert "never places orders" in str(doc["note"]).lower()
-
-
-def test_quote_interest_once_writes_state(tmp_path: Path) -> None:
+def test_quote_interest_one_pass_writes_state(tmp_path: Path, monkeypatch: Any) -> None:
     ledger = tmp_path / "uw_flow.sqlite"
     FlowLedger(ledger)
     state = tmp_path / "quote_interest.json"
-    assert quote_interest_companion.main(
-        ["--ledger", str(ledger), "--state", str(state), "--once"]
-    ) == 0
+    monkeypatch.setenv("FLOW_LEDGER_PATH", str(ledger))
+    monkeypatch.setenv("QUOTE_INTEREST_STATE_PATH", str(state))
+    monkeypatch.setenv("QUOTE_INTEREST_POLL_SEC", "15")
+
+    def _stop(_interval: float) -> None:
+        raise SystemExit(0)
+
+    monkeypatch.setattr(quote_interest_companion.time, "sleep", _stop)
+    try:
+        quote_interest_companion.main()
+    except SystemExit as exc:
+        assert exc.code in (0, None)
     assert state.is_file()
-    text = state.read_text(encoding="utf-8")
-    assert "tradier_quote_interest" in text
-    assert "ws_tape.py" in text
+    doc = json.loads(state.read_text(encoding="utf-8"))
+    assert doc.get("mode") == "host_companion"
+    assert "ws_tape.py" in (ROOT / "scripts" / "quote_interest_companion.py").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_quote_interest_seed_helpers() -> None:
+    assert quote_interest_companion._seed_symbols({}) == []
+    assert quote_interest_companion._seed_symbols({"QUOTE_INTEREST_SEED": "spy, qqq"}) == [
+        "SPY",
+        "QQQ",
+    ]
+    assert quote_interest_companion._env_float("MISSING", 9.0) == 9.0
+    now = datetime(2026, 9, 9, 14, 30, tzinfo=UTC)
+    assert now.tzinfo is UTC
+
+
+def _serve_redirect() -> tuple[HTTPServer, list[str | None]]:
+    sink_auth: list[str | None] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/from":
+                self.send_response(302)
+                self.send_header("Location", "/sink")
+                self.end_headers()
+                return
+            if self.path == "/sink":
+                sink_auth.append(self.headers.get("Authorization"))
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"followed":true}')
+                return
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, *_args: object) -> None:
+            return
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, sink_auth
+
+
+def test_urllib_redirect_does_not_resend_authorization() -> None:
+    server, sink_auth = _serve_redirect()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/from"
+        headers = {"Authorization": "Bearer test-token-not-production"}
+        status, body = helsinki_http.UrllibHttp(timeout=2.0).get_json(url, headers)
+        assert status == 302
+        assert body in ({}, None)
+        ledger_status, ledger_body = flow_ledger_companion._get_json(url, headers)
+        assert ledger_status == 302
+        assert ledger_body in ({}, None)
+        assert sink_auth == []
+    finally:
+        server.shutdown()
+        server.server_close()

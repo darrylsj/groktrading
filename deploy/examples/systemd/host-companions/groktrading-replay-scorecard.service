@@ -1,19 +1,16 @@
-# Example host companion unit. NOT installed or enabled by install_helsinki.sh.
-# Operator-wired only. Merge ≠ Helsinki restart.
-# Account-events stays files-only / disabled.
-# Offline ledger counts only. No network. No invented PnL. Never places orders.
-# Driven by groktrading-replay-scorecard.timer. Do not embed tokens.
+# One-shot: deterministic replay scorecard over hot flow ledger. No PnL. No network.
 
 [Unit]
-Description=GrokTrading host companion: replay scorecard (counts only; no PnL)
-After=local-fs.target
+Description=GrokTrading flow-ledger replay scorecard (one-shot; never orders)
+After=network-online.target
 
 [Service]
 Type=oneshot
-User=tradingdesk
-Group=tradingdesk
+User=root
+Group=root
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=-/etc/trading-desk/groktrading.env
-ExecStart=/opt/groktrading/.venv/bin/groktrading-replay-scorecard --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite --output /var/lib/trading-desk/replay_scorecard.json
+EnvironmentFile=-/opt/trading-desk/.env
+ExecStart=/opt/groktrading/.venv/bin/groktrading-replay-scorecard --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite --output /var/lib/trading-desk/state/replay_scorecard.json
+Nice=10
 NoNewPrivileges=true
 PrivateTmp=true

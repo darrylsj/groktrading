@@ -1,122 +1,171 @@
 #!/usr/bin/env python3
-"""Helsinki host companion: UW option-trades → append-only flow ledger.
+"""Companion UW option-trades -> hot flow ledger (Helsinki sensor farm).
 
-Package CLI ``groktrading-tape`` is an offline skeleton. This process is the
-live poller. It stores parseable rows only. It does **not** emit sit_match
-and never places orders. Grok Bot decides.
-
-Authorization Bearer is runtime env only (see helsinki_http.py).
+Does NOT place orders, emit webhooks, or change live sit_match behavior.
+Reads UW_API_KEY from the environment (EnvironmentFile). Never prints secrets.
 """
 
 from __future__ import annotations
 
-import argparse
+import json
 import os
+import sys
 import time
-from collections.abc import Mapping
-from datetime import datetime
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-from groktrading.cadence import env_seconds
-from groktrading.feeds.unusual_whales import (
-    UW_OPTION_TRADES_PATH,
-    UnusualWhalesClient,
-    uw_data_rows,
-)
-from groktrading.flow_ledger import FlowLedger, FlowLedgerError
-from groktrading.io_atomic import write_json_atomic
-from groktrading.timeutil import UTC, as_utc
-from helsinki_http import NEVER_ORDERS_NOTE as HTTP_NOTE
-from helsinki_http import ledger_path, make_uw_client, state_dir
+from groktrading.flow_ledger import FlowLedger, FlowLedgerError, flow_digest
 
-NEVER_ORDERS_NOTE = (
-    "Host flow-ledger companion polls UW option-trades into the hot ledger. "
-    "emit_sit_match=False. Never places orders. Grok Bot decides. "
-    + HTTP_NOTE
-)
-FLOW_SEC_ENV = "FLOW_SEC"
-FLOW_LEDGER_POLL_ENV = "FLOW_LEDGER_POLL_SEC"
-DEFAULT_POLL_SEC = 15.0
-POLL_LO = 5.0
-POLL_HI = 60.0
-DEFAULT_LIMIT = "50"
+UW_OPTION_TRADES = "https://api.unusualwhales.com/api/option-trades"
+DEFAULT_LEDGER = "/var/lib/trading-desk/ledger/uw_flow.sqlite"
 
 
-def poll_sec(env: Mapping[str, str] | None = None) -> float:
-    source = os.environ if env is None else env
-    raw = str(source.get(FLOW_LEDGER_POLL_ENV, "")).strip()
-    key = FLOW_LEDGER_POLL_ENV if raw else FLOW_SEC_ENV
-    return env_seconds(
-        source,
-        key,
-        default=DEFAULT_POLL_SEC,
-        lo=POLL_LO,
-        hi=POLL_HI,
-    )
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    return float(raw)
 
 
-def one_poll(
-    client: UnusualWhalesClient,
-    ledger: FlowLedger,
-    *,
-    now: datetime | None = None,
-    limit: str = DEFAULT_LIMIT,
-) -> dict[str, object]:
-    stamp = as_utc(now or client.clock.now())
-    _status, body = client.get_documented_path(
-        UW_OPTION_TRADES_PATH, params={"limit": str(limit)}
-    )
-    rows = uw_data_rows(body)
-    stored = 0
-    for payload in rows:
-        try:
-            ledger.append_row(payload, source="option-trades", ingested_at=stamp)
-            stored += 1
-        except FlowLedgerError:
-            continue
+def _ledger_path() -> Path:
+    return Path(os.environ.get("FLOW_LEDGER_PATH", DEFAULT_LEDGER))
+
+
+def _uw_headers() -> dict[str, str]:
+    key = os.environ.get("UW_API_KEY", "").strip()
+    if not key:
+        raise SystemExit("UW_API_KEY missing in environment (not printed)")
     return {
-        "source": "uw_option_trades",
-        "path": UW_OPTION_TRADES_PATH,
-        "note": NEVER_ORDERS_NOTE,
-        "as_of": stamp.isoformat(),
-        "cadence_sec": poll_sec(),
-        "fetched": len(rows),
-        "stored": stored,
-        "emits_sit_match": False,
-        "places_orders": False,
-        "live_http": True,
-        "mode": "signals_only",
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+        "UW-CLIENT-API-ID": "100001",
     }
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Helsinki flow-ledger companion. Polls UW option-trades into "
-            "SQLite. emit_sit_match=False. Never places orders."
-        )
+def _query() -> str:
+    return urllib.parse.urlencode(
+        [
+            ("is_otm", "true"),
+            ("volume_greater_oi", "true"),
+            ("min_premium", "10000"),
+            ("max_dte", "7"),
+            ("min_volume", "100"),
+            ("limit", "40"),
+            ("excluded_tags[]", "bid_side"),
+            ("issue_types[]", "Common Stock"),
+        ]
     )
-    parser.add_argument("--ledger", default="", help="FLOW_LEDGER_PATH override")
-    parser.add_argument("--state", default="", help="State JSON path")
-    parser.add_argument("--once", action="store_true", help="One poll then exit")
-    return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    env = os.environ
-    path = Path(args.ledger) if args.ledger else ledger_path(env)
-    state = Path(args.state) if args.state else state_dir(env) / "flow_ledger.json"
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse 3xx so Authorization is never forwarded to a new origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
+
+
+def _urlopen(req: urllib.request.Request, timeout: float):
+    opener = urllib.request.build_opener(_NoRedirect)
+    return opener.open(req, timeout=timeout)
+
+
+def _get_json(url: str, headers: dict[str, str], timeout: float = 20.0) -> tuple[int, Any]:
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with _urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            status = int(getattr(resp, "status", 200) or 200)
+    except urllib.error.HTTPError as exc:
+        body = exc.read() if hasattr(exc, "read") else b""
+        status = int(exc.code)
+    except Exception as exc:  # noqa: BLE001 — companion stays up; log type only
+        print(f"flow_ledger_companion: fetch_error={type(exc).__name__}", file=sys.stderr, flush=True)
+        return -1, {}
+    try:
+        data = json.loads(body.decode("utf-8", errors="replace") or "{}")
+    except Exception:
+        data = {}
+    return status, data
+
+
+def _row_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "executed_at": raw.get("executed_at"),
+        "ticker": raw.get("ticker") or raw.get("underlying_symbol") or raw.get("underlying"),
+        "occ": raw.get("option_chain_id") or raw.get("occ") or raw.get("option_symbol"),
+        "print": raw.get("price") if raw.get("price") is not None else raw.get("print"),
+        "nbbo_ask": raw.get("nbbo_ask") if raw.get("nbbo_ask") is not None else raw.get("ask"),
+        "option_type": raw.get("option_type") or raw.get("put_call") or raw.get("type"),
+    }
+
+
+def poll_once(ledger: FlowLedger, headers: dict[str, str]) -> dict[str, int]:
+    status, data = _get_json(f"{UW_OPTION_TRADES}?{_query()}", headers)
+    rows = data.get("data") if isinstance(data, dict) else []
+    if not isinstance(rows, list):
+        rows = []
+    inserted = 0
+    seen = 0
+    skipped = 0
+    for raw in rows:
+        if not isinstance(raw, dict):
+            skipped += 1
+            continue
+        payload = _row_payload(raw)
+        try:
+            digest = flow_digest(payload)
+            existed = ledger._fetch_digest("option-trades", digest) is not None  # noqa: SLF001
+            ledger.append_row(payload, source="option-trades")
+        except FlowLedgerError:
+            skipped += 1
+            continue
+        except Exception as exc:  # noqa: BLE001
+            print(f"flow_ledger_companion: append_error={type(exc).__name__}", file=sys.stderr, flush=True)
+            skipped += 1
+            continue
+        if existed:
+            seen += 1
+        else:
+            inserted += 1
+    return {
+        "http_status": status,
+        "rows": len(rows),
+        "inserted": inserted,
+        "seen": seen,
+        "skipped": skipped,
+    }
+
+
+def main() -> int:
+    path = _ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    state.parent.mkdir(parents=True, exist_ok=True)
-    client = make_uw_client(env)
+    interval = _env_float("FLOW_LEDGER_POLL_SEC", _env_float("FLOW_SEC", 8.0))
+    if interval < 2.0:
+        interval = 2.0
+    headers = _uw_headers()
     ledger = FlowLedger(path)
+    print(
+        f"flow_ledger_companion: start ledger={path} interval_sec={interval} "
+        f"mode=append_only no_orders no_webhooks no_sit_match_emit",
+        flush=True,
+    )
     while True:
-        doc = one_poll(client, ledger, now=datetime.now(tz=UTC))
-        write_json_atomic(state, doc)
-        if args.once:
-            return 0
-        time.sleep(poll_sec(env))
+        try:
+            stats = poll_once(ledger, headers)
+            ts = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            print(
+                f"flow_ledger_companion: ts={ts} http={stats['http_status']} "
+                f"rows={stats['rows']} inserted={stats['inserted']} "
+                f"seen={stats['seen']} skip={stats['skipped']}",
+                flush=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"flow_ledger_companion: loop_error={type(exc).__name__}", file=sys.stderr, flush=True)
+        time.sleep(interval)
 
 
 if __name__ == "__main__":

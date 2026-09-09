@@ -82,14 +82,16 @@ and it is **not** an order router.
   interest, thin RTH screener snapshot, shadow minute-marks, `UW_WS_URL`
   probe stub, Finnhub watch widen + overnight news, replay scorecard
   skeleton. Package CLIs stay **offline skeletons**.
-- **Host companions (repo artifacts, operator-wired):** live pollers under
-  `scripts/` (`helsinki_http.py`, `flow_ledger_companion.py`,
+- **Host companions (repo artifacts, operator-wired):** live **urllib**
+  pollers matching Helsinki 2026-09-08 under `scripts/` (`helsinki_http.py`
+  `UrllibHttp` — not httpx; `flow_ledger_companion.py`,
   `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`,
   `quote_interest_companion.py`) plus example units in
-  `deploy/examples/systemd/host-companions/`. **`install_helsinki.sh` does
-  not copy, enable, or start them.** **emit_sit_match=False.** No webhook
-  firehose from flow-alerts by default. Authorization Bearer is runtime env
-  only. Not a claim these processes are live on Helsinki.
+  `deploy/examples/systemd/host-companions/`. urllib GETs do not follow
+  redirects (Authorization is not re-sent). **`install_helsinki.sh` does
+  not copy, enable, or start them.** **emit_sit_match=False.** Flow-alerts
+  material is local JSONL only (no Grok webhook). Authorization Bearer is
+  runtime env only. Not a claim these processes are live on Helsinki.
 - **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
   emit. Package: `groktrading.sit_match`. Ledger may still **store** stale

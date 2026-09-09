@@ -1,127 +1,62 @@
-#!/usr/bin/env python3
-"""Shared host HTTP for Helsinki companions.
+"""Shared urllib HttpJson for Helsinki companions.
 
-Authorization Bearer is **runtime env only** (``UW_API_KEY`` / ``UW_API_TOKEN``).
-Never log headers or tokens. Never places orders. Grok Bot decides.
-
-This module is a transport. Package helpers (``UnusualWhalesClient``) own
-documented paths and freshness. CI / ``--help`` must not require secrets
-or open a live socket.
+Matches groktrading.feeds.unusual_whales.HttpJson:
+  get_json(url, headers=None) -> (status, body)
+Raises TimeoutError on timeouts (UW client maps to fail-closed).
+Never logs tokens or Authorization headers.
+Does not follow redirects (Authorization must not be re-sent).
 """
 
 from __future__ import annotations
 
-import os
-from collections.abc import Mapping
-from datetime import datetime
-from pathlib import Path
+import json
+import socket
+import urllib.error
+import urllib.request
 from typing import Any
 
-import httpx
 
-from groktrading.feeds.unusual_whales import DEFAULT_UW_BASE_URL, UnusualWhalesClient
-from groktrading.timeutil import UTC
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse 3xx so Authorization is never forwarded to a new origin."""
 
-NEVER_ORDERS_NOTE = (
-    "Helsinki host HTTP transport. Authorization Bearer is runtime env only. "
-    "Never places orders. WebSocket never places orders. Grok Bot decides."
-)
-
-DEFAULT_STATE_DIR = Path("/var/lib/trading-desk")
-DEFAULT_LEDGER_NAME = "ledger/uw_flow.sqlite"
-DEFAULT_TIMEOUT_SEC = 15.0
-_TOKEN_KEYS = ("UW_API_KEY", "UW_API_TOKEN")
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
 
 
-def env_map(env: Mapping[str, str] | None = None) -> Mapping[str, str]:
-    return os.environ if env is None else env
+def _urlopen(req: urllib.request.Request, timeout: float):
+    opener = urllib.request.build_opener(_NoRedirect)
+    return opener.open(req, timeout=timeout)
 
 
-def state_dir(env: Mapping[str, str] | None = None) -> Path:
-    source = env_map(env)
-    raw = str(source.get("STATE_DIR", "")).strip()
-    return Path(raw) if raw else DEFAULT_STATE_DIR
-
-
-def ledger_path(env: Mapping[str, str] | None = None) -> Path:
-    source = env_map(env)
-    raw = str(source.get("FLOW_LEDGER_PATH", "")).strip()
-    if raw:
-        return Path(raw)
-    return state_dir(source) / DEFAULT_LEDGER_NAME
-
-
-def uw_token(env: Mapping[str, str] | None = None) -> str:
-    """Token from runtime env. Empty if unset — callers fail closed."""
-    source = env_map(env)
-    for key in _TOKEN_KEYS:
-        raw = str(source.get(key, "")).strip()
-        if raw:
-            return raw
-    return ""
-
-
-def authorization_headers(token: str) -> dict[str, str]:
-    """Build Authorization Bearer at request time. Never log this mapping."""
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-    }
-
-
-def uw_base_url(env: Mapping[str, str] | None = None) -> str:
-    source = env_map(env)
-    raw = str(source.get("UW_BASE_URL") or source.get("UW_API_BASE") or "").strip()
-    return raw or DEFAULT_UW_BASE_URL
-
-
-class HelsinkiHttp:
-    """httpx JSON GET. Forwards caller headers (Bearer is runtime env / client)."""
-
-    def __init__(self, *, timeout: float = DEFAULT_TIMEOUT_SEC) -> None:
-        self.timeout = timeout
+class UrllibHttp:
+    def __init__(self, timeout: float = 20.0) -> None:
+        self.timeout = float(timeout)
 
     def get_json(
         self, url: str, headers: dict[str, str] | None = None
     ) -> tuple[int, Any]:
-        hdrs = dict(headers or {})
-        if "Authorization" not in hdrs:
-            token = uw_token()
-            if token:
-                hdrs.update(authorization_headers(token))
+        req = urllib.request.Request(url, headers=headers or {}, method="GET")
         try:
-            response = httpx.get(url, headers=hdrs, timeout=self.timeout)
-        except httpx.TimeoutException as exc:
-            raise TimeoutError("helsinki_http_timeout") from exc
+            with _urlopen(req, timeout=self.timeout) as resp:
+                raw = resp.read()
+                status = int(getattr(resp, "status", 200) or 200)
+        except urllib.error.HTTPError as exc:
+            raw = exc.read() if hasattr(exc, "read") else b""
+            status = int(exc.code)
+        except TimeoutError:
+            raise
+        except socket.timeout as exc:
+            raise TimeoutError("urllib_timeout") from exc
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            if isinstance(reason, (TimeoutError, socket.timeout)):
+                raise TimeoutError("urllib_timeout") from exc
+            # Some platforms wrap timeout as OSError with errno
+            if "timed out" in str(exc).lower() or "timeout" in str(reason).lower():
+                raise TimeoutError("urllib_timeout") from exc
+            raise
         try:
-            body: Any = response.json()
-        except ValueError:
+            body: Any = json.loads(raw.decode("utf-8", errors="replace") or "null")
+        except Exception:
             body = {}
-        return response.status_code, body
-
-
-class UtcClock:
-    def now(self) -> datetime:
-        return datetime.now(tz=UTC)
-
-
-def require_uw_token(env: Mapping[str, str] | None = None) -> str:
-    token = uw_token(env)
-    if not token:
-        raise SystemExit("UW_API_KEY or UW_API_TOKEN is required in the environment")
-    return token
-
-
-def make_uw_client(env: Mapping[str, str] | None = None) -> UnusualWhalesClient:
-    """Live UW client. Token is read at call time; never embedded."""
-    source = env_map(env)
-    return UnusualWhalesClient(
-        http=HelsinkiHttp(),
-        clock=UtcClock(),
-        token=require_uw_token(source),
-        base_url=uw_base_url(source),
-    )
-
-
-if __name__ == "__main__":
-    print(NEVER_ORDERS_NOTE)
+        return status, body

@@ -197,10 +197,12 @@ def test_example_units_are_package_named_and_secret_free() -> None:
         )
     ]
     assert "emit_sit_match=False" in companion_texts[1]
-    assert "webhook firehose" in companion_texts[1]
-    assert "NOT installed or enabled by install_helsinki.sh" in companion_texts[0]
-    assert "scripts/flow_alerts_companion.py" not in SCRIPT.read_text(encoding="utf-8")
-    assert "host-companions" in SCRIPT.read_text(encoding="utf-8")
+    assert "no Grok webhook" in companion_texts[1]
+    assert "scripts/flow_ledger_companion.py" in companion_texts[0]
+    install_text = SCRIPT.read_text(encoding="utf-8")
+    assert "scripts/flow_alerts_companion.py" not in install_text
+    assert "host-companions" in install_text
+    assert "does not copy, enable, or start" in install_text
     for text in (finnhub, tape, account, *companion_texts):
         assert "YOUR_" not in text
         assert "token=" not in text.lower()

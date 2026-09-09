@@ -32,7 +32,7 @@ under `/opt/trading-desk` and still does not run this commit until an
 operator cutover. **Merging this repo does not restart Helsinki.** Wire
 companion units separately (`deploy/examples/systemd/host-companions/` —
 not auto-enabled). Account-events stays files-only / disabled.
-`emit_sit_match=False`. No webhook firehose from flow-alerts by default.
+`emit_sit_match=False`. Flow-alerts material is local JSONL only (no Grok webhook).
 **Grok Update Computer does not rebuild Helsinki.**
 
 ## What was observed

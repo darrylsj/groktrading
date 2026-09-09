@@ -1,22 +1,24 @@
-# Example host companion unit. NOT installed or enabled by install_helsinki.sh.
-# Operator-wired only. Merge ≠ Helsinki restart.
-# Account-events stays files-only / disabled.
-# emit_sit_match=False. No webhook firehose from flow-alerts by default.
-# Never places orders. Do not embed tokens.
-# Authorization Bearer is runtime env only (unusual-whales.env).
+# Host companion: polls UW flow-alerts via package poll_flow_alerts.
+# emit_sit_match=False. Material → local JSONL only (no Grok webhook tonight).
+# Never places orders. Never embed tokens in this unit.
 
 [Unit]
-Description=GrokTrading host companion: UW flow-alerts (no sit_match; no webhook firehose)
+Description=GrokTrading UW flow-alerts companion (host poll; never orders)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=tradingdesk
-Group=tradingdesk
+User=root
+Group=root
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=-/etc/trading-desk/groktrading.env
-EnvironmentFile=-/etc/trading-desk/unusual-whales.env
+EnvironmentFile=/opt/trading-desk/.env
+EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+Environment=FLOW_LEDGER_PATH=/var/lib/trading-desk/ledger/uw_flow.sqlite
+Environment=FLOW_ALERTS_SEEN_PATH=/var/lib/trading-desk/ledger/flow_alerts_seen.json
+Environment=FLOW_ALERTS_STATE_PATH=/var/lib/trading-desk/state/flow_alerts.json
+Environment=FLOW_ALERTS_MATERIAL_PATH=/var/lib/trading-desk/state/flow_alerts_material.jsonl
+Environment=FLOW_ALERTS_POLL_SEC=20
 ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/flow_alerts_companion.py
 Restart=on-failure
 RestartSec=5

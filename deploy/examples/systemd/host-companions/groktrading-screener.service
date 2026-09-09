@@ -1,24 +1,23 @@
-# Example host companion unit. NOT installed or enabled by install_helsinki.sh.
-# Operator-wired only. Merge ≠ Helsinki restart.
-# Account-events stays files-only / disabled.
-# emit_sit_match=False. Do not spray sit_match. Never places orders.
-# Do not embed tokens. Authorization Bearer is runtime env only.
+# Host companion: RTH UW option-screener snapshot → screener_state.json.
+# rth_only=True (library no-ops write outside RTH). Never sit_match spray.
 
 [Unit]
-Description=GrokTrading host companion: thin RTH UW screener snapshot (no sit_match)
+Description=GrokTrading UW screener companion (RTH snapshot; never orders)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=tradingdesk
-Group=tradingdesk
+User=root
+Group=root
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=-/etc/trading-desk/groktrading.env
-EnvironmentFile=-/etc/trading-desk/unusual-whales.env
+EnvironmentFile=/opt/trading-desk/.env
+EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+Environment=SCREENER_STATE_PATH=/var/lib/trading-desk/state/screener_state.json
+Environment=SCREENER_POLL_SEC=600
 ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/screener_companion.py
 Restart=on-failure
-RestartSec=5
+RestartSec=15
 NoNewPrivileges=true
 PrivateTmp=true
 

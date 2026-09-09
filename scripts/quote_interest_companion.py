@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
-"""Helsinki host companion: bounded Tradier quote interest from the flow ledger.
+"""Helsinki host companion: Tradier quote interest set publisher.
 
-Package CLI ``groktrading-quote-interest`` is an offline skeleton. This process
-refreshes the interest set from recent ledger rows. Live ``ws_tape.py`` is
-host-owned and must be wired by the operator. This companion never opens a
-Tradier socket and never places orders. Grok Bot decides.
+Reads recent underlyings from the hot flow ledger, updates TradierQuoteInterest
+via note_flow_row (freshness-gated), writes quote_interest.json.
 
-No UW HTTP. No sit_match emit. Authorization Bearer is unused here.
+Live ws_tape.py subscribe remains host-owned — this only publishes the
+interest set for Grok/operator. Never opens a Tradier socket. Never orders.
+Never prints tokens.
 """
 
 from __future__ import annotations
 
-import argparse
 import os
+import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-from groktrading.cadence import env_seconds
-from groktrading.feeds.quote_subscribe import NEVER_ORDERS_NOTE as QUOTE_NOTE
 from groktrading.feeds.quote_subscribe import (
     TradierQuoteInterest,
     quote_idle_ttl_sec,
@@ -27,81 +25,102 @@ from groktrading.feeds.quote_subscribe import (
 from groktrading.flow_ledger import FlowLedger
 from groktrading.io_atomic import write_json_atomic
 from groktrading.timeutil import UTC
-from helsinki_http import ledger_path, state_dir
 
-NEVER_ORDERS_NOTE = (
-    "Host quote-interest companion. Live ws_tape.py is host-owned. "
-    "emit_sit_match=False. WebSocket never places orders. "
-    + QUOTE_NOTE
-)
-QUOTE_INTEREST_POLL_ENV = "QUOTE_INTEREST_POLL_SEC"
-DEFAULT_POLL_SEC = 20.0
-POLL_LO = 15.0
-POLL_HI = 60.0
-RECENT_LIMIT = 40
+DEFAULT_LEDGER = "/var/lib/trading-desk/ledger/uw_flow.sqlite"
+DEFAULT_STATE = "/var/lib/trading-desk/state/quote_interest.json"
+DEFAULT_POLL = 60.0
+DEFAULT_RECENT = 80
 
 
-def poll_sec(env: dict[str, str] | None = None) -> float:
-    return env_seconds(
-        os.environ if env is None else env,
-        QUOTE_INTEREST_POLL_ENV,
-        default=DEFAULT_POLL_SEC,
-        lo=POLL_LO,
-        hi=POLL_HI,
-    )
+class UtcClock:
+    def now(self) -> datetime:
+        return datetime.now(tz=UTC)
 
 
-def refresh(
-    ledger: FlowLedger,
-    interest: TradierQuoteInterest,
-    *,
-    now: datetime,
-    env: dict[str, str] | None = None,
-) -> dict[str, object]:
-    source = os.environ if env is None else env
-    for row in ledger.iter_recent(limit=RECENT_LIMIT):
-        interest.note_flow_row(row, now, env=source)
-    interest.drop_idle(now)
-    doc = interest.state_document(now=now)
-    doc["emits_sit_match"] = False
-    doc["places_orders"] = False
-    doc["live_http"] = False
-    doc["live_socket"] = False
-    doc["note"] = NEVER_ORDERS_NOTE
-    return doc
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Helsinki quote-interest companion. Ledger → bounded symbol set. "
-            "ws_tape.py is host-owned. Never places orders."
-        )
-    )
-    parser.add_argument("--ledger", default="", help="FLOW_LEDGER_PATH override")
-    parser.add_argument("--state", default="", help="quote_interest.json path")
-    parser.add_argument("--once", action="store_true", help="One refresh then exit")
-    return parser
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    env = os.environ
-    path = Path(args.ledger) if args.ledger else ledger_path(env)
-    state = Path(args.state) if args.state else state_dir(env) / "quote_interest.json"
-    state.parent.mkdir(parents=True, exist_ok=True)
-    ledger = FlowLedger(path)
+def _seed_symbols(env: dict[str, str]) -> list[str]:
+    raw = env.get("QUOTE_INTEREST_SEED", env.get("QUOTE_INTEREST_SYMBOLS", "")).strip()
+    if not raw:
+        return []
+    return [p.strip().upper() for p in raw.split(",") if p.strip()]
+
+
+def main() -> int:
+    ledger_path = Path(os.environ.get("FLOW_LEDGER_PATH", DEFAULT_LEDGER))
+    state_path = Path(os.environ.get("QUOTE_INTEREST_STATE_PATH", DEFAULT_STATE))
+    interval = max(15.0, _env_float("QUOTE_INTEREST_POLL_SEC", DEFAULT_POLL))
+    recent_n = max(1, _env_int("QUOTE_INTEREST_RECENT_N", DEFAULT_RECENT))
+    env = dict(os.environ)
+
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    clock = UtcClock()
     interest = TradierQuoteInterest(
         bound=quote_watch_bound(env),
         idle_ttl_seconds=quote_idle_ttl_sec(env),
+        clock=clock,
     )
+    # Optional seed (operator env); not freshness-gated.
+    for sym in _seed_symbols(env):
+        try:
+            interest.touch(sym, now=clock.now())
+        except Exception:
+            pass
+
+    print(
+        f"quote_interest_companion: start state={state_path} "
+        f"ledger={ledger_path} interval={interval} "
+        "host_owned_tape=ws_tape.py no_socket no_orders",
+        flush=True,
+    )
+
     while True:
-        now = datetime.now(tz=UTC)
-        doc = refresh(ledger, interest, now=now, env=dict(env))
-        write_json_atomic(state, doc)
-        if args.once:
-            return 0
-        time.sleep(poll_sec(env))
+        try:
+            now = clock.now()
+            if ledger_path.is_file():
+                ledger = FlowLedger(ledger_path, clock=clock)
+                for row in ledger.iter_recent(limit=recent_n):
+                    try:
+                        interest.note_flow_row(row, now, env=env)
+                    except Exception:
+                        continue
+            interest.drop_idle(now)
+            doc = interest.state_document(now=now)
+            doc["mode"] = "host_companion"
+            doc["recent_n"] = recent_n
+            write_json_atomic(state_path, doc)
+            ts = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            print(
+                f"quote_interest_companion: ts={ts} "
+                f"symbols={len(doc.get('symbols') or [])} "
+                f"bound={doc.get('bound')}",
+                flush=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"quote_interest_companion: loop_error={type(exc).__name__}",
+                file=sys.stderr,
+                flush=True,
+            )
+        time.sleep(interval)
 
 
 if __name__ == "__main__":
