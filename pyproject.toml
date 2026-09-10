@@ -30,10 +30,11 @@ dev = [
   "mypy>=1.10",
   "pytest>=8.2",
   "ruff>=0.6",
-  "numpy>=1.26,<3",
+  "numpy>=1.26,<2.4",
 ]
-fluid = ["numpy>=1.26,<3"]
-fluid-feed = ["numpy>=1.26,<3", "databento>=0.86,<0.87"]
+# Keep NumPy stubs compatible with this project's Python 3.11 mypy target.
+fluid = ["numpy>=1.26,<2.4"]
+fluid-feed = ["numpy>=1.26,<2.4", "databento>=0.86,<0.87"]
 ws = [
   "websockets>=12,<16",
 ]
