@@ -96,7 +96,10 @@ def _row_payload(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "executed_at": raw.get("executed_at"),
         "ticker": raw.get("ticker") or raw.get("underlying_symbol") or raw.get("underlying"),
-        "occ": raw.get("option_chain_id") or raw.get("occ") or raw.get("option_symbol"),
+        "occ": raw.get("option_chain_id")
+        or raw.get("option_chain")
+        or raw.get("occ")
+        or raw.get("option_symbol"),
         "print": raw.get("price") if raw.get("price") is not None else raw.get("print"),
         "nbbo_ask": raw.get("nbbo_ask") if raw.get("nbbo_ask") is not None else raw.get("ask"),
         "option_type": raw.get("option_type") or raw.get("put_call") or raw.get("type"),

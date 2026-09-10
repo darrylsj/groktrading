@@ -23,6 +23,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 
+from groktrading.quote_gate import normalize_occ
 from groktrading.redaction import redact_mapping
 from groktrading.sit_match import SitMatchFreshness, evaluate_sit_match_freshness, parse_executed_at
 from groktrading.timeutil import UTC, as_utc
@@ -30,6 +31,10 @@ from groktrading.timeutil import UTC, as_utc
 FlowSource = Literal["option-trades", "flow-alerts"]
 FLOW_SOURCES: frozenset[str] = frozenset({"option-trades", "flow-alerts"})
 OPTION_TYPES: frozenset[str] = frozenset({"call", "put"})
+# Shared OCC aliases (live UW flow-alerts use option_chain).
+OCC_ALIAS_KEYS: tuple[str, ...] = ("occ", "option_symbol", "option_chain_id", "option_chain")
+# Execution clock only. Never treat created_at / timestamp as executed_at.
+EXECUTION_CLOCK_KEY = "executed_at"
 
 
 class Clock(Protocol):
@@ -43,9 +48,15 @@ class UtcClock:
 
 @dataclass(frozen=True)
 class FlowRow:
-    """One UW flow print. ``raw_digest`` is a hash, never the raw payload."""
+    """One UW flow print. ``raw_digest`` is a hash, never the raw payload.
 
-    executed_at: datetime
+    ``executed_at`` is the execution clock when present. Missing means the
+    row may be stored for research but must not pass freshness-sensitive
+    gates (sit_match, quote interest). ``created_at`` / ``timestamp`` are
+    not substitutes.
+    """
+
+    executed_at: datetime | None
     ticker: str
     occ: str
     print: str
@@ -116,6 +127,19 @@ def _first(payload: Mapping[str, Any], *keys: str) -> object:
     return None
 
 
+def extract_occ(payload: Mapping[str, Any]) -> str:
+    """Normalize OCC from documented aliases. Spaces/dashes stripped."""
+    return normalize_occ(_require_text(_first(payload, *OCC_ALIAS_KEYS), "occ"))
+
+
+def extract_execution_clock(payload: Mapping[str, Any]) -> datetime | None:
+    """Return parsed ``executed_at`` only. Never created_at / timestamp."""
+    raw = payload.get(EXECUTION_CLOCK_KEY)
+    if raw in (None, ""):
+        return None
+    return parse_executed_at(raw)
+
+
 def draft_from_uw_row(
     payload: Mapping[str, Any],
     *,
@@ -124,21 +148,19 @@ def draft_from_uw_row(
 ) -> FlowRow:
     """Map a documented UW option-trades (or later flow-alerts) row.
 
-    Required: parseable ``executed_at``, ticker, OCC, print, nbbo ask, call/put.
-    Does not invent missing fields. Stale ``executed_at`` is allowed to store.
+    Required: ticker, OCC, print, nbbo ask, call/put. ``executed_at`` is the
+    only execution clock — ``created_at`` / ``timestamp`` are not substituted.
+    Missing ``executed_at`` may still store; unparseable ``executed_at`` fails
+    closed. Stale ``executed_at`` is allowed to store.
     """
-    executed = parse_executed_at(
-        _first(payload, "executed_at", "timestamp", "created_at")
-    )
-    if executed is None:
+    raw_clock = payload.get(EXECUTION_CLOCK_KEY)
+    if raw_clock not in (None, "") and parse_executed_at(raw_clock) is None:
         raise FlowLedgerError("sit_match_missing_or_unparseable_executed_at")
+    executed = extract_execution_clock(payload)
     ticker = _require_text(
         _first(payload, "ticker", "underlying", "ticker_symbol"), "ticker"
     ).upper()
-    occ = _require_text(
-        _first(payload, "occ", "option_symbol", "option_chain_id", "option_chain"),
-        "occ",
-    ).upper()
+    occ = extract_occ(payload)
     print_px = _require_price(
         _first(payload, "print", "price", "trade_price", "avg_price"), "print"
     )
@@ -240,26 +262,33 @@ class FlowLedger:
         existing = self._fetch_digest(row.source, row.raw_digest)
         if existing is not None:
             return existing
-        cur = self._conn.execute(
-            """
-            INSERT INTO flow_rows (
-                executed_at, ticker, occ, print, nbbo_ask, option_type,
-                ingested_at, source, raw_digest
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                _iso(row.executed_at),
-                row.ticker,
-                row.occ,
-                row.print,
-                row.nbbo_ask,
-                row.option_type,
-                _iso(row.ingested_at),
-                row.source,
-                row.raw_digest,
-            ),
-        )
-        self._conn.commit()
+        try:
+            cur = self._conn.execute(
+                """
+                INSERT INTO flow_rows (
+                    executed_at, ticker, occ, print, nbbo_ask, option_type,
+                    ingested_at, source, raw_digest
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _iso(row.executed_at) if row.executed_at is not None else "",
+                    row.ticker,
+                    row.occ,
+                    row.print,
+                    row.nbbo_ask,
+                    row.option_type,
+                    _iso(row.ingested_at),
+                    row.source,
+                    row.raw_digest,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            raced = self._fetch_digest(row.source, row.raw_digest)
+            if raced is not None:
+                return raced
+            raise FlowLedgerError("insert_conflict") from None
         inserted = cur.lastrowid
         if inserted is None:
             raise FlowLedgerError("insert_missing_row_id")
@@ -335,9 +364,11 @@ class FlowLedger:
         source = str(raw["source"])
         if source not in FLOW_SOURCES:
             raise FlowLedgerError("corrupt_source")
+        raw_executed = str(raw["executed_at"] or "").strip()
+        executed = _parse_stored_ts(raw_executed) if raw_executed else None
         return FlowRow(
             row_id=int(raw["id"]),
-            executed_at=_parse_stored_ts(str(raw["executed_at"])),
+            executed_at=executed,
             ticker=str(raw["ticker"]),
             occ=str(raw["occ"]),
             print=str(raw["print"]),

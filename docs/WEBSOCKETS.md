@@ -85,7 +85,7 @@ Helsinki pushes **material events only**. No LLM polling.
 
 | Event | Meaning on the live card |
 | --- | --- |
-| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/`executed_at` older than the cap → **do not emit**. Payload includes `executed_at`. 90s per-OCC debounce is not a freshness gate — stale UW rows can linger for hours. |
+| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). `created_at` / `timestamp` are not substitutes. Missing/unparseable/`executed_at` older than the cap / non-finite max-age → **do not emit**. Payload includes `executed_at`. 90s per-OCC debounce is not a freshness gate — stale UW rows can linger for hours. |
 | `in_position` | Broker already holds the OCC / underlying — do not spray a second entry |
 | `cash_up` | 12:30 PT **entry-cutoff** notice. Flag: `entry_cutoff_only_no_flatten`. Existing overnight longs stay. |
 | `day_win_target` | Informational. `auto_flatten: false` — **not** a liquidation trigger |

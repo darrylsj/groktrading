@@ -1,6 +1,11 @@
 # Host companion: publish Tradier quote interest set from recent flow ledger.
 # Live ws_tape.py subscribe is still host-owned — this only publishes the
 # interest set for Grok/operator. Never opens a Tradier market WS. Never orders.
+# Example only — not copied/enabled by install_helsinki.sh. Merge ≠ Helsinki restart.
+#
+# Least privilege (H5): User=tradingdesk (not root).
+# Writable: /var/lib/trading-desk/state (quote_interest.json).
+# Reads ledger at /var/lib/trading-desk/ledger. No webhook env. No UW token.
 
 [Unit]
 Description=GrokTrading Tradier quote-interest companion (interest set only; never orders)
@@ -9,11 +14,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=tradingdesk
+Group=tradingdesk
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=/opt/trading-desk/.env
-EnvironmentFile=-/etc/trading-desk/grok-webhook.env
 Environment=FLOW_LEDGER_PATH=/var/lib/trading-desk/ledger/uw_flow.sqlite
 Environment=QUOTE_INTEREST_STATE_PATH=/var/lib/trading-desk/state/quote_interest.json
 Environment=QUOTE_INTEREST_POLL_SEC=60

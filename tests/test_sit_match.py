@@ -7,6 +7,7 @@ from groktrading.idempotency import DurableIdempotency
 from groktrading.models import AssembledFacts, Candidate
 from groktrading.sit_match import (
     DEFAULT_SIT_MATCH_MAX_AGE_SEC,
+    REASON_INVALID_MAX_AGE,
     REASON_MISSING,
     REASON_STALE,
     REASON_UNPARSEABLE,
@@ -123,6 +124,34 @@ def test_env_max_age_override() -> None:
     assert tight.reason == REASON_STALE
     wide = evaluate_sit_match_freshness(executed, NOW, env={"SIT_MATCH_MAX_AGE_SEC": "30"})
     assert wide.allow is True
+
+
+def test_non_finite_max_age_fail_closed_env_and_arg() -> None:
+    assert sit_match_max_age_sec({"SIT_MATCH_MAX_AGE_SEC": "inf"}) is None
+    assert sit_match_max_age_sec({"SIT_MATCH_MAX_AGE_SEC": "NaN"}) is None
+    assert sit_match_max_age_sec({"SIT_MATCH_MAX_AGE_SEC": "-1"}) is None
+    old = NOW - timedelta(days=30)
+    for limit in (float("inf"), float("nan"), float("-inf")):
+        decision = evaluate_sit_match_freshness(old, NOW, max_age_sec=limit)
+        assert decision.allow is False
+        assert decision.reason == REASON_INVALID_MAX_AGE
+    env_inf = evaluate_sit_match_freshness(
+        old, NOW, env={"SIT_MATCH_MAX_AGE_SEC": "inf"}
+    )
+    assert env_inf.allow is False
+    assert env_inf.reason == REASON_INVALID_MAX_AGE
+
+
+def test_created_at_is_not_execution_clock() -> None:
+    payload = {
+        "event": "sit_match",
+        "occ": "NVDA260918P00170000",
+        "created_at": "2026-09-09T16:29:50Z",
+        "timestamp": "2026-09-09T16:29:50Z",
+    }
+    decision = evaluate_sit_match_payload(payload, NOW)
+    assert decision.allow is False
+    assert decision.reason == REASON_MISSING
 
 
 def test_candidate_and_facts_keep_executed_at() -> None:

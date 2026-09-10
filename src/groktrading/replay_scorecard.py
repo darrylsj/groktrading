@@ -56,7 +56,8 @@ class ReplayScorecard:
 
 
 def _row_sort_key(row: FlowRow) -> tuple[datetime, datetime, int]:
-    return (row.executed_at, row.ingested_at, row.row_id or 0)
+    clock = row.executed_at if row.executed_at is not None else row.ingested_at
+    return (clock, row.ingested_at, row.row_id or 0)
 
 
 def scorecard(

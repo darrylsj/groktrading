@@ -10,7 +10,9 @@ legacy Helsinki. They are not a live deployment and must not contain tokens.
 | `systemd/groktrading-finnhub.service` | Package Finnhub tape unit (`groktrading-finnhub-tape`). |
 | `systemd/groktrading-tape.service` | Package tape **skeleton** (`groktrading-tape`). **Not** `ws_tape.py`. |
 | `systemd/groktrading-account-events.service` | Tradier account-events **position truth** (never orders). Files only; not enabled by the installer. |
-| `systemd/host-companions/` | Example **operator-wired** live urllib poller units (Helsinki 2026-09-08) + replay-scorecard timer. **Not** copied, enabled, or started by `install_helsinki.sh`. **Merge ≠ Helsinki restart.** `emit_sit_match=False`. Flow-alerts material is local JSONL only (no Grok webhook). Account-events stays files-only / disabled. |
+| `systemd/host-companions/` | Example **operator-wired** live urllib poller units (Helsinki 2026-09-08) + replay-scorecard timer. **`User=tradingdesk`** (not root). Units that never emit webhooks omit `grok-webhook.env`. Writable: `/var/lib/trading-desk/ledger`, `/var/lib/trading-desk/state`. **Not** copied, enabled, or started by `install_helsinki.sh`. **Merge ≠ Helsinki restart.** `emit_sit_match=False`. Flow-alerts material is local JSONL only (no Grok webhook). Account-events stays files-only / disabled. |
+| `systemd/hot-retention/` | Example **files-only** timer/service for `scripts/hot_ledger_retain.py` (7–14 day hot window + JSONL bound). Default ExecStart is `--dry-run`. **Do not enable from this repo.** |
+| `cron/hot-retain.cron` | Example cron snippet (commented). Same retain script. |
 | `env/*.env.example` P1/P2 knobs | `FLOW_ALERTS_POLL_SEC`, `TIDE_POLL_SEC`, `SCREENER_POLL_SEC`, `TRADIER_QUOTE_WATCH_BOUND`, `SHADOW_MARK_SEC`, `FINNHUB_WATCH_WIDEN_CAP`, `UW_WS_URL` (unset = fail-closed). Merge ≠ Helsinki restart; wire companion units separately. |
 | `systemd/webhook.env.conf` | Drop-in that loads `/etc/trading-desk/grok-webhook.env`. |
 

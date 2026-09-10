@@ -32,7 +32,13 @@ from groktrading.feeds.unusual_whales import (
     UnusualWhalesClient,
     uw_data_rows,
 )
-from groktrading.flow_ledger import FlowLedger, FlowLedgerError, FlowRow
+from groktrading.flow_ledger import (
+    EXECUTION_CLOCK_KEY,
+    OCC_ALIAS_KEYS,
+    FlowLedger,
+    FlowLedgerError,
+    FlowRow,
+)
 from groktrading.io_atomic import write_json_atomic
 from groktrading.sit_match import (
     SIT_MATCH_EVENT,
@@ -86,7 +92,11 @@ def extract_alert_id(payload: Mapping[str, Any]) -> str | None:
 
 
 def is_sit_match_shaped(payload: Mapping[str, Any]) -> bool:
-    """True when the row looks like a sit_match print (freshness applies)."""
+    """True when the row looks like a sit_match print (freshness applies).
+
+    OCC aliases include live UW ``option_chain``. The execution clock is
+    ``executed_at`` only — ``created_at`` / ``timestamp`` do not count.
+    """
     event = str(payload.get("event") or "").strip().lower()
     if event == SIT_MATCH_EVENT:
         return True
@@ -94,12 +104,8 @@ def is_sit_match_shaped(payload: Mapping[str, Any]) -> bool:
         return True
     has_print = any(payload.get(k) not in (None, "") for k in ("print", "price", "avg_price"))
     has_ask = any(payload.get(k) not in (None, "") for k in ("nbbo_ask", "ask"))
-    has_occ = any(
-        payload.get(k) not in (None, "") for k in ("occ", "option_symbol", "option_chain_id")
-    )
-    has_ts = any(
-        payload.get(k) not in (None, "") for k in ("executed_at", "timestamp", "created_at")
-    )
+    has_occ = any(payload.get(k) not in (None, "") for k in OCC_ALIAS_KEYS)
+    has_ts = payload.get(EXECUTION_CLOCK_KEY) not in (None, "")
     return bool(has_print and has_ask and has_occ and has_ts)
 
 
@@ -127,6 +133,13 @@ class SeenAlertStore:
 
     def known(self, alert_id: str) -> bool:
         return alert_id in self._ids
+
+    def forget(self, alert_id: str) -> None:
+        """Drop an id so a failed delivery can retry (H1 outbox)."""
+        if alert_id not in self._ids:
+            return
+        self._ids.discard(alert_id)
+        self._persist()
 
     def remember(self, alert_id: str) -> bool:
         """Return True if this id is newly recorded (first time)."""
@@ -212,14 +225,10 @@ def poll_flow_alerts(
     for payload in rows:
         alert_id = extract_alert_id(payload)
         already = alert_id is not None and seen.known(alert_id)
-        is_new = False
-        if alert_id is not None and not already:
-            is_new = seen.remember(alert_id)
-            if is_new:
-                new_n += 1
         row: FlowRow | None = None
         stored = False
         try:
+            # H1: append (durable) before marking seen.
             row = ledger.append_row(payload, source="flow-alerts", ingested_at=stamp)
             stored = True
             stored_n += 1
@@ -232,17 +241,16 @@ def poll_flow_alerts(
         skip: str | None = None
         if alert_id is None:
             skip = "missing_alert_id"
-            skip_n += 1
-        elif not is_new:
+        elif already:
             skip = "duplicate_alert_id"
-            skip_n += 1
+        elif not stored:
+            skip = "store_failed"
         elif emit_sit_match and shaped:
             if freshness is not None and freshness.allow:
                 emit = True
                 event = SIT_MATCH_EVENT
             else:
                 skip = freshness.reason if freshness is not None else "sit_match_blocked"
-                skip_n += 1
         else:
             emit = True
             event = FLOW_ALERT_EVENT
@@ -250,17 +258,54 @@ def poll_flow_alerts(
             alert_id=alert_id,
             row=row,
             stored=stored,
-            is_new_id=is_new,
+            is_new_id=False,
             emit=emit,
             event_type=event,
             skip_reason=skip,
             sit_match=freshness,
         )
+        delivered = True
+        if emit and on_material is not None:
+            try:
+                on_material(hit)
+            except Exception:
+                delivered = False
+                emit = False
+                skip = "delivery_failed"
+                event = None
+                hit = FlowAlertHit(
+                    alert_id=alert_id,
+                    row=row,
+                    stored=stored,
+                    is_new_id=False,
+                    emit=False,
+                    event_type=None,
+                    skip_reason=skip,
+                    sit_match=freshness,
+                )
+        is_new = False
+        if alert_id is not None and not already and stored:
+            if emit and delivered:
+                is_new = seen.remember(alert_id)
+            elif skip not in {None, "store_failed", "delivery_failed"}:
+                is_new = seen.remember(alert_id)
+        if is_new:
+            new_n += 1
+            hit = FlowAlertHit(
+                alert_id=alert_id,
+                row=row,
+                stored=stored,
+                is_new_id=True,
+                emit=emit,
+                event_type=event,
+                skip_reason=skip,
+                sit_match=freshness,
+            )
         hits.append(hit)
         if emit:
             emit_n += 1
-            if on_material is not None:
-                on_material(hit)
+        if skip is not None:
+            skip_n += 1
     return FlowAlertPollResult(
         fetched=len(rows),
         stored=stored_n,

@@ -1,0 +1,12 @@
+# Example cron (not installed by this repo). CRON_TZ=America/Los_Angeles
+# Run after a verified Box cold-rotate of the closed day pack.
+# Do not enable from a cloud agent. tradingdesk user only.
+#
+# 20 14 * * 1-5  tradingdesk  /opt/groktrading/.venv/bin/python /opt/groktrading/scripts/hot_ledger_retain.py \
+#   --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite \
+#   --state-dir /var/lib/trading-desk/state \
+#   --keep-hot-days 7 \
+#   --verified
+#
+# Dry-run first:
+#   python scripts/hot_ledger_retain.py --ledger ... --state-dir ... --dry-run --verified

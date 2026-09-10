@@ -9,7 +9,8 @@ This repo ships a **plan + deny-list + delete guard**. Upload uses Box CLI
 when the operator has it. CI never calls Box or Tradier.
 
 Related: [DEPLOY.md](DEPLOY.md), [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md),
-package `groktrading.box_rotate`, script `scripts/box_cold_rotate.py`.
+package `groktrading.box_rotate` / `groktrading.retention`, scripts
+`scripts/box_cold_rotate.py` and `scripts/hot_ledger_retain.py`.
 
 ## Layout
 
@@ -36,13 +37,16 @@ window the helper fail-closes.
 
 ## Never upload
 
-Deny-list (path filter; unit-tested):
+Deny-list (path filter; unit-tested; case-insensitive):
 
-- `.env` and `.env*`
+- `.env` and `.env*` (including `.ENV`, `.env.staging`)
 - `*.pem` / `*.key` / `*.p12` / `*.pfx`
 - names containing `token`, `secret`, `credential`, `password`, `api_key`, …
 - path segments `.ssh`, `secrets`, `credentials`
 - `schwab_token.json`
+- **symlinks** (including a symlink whose name looks like a pack)
+- resolved paths **outside** the archive root
+- anything that is not a controlled export (``.sqlite`` / ``.json`` / ``.jsonl``)
 
 Tokens stay in root-owned **0600** env files on the host. They are not Box
 objects.
@@ -76,4 +80,29 @@ Box CLI (optional, serial — do not parallelize): `box files:upload`.
 Auth check: `box users:get me --json`. Do not use
 `box configure:environments:get --current` (can print environment secrets).
 
-Merging this repo does **not** run rotate on Helsinki. Operator SSH only.
+## Hot window retain (7–14 days)
+
+After a **verified** Box upload of the closed day pack, purge the live hot
+SQLite (`uw_flow.sqlite`) and bound companion material JSONL:
+
+```bash
+python scripts/hot_ledger_retain.py \
+  --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite \
+  --state-dir /var/lib/trading-desk/state \
+  --keep-hot-days 7 \
+  --dry-run --verified
+
+# After the operator confirms the Box pack is present:
+python scripts/hot_ledger_retain.py \
+  --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite \
+  --state-dir /var/lib/trading-desk/state \
+  --keep-hot-days 7 \
+  --verified
+```
+
+Purge is fail-closed without `--verified` or `--confirm`. Example systemd
+timer / cron live under `deploy/examples/systemd/hot-retention/` and
+`deploy/examples/cron/hot-retain.cron`. **Do not enable them from this
+repo or a cloud agent.**
+
+Merging this repo does **not** run rotate or retain on Helsinki. Operator SSH only.

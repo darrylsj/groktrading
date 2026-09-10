@@ -199,6 +199,19 @@ def test_example_units_are_package_named_and_secret_free() -> None:
     assert "emit_sit_match=False" in companion_texts[1]
     assert "no Grok webhook" in companion_texts[1]
     assert "scripts/flow_ledger_companion.py" in companion_texts[0]
+    for text in companion_texts:
+        if "[Service]" not in text:
+            continue
+        assert "User=tradingdesk" in text
+        assert "User=root" not in text
+        assert "grok-webhook.env" not in text
+        assert "/var/lib/trading-desk/" in text
+    retain = ROOT / "deploy" / "examples" / "systemd" / "hot-retention"
+    retain_svc = (retain / "groktrading-hot-retain.service").read_text(encoding="utf-8")
+    assert "User=tradingdesk" in retain_svc
+    assert "User=root" not in retain_svc
+    assert "--dry-run" in retain_svc
+    assert "hot_ledger_retain.py" in retain_svc
     install_text = SCRIPT.read_text(encoding="utf-8")
     assert "scripts/flow_alerts_companion.py" not in install_text
     assert "host-companions" in install_text

@@ -1,0 +1,22 @@
+# Example one-shot: verified hot-ledger purge + companion JSONL bound.
+# Copy only. Do NOT enable from this repo or a cloud agent.
+# Run after a verified Box cold-rotate of the closed day pack.
+# User=tradingdesk. Writable: /var/lib/trading-desk/ledger and state.
+# Never places orders. Never uploads .env / tokens.
+
+[Unit]
+Description=GrokTrading hot ledger retain (7–14 day window; example only)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+# Default is dry-run. After a verified Box read-after-write, replace
+# --dry-run with --verified (or --confirm) before enabling this example.
+Environment=FLOW_LEDGER_PATH=/var/lib/trading-desk/ledger/uw_flow.sqlite
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/hot_ledger_retain.py --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite --state-dir /var/lib/trading-desk/state --keep-hot-days 7 --dry-run --verified
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

@@ -1,4 +1,10 @@
 # One-shot: deterministic replay scorecard over hot flow ledger. No PnL. No network.
+# Example only — not copied/enabled by install_helsinki.sh. Merge ≠ Helsinki restart.
+# Replay counts are not performance evidence.
+#
+# Least privilege (H5): User=tradingdesk (not root).
+# Writable: /var/lib/trading-desk/state (replay_scorecard.json).
+# Reads ledger at /var/lib/trading-desk/ledger. No secrets env. No webhook env.
 
 [Unit]
 Description=GrokTrading flow-ledger replay scorecard (one-shot; never orders)
@@ -6,10 +12,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=root
-Group=root
+User=tradingdesk
+Group=tradingdesk
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=-/opt/trading-desk/.env
 ExecStart=/opt/groktrading/.venv/bin/groktrading-replay-scorecard --ledger /var/lib/trading-desk/ledger/uw_flow.sqlite --output /var/lib/trading-desk/state/replay_scorecard.json
 Nice=10
 NoNewPrivileges=true

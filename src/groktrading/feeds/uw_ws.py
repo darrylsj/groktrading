@@ -22,9 +22,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from groktrading.feeds.unusual_whales import DOCS_WS_CHANNELS, DOCS_WS_SKILL
-from groktrading.redaction import redact_string
 
 UW_WS_URL_ENV = "UW_WS_URL"
 DOCUMENTED_UW_WS_HINT = "wss://api.unusualwhales.com/socket"
@@ -51,6 +51,29 @@ class UwWsProbe:
     note: str = NEVER_ORDERS_NOTE
 
 
+def public_probe_url(raw: str) -> str | None:
+    """Publish only validated ``wss`` scheme/host/path.
+
+    Query, userinfo, and fragment (including ``access_token``) are discarded.
+    """
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        return None
+    if parts.scheme.lower() != "wss":
+        return None
+    host = parts.hostname
+    if not host:
+        return None
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    path = parts.path or ""
+    return urlunsplit(("wss", host, path, "", ""))
+
+
 def probe_uw_ws(env: Mapping[str, str] | None = None) -> UwWsProbe:
     """Inspect env only. Never connects. Never logs an unredacted URL."""
     source = {} if env is None else env
@@ -62,7 +85,8 @@ def probe_uw_ws(env: Mapping[str, str] | None = None) -> UwWsProbe:
             reason=REASON_UNSET,
             public_url=None,
         )
-    if not raw.lower().startswith("wss://"):
+    public = public_probe_url(raw)
+    if public is None:
         return UwWsProbe(
             ok=False,
             configured=True,
@@ -73,7 +97,7 @@ def probe_uw_ws(env: Mapping[str, str] | None = None) -> UwWsProbe:
         ok=True,
         configured=True,
         reason=None,
-        public_url=redact_string(raw),
+        public_url=public,
         note=(
             f"{NEVER_ORDERS_NOTE} Documented hint: {DOCUMENTED_UW_WS_HINT}. "
             f"Fetch {DOCS_WS_CHANNELS} before any host subscribe."

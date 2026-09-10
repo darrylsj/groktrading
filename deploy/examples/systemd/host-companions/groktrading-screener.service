@@ -1,5 +1,10 @@
 # Host companion: RTH UW option-screener snapshot → screener_state.json.
 # rth_only=True (library no-ops write outside RTH). Never sit_match spray.
+# Example only — not copied/enabled by install_helsinki.sh. Merge ≠ Helsinki restart.
+#
+# Least privilege (H5): User=tradingdesk (not root).
+# Writable: /var/lib/trading-desk/state (screener_state.json).
+# This unit never emits webhooks — no grok-webhook.env.
 
 [Unit]
 Description=GrokTrading UW screener companion (RTH snapshot; never orders)
@@ -8,11 +13,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=tradingdesk
+Group=tradingdesk
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=/opt/trading-desk/.env
-EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+EnvironmentFile=-/etc/trading-desk/unusual-whales.env
 Environment=SCREENER_STATE_PATH=/var/lib/trading-desk/state/screener_state.json
 Environment=SCREENER_POLL_SEC=600
 ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/screener_companion.py

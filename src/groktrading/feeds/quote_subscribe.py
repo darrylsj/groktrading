@@ -101,6 +101,20 @@ class TradierQuoteInterest:
         del self.last_seen[oldest]
         return oldest
 
+    def _evict_ranked(self, now: datetime) -> str | None:
+        """Idle-over-TTL first, then oldest last_seen (LRU)."""
+        idle = [
+            (seen, symbol)
+            for symbol, seen in self.last_seen.items()
+            if (now - as_utc(seen)).total_seconds() > self.idle_ttl_seconds
+        ]
+        if idle:
+            idle.sort()
+            victim = idle[0][1]
+            del self.last_seen[victim]
+            return victim
+        return self._evict_oldest()
+
     def touch(self, symbol: str, now: datetime | None = None) -> bool:
         """Add or refresh a name. Returns True if newly added."""
         clean = sanitize_ticker(symbol)
@@ -112,7 +126,7 @@ class TradierQuoteInterest:
             self.last_seen[clean] = stamp
             return False
         if len(self.last_seen) >= self.bound:
-            self._evict_oldest()
+            self._evict_ranked(stamp)
         if len(self.last_seen) >= self.bound:
             raise WatchlistBoundError(f"quote interest bound {self.bound} exceeded")
         self.last_seen[clean] = stamp

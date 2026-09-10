@@ -91,7 +91,10 @@ scorecard CLI. Package CLIs are **offline skeletons**.
 pollers matching Helsinki 2026-09-08 in `scripts/` (`UrllibHttp`, not httpx)
 plus example units under
 [`deploy/examples/systemd/host-companions/`](../deploy/examples/systemd/host-companions/).
-urllib GETs do not follow redirects. **`install_helsinki.sh` does not copy,
+Example units run as **`User=tradingdesk`** (not root). Units that never
+emit webhooks do not load `grok-webhook.env`. Scoped writable dirs:
+`/var/lib/trading-desk/ledger` and `/var/lib/trading-desk/state`. urllib
+GETs do not follow redirects. **`install_helsinki.sh` does not copy,
 enable, or start those units.**
 **Merge ≠ Helsinki restart.** Account-events stays **files-only / disabled**.
 Companions keep **`emit_sit_match=False`**. Flow-alerts material is local
@@ -99,10 +102,20 @@ JSONL only (no Grok webhook). Authorization Bearer is runtime env only.
 **Grok Update Computer does not rebuild Helsinki**; after merge, SSH and
 restart live units yourself.
 
+**Hot retention (examples only):** `scripts/hot_ledger_retain.py` purges
+`uw_flow.sqlite` after a verified Box export (7–14 day window) and bounds
+companion JSONL. Example timer/cron:
+[`deploy/examples/systemd/hot-retention/`](../deploy/examples/systemd/hot-retention/),
+[`deploy/examples/cron/hot-retain.cron`](../deploy/examples/cron/hot-retain.cron).
+Do **not** enable timers from this repo.
+
 **`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than
 `SIT_MATCH_MAX_AGE_SEC` (default 60s) and puts `executed_at` on the webhook
-payload. The installer still does **not** embed or overwrite `ws_tape.py`.
+payload. `created_at` / `timestamp` are **not** substituted for the
+execution clock. Non-finite freshness limits (`inf` / `NaN`) fail closed
+in env parsing and explicit args. The installer still does **not** embed
+or overwrite `ws_tape.py`.
 An operator must patch the live Helsinki sit_match branch the same way and
 **restart `trading-desk-tape`** (this repo must not do that restart).
 

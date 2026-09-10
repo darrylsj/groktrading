@@ -11,7 +11,7 @@ from groktrading.flow_ledger import (
     evaluate_row_sit_match,
     flow_digest,
 )
-from groktrading.sit_match import REASON_STALE
+from groktrading.sit_match import REASON_MISSING, REASON_STALE, REASON_UNPARSEABLE
 from groktrading.timeutil import UTC
 
 NOW = datetime(2026, 9, 9, 16, 30, 0, tzinfo=UTC)
@@ -79,6 +79,11 @@ def test_flow_alerts_source_and_uw_aliases() -> None:
     assert row.option_type == "call"
     assert row.source == "flow-alerts"
     assert row.raw_digest == flow_digest(payload)
+    # created_at is not the execution clock (C2).
+    assert row.executed_at is None
+    gate = evaluate_row_sit_match(row, NOW)
+    assert gate.allow is False
+    assert gate.reason == REASON_MISSING
 
 
 def test_flow_alerts_append_row_maps_option_chain() -> None:
@@ -102,6 +107,9 @@ def test_flow_alerts_append_row_maps_option_chain() -> None:
     stored = list(ledger.iter_recent(limit=5, source="flow-alerts"))
     assert len(stored) == 1
     assert stored[0].occ == "SPXW260930P07500000"
+    assert stored[0].executed_at is None
+    assert evaluate_row_sit_match(stored[0], NOW).allow is False
+    assert evaluate_row_sit_match(stored[0], NOW).reason == REASON_MISSING
 
 
 def test_append_fail_closed_on_bad_clock_or_source() -> None:
@@ -142,6 +150,22 @@ def test_purge_older_than_uses_fake_clock() -> None:
     assert kept[0].occ == "NVDA260918P00170000"
     with pytest.raises(FlowLedgerError):
         ledger.purge_older_than(0, now=NOW)
+
+
+def test_created_at_and_timestamp_are_not_execution_clock() -> None:
+    for key in ("created_at", "timestamp"):
+        payload = _sample()
+        del payload["executed_at"]
+        payload[key] = "2026-09-09T16:29:50Z"
+        row = draft_from_uw_row(payload, ingested_at=NOW)
+        assert row.executed_at is None
+        assert evaluate_row_sit_match(row, NOW).reason == REASON_MISSING
+
+
+def test_unparseable_executed_at_still_fail_closed() -> None:
+    with pytest.raises(FlowLedgerError, match="unparseable_executed_at"):
+        draft_from_uw_row(_sample(executed_at="not-a-time"), ingested_at=NOW)
+    assert REASON_UNPARSEABLE == "sit_match_unparseable_executed_at"
 
 
 def test_digest_redacts_secret_keys() -> None:

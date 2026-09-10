@@ -1,0 +1,14 @@
+# Example timer: daily after US cash close (21:20 UTC).
+# Copy only. Do NOT enable from this repo or a cloud agent.
+# Pair with groktrading-hot-retain.service after a verified Box rotate.
+
+[Unit]
+Description=Daily GrokTrading hot ledger retain after close (21:20 UTC)
+
+[Timer]
+OnCalendar=*-*-* 21:20:00 UTC
+Persistent=true
+Unit=groktrading-hot-retain.service
+
+[Install]
+WantedBy=timers.target
