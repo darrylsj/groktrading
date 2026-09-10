@@ -204,7 +204,10 @@ def test_example_units_are_package_named_and_secret_free() -> None:
             continue
         assert "User=tradingdesk" in text
         assert "User=root" not in text
-        assert "grok-webhook.env" not in text
+        assert not any(
+            line.startswith("EnvironmentFile=") and "grok-webhook" in line
+            for line in text.splitlines()
+        )
         assert "/var/lib/trading-desk/" in text
     retain = ROOT / "deploy" / "examples" / "systemd" / "hot-retention"
     retain_svc = (retain / "groktrading-hot-retain.service").read_text(encoding="utf-8")

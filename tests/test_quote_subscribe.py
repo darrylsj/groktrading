@@ -7,7 +7,11 @@ import pytest
 from groktrading.errors import WatchlistBoundError
 from groktrading.feeds.quote_subscribe import TradierQuoteInterest, quote_watch_bound
 from groktrading.flow_ledger import draft_from_uw_row
-from groktrading.sit_match import REASON_INVALID_MAX_AGE, REASON_MISSING, evaluate_sit_match_freshness
+from groktrading.sit_match import (
+    REASON_INVALID_MAX_AGE,
+    REASON_MISSING,
+    evaluate_sit_match_freshness,
+)
 from groktrading.timeutil import UTC
 
 NOW = datetime(2026, 9, 9, 16, 30, 0, tzinfo=UTC)

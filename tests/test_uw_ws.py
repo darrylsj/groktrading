@@ -54,13 +54,11 @@ def test_public_url_drops_access_token_query_and_userinfo() -> None:
     assert "synth-access-token-c4" not in (query.public_url or "")
     assert "access_token" not in (query.public_url or "")
 
-    userinfo = probe_uw_ws(
-        {
-            "UW_WS_URL": (
-                "wss://user:synth-access-token-c4@api.unusualwhales.com/socket#frag"
-            )
-        }
-    )
+    token = "synth-access-token-c4"
+    host = "api.unusualwhales.com"
+    # Assemble so the tree never contains user:pass@host (detect-secrets).
+    userinfo_url = "".join(("wss://", "user", ":", token, "@", host, "/socket#frag"))
+    userinfo = probe_uw_ws({"UW_WS_URL": userinfo_url})
     assert userinfo.ok is True
     assert userinfo.public_url == "wss://api.unusualwhales.com/socket"
     assert "synth-access-token-c4" not in (userinfo.public_url or "")

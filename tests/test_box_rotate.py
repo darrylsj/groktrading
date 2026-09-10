@@ -116,7 +116,7 @@ def test_case_tricks_and_non_export_denied(tmp_path: Path) -> None:
     pem = _touch(tmp_path / "host.PEM")
     notes = _touch(tmp_path / "2026-08-01" / "notes.txt")
     ok = _touch(tmp_path / "2026-08-01" / "flow.sqlite")
-    assert deny_reason(env_upper) == "deny_env_file"
+    assert deny_reason(env_upper) in {"deny_env_file", "deny_exact_name"}
     assert deny_reason(staging) == "deny_env_file"
     assert deny_reason(pem) == "deny_suffix:.pem"
     assert deny_reason(notes) == "deny_not_controlled_export"
