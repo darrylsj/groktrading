@@ -30,7 +30,10 @@ dev = [
   "mypy>=1.10",
   "pytest>=8.2",
   "ruff>=0.6",
+  "numpy>=1.26,<3",
 ]
+fluid = ["numpy>=1.26,<3"]
+fluid-feed = ["numpy>=1.26,<3", "databento>=0.86,<0.87"]
 ws = [
   "websockets>=12,<16",
 ]
@@ -39,6 +42,7 @@ schwab = [
 ]
 
 [project.scripts]
+groktrading-fluid60 = "groktrading.research.fluid60.cli:main"
 groktrading-opening15 = "groktrading.research.cli:main"
 groktrading-research-cycle = "groktrading.research.cycle_cli:main"
 groktrading-finnhub-probe = "groktrading.cli:finnhub_probe_main"
