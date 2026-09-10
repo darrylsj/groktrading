@@ -11,6 +11,7 @@ fail-closed until the upload is verified **or** the operator passes
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -57,6 +58,8 @@ DENY_NAME_SUBSTRINGS = (
 )
 # Extra path segments (any ancestor or the file name).
 DENY_PATH_PARTS = frozenset({".ssh", "secrets", "credentials"})
+# Only these research suffixes may leave the host.
+ALLOW_EXPORT_SUFFIXES = (".sqlite", ".json", ".jsonl")
 
 _DATE_RE = re.compile(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})")
 
@@ -91,13 +94,30 @@ def pack_date_from_path(path: Path) -> date | None:
     return None
 
 
-def deny_reason(path: Path) -> str | None:
-    """Why this path must not be uploaded. None = allowed research artifact."""
+def _resolved_outside_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return True
+    return False
+
+
+def deny_reason(path: Path, *, root: Path | None = None) -> str | None:
+    """Why this path must not be uploaded. None = allowed research artifact.
+
+    Filename checks are case-insensitive (``.ENV``, ``.env.staging``).
+    Symlinks and resolved paths outside ``root`` are denied.
+    """
+    if path.is_symlink():
+        return "deny_symlink"
+    if root is not None and _resolved_outside_root(path, root):
+        return "deny_outside_archive_root"
     name = path.name
     lowered = name.lower()
-    if name in DENY_EXACT_NAMES or lowered in DENY_EXACT_NAMES:
+    deny_exact = {item.lower() for item in DENY_EXACT_NAMES}
+    if lowered in deny_exact:
         return "deny_exact_name"
-    if name.startswith(".env"):
+    if lowered.startswith(".env"):
         return "deny_env_file"
     for suffix in DENY_SUFFIXES:
         if lowered.endswith(suffix):
@@ -108,11 +128,13 @@ def deny_reason(path: Path) -> str | None:
     for needle in DENY_NAME_SUBSTRINGS:
         if needle in lowered:
             return f"deny_name_substring:{needle}"
+    if not any(lowered.endswith(suffix) for suffix in ALLOW_EXPORT_SUFFIXES):
+        return "deny_not_controlled_export"
     return None
 
 
-def is_denied(path: Path) -> bool:
-    return deny_reason(path) is not None
+def is_denied(path: Path, *, root: Path | None = None) -> bool:
+    return deny_reason(path, root=root) is not None
 
 
 def session_date(now: datetime) -> date:
@@ -197,9 +219,9 @@ def plan_rotate(
     )
     candidates = list(paths) if paths is not None else _default_candidates(root)
     for path in candidates:
-        if not path.is_file():
+        if not path.is_symlink() and not path.is_file():
             continue
-        reason = deny_reason(path)
+        reason = deny_reason(path, root=root)
         pack_date = pack_date_from_path(path)
         denied = reason is not None
         eligible = False
@@ -226,6 +248,13 @@ def assert_can_delete(plan: RotatePlan) -> None:
 
 
 def _default_candidates(root: Path) -> Iterable[Path]:
+    """Files under ``root``. Do not follow symlink directories."""
     if not root.exists():
         return []
-    return sorted(p for p in root.rglob("*") if p.is_file())
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        dirnames[:] = [name for name in dirnames if not (base / name).is_symlink()]
+        for name in filenames:
+            found.append(base / name)
+    return sorted(found)

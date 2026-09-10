@@ -6,17 +6,20 @@ and can re-wake the desk after Tradier ask has moved. Debounce is ~90s per OCC
 and is not a freshness gate.
 
 Fail closed: missing or unparseable ``executed_at`` must not emit or consume a
-``sit_match``. Age must be ≤ ``SIT_MATCH_MAX_AGE_SEC`` (default 60). This module
-is the in-repo source of truth for that gate. Apply the same check in the live
-``ws_tape`` sit_match branch; ``install_helsinki.sh`` does not copy ``ws_tape.py``.
-The append-only flow ledger (``groktrading.flow_ledger``) may store stale
-prints for research; emission still uses this gate.
+``sit_match``. Do not substitute ``created_at`` or ``timestamp``. Age must be
+≤ ``SIT_MATCH_MAX_AGE_SEC`` (default 60). Non-finite limits (inf/NaN) fail
+closed. This module is the in-repo source of truth for that gate. Apply the
+same check in the live ``ws_tape`` sit_match branch; ``install_helsinki.sh``
+does not copy ``ws_tape.py``. The append-only flow ledger
+(``groktrading.flow_ledger``) may store stale or clock-less prints for
+research; emission still uses this gate.
 
 Does not change Tradier quote / order gates.
 """
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -46,19 +49,36 @@ class SitMatchFreshness:
     max_age_sec: float | None
 
 
+def _finite_max_age(value: object) -> float | None:
+    """Accept a non-negative finite age. inf / NaN / junk → None (fail closed)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed) or parsed < 0:
+        return None
+    return parsed
+
+
 def sit_match_max_age_sec(env: Mapping[str, str] | None = None) -> float | None:
     """Return configured max age, default 60. None if the env value is invalid."""
     source = os.environ if env is None else env
     raw = source.get(SIT_MATCH_MAX_AGE_ENV)
     if raw is None or str(raw).strip() == "":
         return DEFAULT_SIT_MATCH_MAX_AGE_SEC
-    try:
-        value = float(str(raw).strip())
-    except (TypeError, ValueError):
-        return None
-    if value < 0 or value != value:  # NaN
-        return None
-    return value
+    return _finite_max_age(str(raw).strip())
+
+
+def resolve_sit_match_max_age(
+    max_age_sec: float | None = None,
+    env: Mapping[str, str] | None = None,
+) -> float | None:
+    """Resolve an explicit arg or env. Non-finite / negative → None."""
+    if max_age_sec is not None:
+        return _finite_max_age(max_age_sec)
+    return sit_match_max_age_sec(env)
 
 
 def executed_at_iso(value: datetime) -> str:
@@ -106,20 +126,24 @@ def evaluate_sit_match_freshness(
     max_age_sec: float | None = None,
     env: Mapping[str, str] | None = None,
 ) -> SitMatchFreshness:
-    """Allow only when ``executed_at`` parses and age ≤ max (default 60s)."""
-    limit = DEFAULT_SIT_MATCH_MAX_AGE_SEC if max_age_sec is None else max_age_sec
-    if max_age_sec is None:
-        resolved = sit_match_max_age_sec(env)
-        if resolved is None:
-            return SitMatchFreshness(
-                allow=False,
-                reason=REASON_INVALID_MAX_AGE,
-                executed_at=None,
-                age_seconds=None,
-                executed_at_iso=None,
-                max_age_sec=None,
-            )
-        limit = resolved
+    """Allow only when ``executed_at`` parses and age ≤ max (default 60s).
+
+    ``executed_at`` is the only execution clock. Callers must not pass
+    ``created_at`` / ``timestamp`` as a substitute. Missing/unparseable
+    ``executed_at`` fail closed. Non-finite ``max_age_sec`` (inf/NaN) is
+    rejected in both the explicit arg and env parsing.
+    """
+    resolved = resolve_sit_match_max_age(max_age_sec, env)
+    if resolved is None:
+        return SitMatchFreshness(
+            allow=False,
+            reason=REASON_INVALID_MAX_AGE,
+            executed_at=None,
+            age_seconds=None,
+            executed_at_iso=None,
+            max_age_sec=None,
+        )
+    limit = resolved
 
     if executed_at is None or (isinstance(executed_at, str) and not executed_at.strip()):
         return SitMatchFreshness(

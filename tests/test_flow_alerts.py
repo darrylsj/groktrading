@@ -160,6 +160,50 @@ def test_cadence_clamp_and_timeout_fail_closed() -> None:
         poll_flow_alerts(_client(http), ledger, SeenAlertStore(), now=NOW)
 
 
+def test_option_chain_alias_is_sit_match_shaped() -> None:
+    payload = {
+        "id": "oc-1",
+        "ticker": "SPXW",
+        "option_chain": "spxw260930p07500000",
+        "price": "1.25",
+        "ask": "1.30",
+        "type": "Puts",
+        "executed_at": "2026-09-09T16:29:40Z",
+    }
+    assert is_sit_match_shaped(payload) is True
+    created_only = dict(payload)
+    del created_only["executed_at"]
+    created_only["created_at"] = "2026-09-09T16:29:50Z"
+    assert is_sit_match_shaped(created_only) is False
+
+
+def test_seen_after_append_retries_store_failure() -> None:
+    """H1: marking seen before append would drop a later complete row."""
+    incomplete = {
+        "id": "retry-me",
+        "executed_at": "2026-09-09T16:29:40Z",
+        "price": "1.07",
+        "ask": "1.10",
+        "type": "Puts",
+    }
+    complete = _alert(alert_id="retry-me")
+    ledger = FlowLedger(":memory:", clock=FrozenClock(NOW))
+    seen = SeenAlertStore()
+    first = poll_flow_alerts(
+        _client(FakeHttp({"data": [incomplete]})), ledger, seen, now=NOW
+    )
+    assert first.stored == 0
+    assert first.emitted == 0
+    assert first.hits[0].skip_reason == "store_failed"
+    assert seen.known("retry-me") is False
+    second = poll_flow_alerts(
+        _client(FakeHttp({"data": [complete]})), ledger, seen, now=NOW
+    )
+    assert second.stored == 1
+    assert second.emitted == 1
+    assert seen.known("retry-me") is True
+
+
 def test_seen_store_persists(tmp_path) -> None:  # type: ignore[no-untyped-def]
     path = tmp_path / "seen.json"
     store = SeenAlertStore(path)

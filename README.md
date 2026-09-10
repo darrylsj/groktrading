@@ -87,24 +87,35 @@ and it is **not** an order router.
   `UrllibHttp` — not httpx; `flow_ledger_companion.py`,
   `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`,
   `quote_interest_companion.py`) plus example units in
-  `deploy/examples/systemd/host-companions/`. urllib GETs do not follow
-  redirects (Authorization is not re-sent). **`install_helsinki.sh` does
-  not copy, enable, or start them.** **emit_sit_match=False.** Flow-alerts
-  material is local JSONL only (no Grok webhook). Authorization Bearer is
-  runtime env only. Not a claim these processes are live on Helsinki.
+  `deploy/examples/systemd/host-companions/`. Example units use
+  **`User=tradingdesk`** (not root) and omit webhook env on units that
+  never emit webhooks. urllib GETs do not follow redirects (Authorization
+  is not re-sent). **`install_helsinki.sh` does not copy, enable, or start
+  them.** **emit_sit_match=False.** Flow-alerts material is local JSONL
+  only (no Grok webhook). Authorization Bearer is runtime env only. Not a
+  claim these processes are live on Helsinki.
 - **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
-  emit. Package: `groktrading.sit_match`. Ledger may still **store** stale
-  prints for research (`groktrading.flow_ledger`). Flow-alerts reuse the same
-  gate when a row is sit_match-shaped.
+  emit. `created_at` / `timestamp` are **not** the execution clock.
+  Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`.
+  Ledger may still **store** stale or clock-less prints for research
+  (`groktrading.flow_ledger`); freshness-sensitive use (sit_match, quote
+  interest) fail-closes. Flow-alerts reuse the same gate when a row is
+  sit_match-shaped.
 - **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
   fills/cancels keep `in_position` honest after flatten. Never a submit path.
   Package helper: `groktrading.feeds.account_events`. Example unit
   `groktrading-account-events.service` is **files only** (not enabled by
   `install_helsinki.sh`). Do **not** auto-start it.
 - **Box cold-rotate:** `scripts/box_cold_rotate.py` + [docs/BOX_ARCHIVE.md](docs/BOX_ARCHIVE.md).
-  Deny-list blocks `.env` / tokens / credentials. Delete only after verified
-  upload or `--confirm-delete`.
+  Deny-list blocks `.env` / tokens / credentials, **symlinks**, paths
+  outside the archive root, and non-export suffixes. Delete only after
+  verified upload or `--confirm-delete`.
+- **Hot retention:** `scripts/hot_ledger_retain.py` purges `uw_flow.sqlite`
+  after a verified Box export (7–14 day window) and bounds companion JSONL.
+  Example timer/cron under `deploy/examples/systemd/hot-retention/` — do
+  **not** enable from this repo. Replay scorecard counts are **not**
+  performance evidence.
 - **Recovery:** SSH + systemd on the host. **Merging this repo does not
   deploy Helsinki** and does **not** restart live units. **Grok Update Computer does not rebuild Helsinki.** After merge, an operator must copy
   helpers into the live tape if needed and **wire companion units
@@ -309,6 +320,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `deploy/examples/systemd/host-companions/` | Example companion units + replay-scorecard timer (not installer-managed) |
 | `src/groktrading/feeds/account_events.py` | Tradier account-events parse/backoff; position truth; never orders |
 | `src/groktrading/box_rotate.py` | Box cold-rotate deny-list + 7–14d keep-hot + delete guard |
+| `src/groktrading/retention.py` | Verified hot-ledger purge + companion JSONL bound |
+| `scripts/hot_ledger_retain.py` | Operator retain CLI (examples only; no live timer enable) |
 | `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
 | `docs/WEBSOCKETS.md` | Auditor WS/webhook map (Finnhub ≠ option NBBO; WS never orders) |
 | `docs/BOX_ARCHIVE.md` | Hot ledger vs Box `daily/YYYY-MM-DD/` cold archive |

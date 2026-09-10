@@ -7,8 +7,34 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- **C2** Execution-time freshness: `flow_ledger` / `sit_match` no longer treat
+  `created_at` or `timestamp` as `executed_at`. Missing execution clock
+  fail-closes freshness-sensitive use (sit_match age gate, quote interest).
+  Non-finite `SIT_MATCH_MAX_AGE_SEC` / explicit `max_age_sec` (`inf` / `NaN`)
+  fail closed. Codex Astra review 2026-09-08.
+- **C4** `UW_WS_URL` probe `public_url` publishes only validated
+  `wss` scheme/host/path; query, userinfo, and fragment (including
+  `access_token`) are discarded.
+- **C5** Box rotate rejects symlinks, resolved paths outside the archive
+  root, and case-tricks (`.ENV`, `.env.staging`); only controlled
+  `.sqlite` / `.json` / `.jsonl` exports are eligible.
+
 ### Added
 
+- **H3** Operational retention: `groktrading.retention` +
+  `scripts/hot_ledger_retain.py` (verified purge of `uw_flow.sqlite`, bound
+  companion JSONL). Example systemd timer/cron under
+  `deploy/examples/systemd/hot-retention/` and `deploy/examples/cron/` —
+  files only; do not enable from this repo.
+- **H5** Host companion example units run as `User=tradingdesk` (not root),
+  drop `grok-webhook.env` from units that never emit webhooks, and document
+  scoped writable dirs (`/var/lib/trading-desk/ledger`, `state`).
+- Flow-alerts **H1**: append to the ledger before marking an alert id seen;
+  failed store/delivery is retried (not silently dropped).
+- Shared OCC aliases include live UW `option_chain` for sit_match-shaped
+  detection; conflict-safe flow_ledger insert on `(source, raw_digest)`.
 - Helsinki **host companions** as first-class repo artifacts (secret-free): live **urllib** pollers matching Helsinki 2026-09-08 (`scripts/helsinki_http.py` `UrllibHttp`, not httpx; `flow_ledger_companion.py`, `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`, `quote_interest_companion.py`). urllib GETs **do not follow redirects** so `Authorization` is never re-sent. Example units under `deploy/examples/systemd/host-companions/` (flow-ledger, flow-alerts, tide, screener, quote-interest, replay-scorecard service + timer). **`install_helsinki.sh` does not copy, enable, or start them.** Operator-wired only. **Merge ≠ Helsinki restart.** Account-events stays files-only / disabled. **`emit_sit_match=False`.** Flow-alerts material is local JSONL only (no Grok webhook). Authorization Bearer is runtime env only. Never-orders comments preserved. No live UW in CI; no credentials.
 
 ### Fixed

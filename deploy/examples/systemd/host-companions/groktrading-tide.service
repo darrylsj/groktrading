@@ -1,5 +1,10 @@
 # Host companion: UW market-tide (+ optional TIDE_NET_PREM_SYMBOLS) → tide_state.json.
 # Calls write_tide_state. Never places orders. Never sit_match spray.
+# Example only — not copied/enabled by install_helsinki.sh. Merge ≠ Helsinki restart.
+#
+# Least privilege (H5): User=tradingdesk (not root).
+# Writable: /var/lib/trading-desk/state (tide_state.json).
+# This unit never emits webhooks — no grok-webhook.env.
 
 [Unit]
 Description=GrokTrading UW tide/net-prem companion (host poll; never orders)
@@ -8,11 +13,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=tradingdesk
+Group=tradingdesk
 WorkingDirectory=/opt/groktrading
-EnvironmentFile=/opt/trading-desk/.env
-EnvironmentFile=-/etc/trading-desk/grok-webhook.env
+EnvironmentFile=-/etc/trading-desk/unusual-whales.env
 Environment=TIDE_STATE_PATH=/var/lib/trading-desk/state/tide_state.json
 Environment=TIDE_POLL_SEC=180
 # Optional comma list; library caps symbols. Empty = tide only.

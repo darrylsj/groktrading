@@ -12,4 +12,10 @@
 # Never put tokens in unit files, git, chat logs, or tape JSON.
 # scripts/install_helsinki.sh creates /etc/trading-desk (0700) but does not
 # overwrite existing *.env and does not copy real secrets.
+# Companion / retain example units run as User=tradingdesk (not root).
+# systemd reads root-owned 0600 EnvironmentFile= before dropping privileges.
+# Scoped writable dirs for tradingdesk:
+#   /var/lib/trading-desk/ledger   (uw_flow.sqlite, seen JSON)
+#   /var/lib/trading-desk/state    (companion JSON / JSONL)
+# Do not grant tradingdesk write to /etc/trading-desk or /opt/trading-desk/.env.
 # This repository is not a live deployment and must not restart remote hosts.

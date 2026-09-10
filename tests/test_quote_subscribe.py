@@ -7,7 +7,11 @@ import pytest
 from groktrading.errors import WatchlistBoundError
 from groktrading.feeds.quote_subscribe import TradierQuoteInterest, quote_watch_bound
 from groktrading.flow_ledger import draft_from_uw_row
-from groktrading.sit_match import evaluate_sit_match_freshness
+from groktrading.sit_match import (
+    REASON_INVALID_MAX_AGE,
+    REASON_MISSING,
+    evaluate_sit_match_freshness,
+)
 from groktrading.timeutil import UTC
 
 NOW = datetime(2026, 9, 9, 16, 30, 0, tzinfo=UTC)
@@ -77,6 +81,53 @@ def test_note_flow_row_uses_sit_match_freshness() -> None:
     )
     assert interest.note_flow_row(stale, NOW) is False
     assert "AMD" not in interest.symbols()
+
+
+def test_row_without_executed_at_does_not_expand_interest() -> None:
+    interest = TradierQuoteInterest()
+    row = draft_from_uw_row(
+        {
+            "created_at": "2026-09-09T16:29:50Z",
+            "timestamp": "2026-09-09T16:29:50Z",
+            "ticker": "NVDA",
+            "occ": "NVDA260918P00170000",
+            "print": "1.07",
+            "nbbo_ask": "1.10",
+            "option_type": "put",
+        },
+        ingested_at=NOW,
+    )
+    assert row.executed_at is None
+    assert interest.note_flow_row(row, NOW) is False
+    assert interest.symbols() == []
+    missing = evaluate_sit_match_freshness(row.executed_at, NOW)
+    assert missing.allow is False
+    assert missing.reason == REASON_MISSING
+
+
+def test_thirty_day_print_fails_even_when_limit_is_inf() -> None:
+    interest = TradierQuoteInterest()
+    old = draft_from_uw_row(
+        {
+            "executed_at": "2026-08-10T16:29:40Z",
+            "ticker": "AMD",
+            "occ": "AMD260918C00100000",
+            "print": "1.00",
+            "nbbo_ask": "1.05",
+            "option_type": "call",
+        },
+        ingested_at=NOW,
+    )
+    blocked = evaluate_sit_match_freshness(old.executed_at, NOW, max_age_sec=float("inf"))
+    assert blocked.allow is False
+    assert blocked.reason == REASON_INVALID_MAX_AGE
+    assert interest.note_fresh_print("AMD", now=NOW, freshness=blocked) is False
+    assert "AMD" not in interest.symbols()
+    env_blocked = evaluate_sit_match_freshness(
+        old.executed_at, NOW, env={"SIT_MATCH_MAX_AGE_SEC": "inf"}
+    )
+    assert env_blocked.allow is False
+    assert interest.note_flow_row(old, NOW, env={"SIT_MATCH_MAX_AGE_SEC": "inf"}) is False
 
 
 def test_full_after_idle_drop_still_respects_bound() -> None:

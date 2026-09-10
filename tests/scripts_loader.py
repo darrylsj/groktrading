@@ -28,3 +28,4 @@ flow_alerts_companion = load("flow_alerts_companion", "scripts/flow_alerts_compa
 tide_companion = load("tide_companion", "scripts/tide_companion.py")
 screener_companion = load("screener_companion", "scripts/screener_companion.py")
 quote_interest_companion = load("quote_interest_companion", "scripts/quote_interest_companion.py")
+hot_ledger_retain_script = load("hot_ledger_retain_script", "scripts/hot_ledger_retain.py")

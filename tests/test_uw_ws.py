@@ -5,8 +5,8 @@ from groktrading.feeds.uw_ws import (
     REASON_UNSET,
     probe_document,
     probe_uw_ws,
+    public_probe_url,
 )
-from groktrading.redaction import REDACTED
 
 
 def test_unset_fail_closed() -> None:
@@ -34,8 +34,34 @@ def test_configured_does_not_connect_and_redacts_token() -> None:
     assert probe.ok is True
     assert probe.configured is True
     assert probe.connected is False
-    assert probe.public_url is not None
+    assert probe.public_url == "wss://api.unusualwhales.com/socket"
     assert "super-secret" not in probe.public_url
-    assert REDACTED in probe.public_url
+    assert "token=" not in (probe.public_url or "")
     assert "channels" in probe.channels_docs
     assert "websocket.md" in probe.skill_docs
+
+
+def test_public_url_drops_access_token_query_and_userinfo() -> None:
+    query = probe_uw_ws(
+        {
+            "UW_WS_URL": (
+                "wss://api.unusualwhales.com/socket?access_token=synth-access-token-c4"
+            )
+        }
+    )
+    assert query.ok is True
+    assert query.public_url == "wss://api.unusualwhales.com/socket"
+    assert "synth-access-token-c4" not in (query.public_url or "")
+    assert "access_token" not in (query.public_url or "")
+
+    token = "synth-access-token-c4"
+    host = "api.unusualwhales.com"
+    # Assemble so the tree never contains user:pass@host (detect-secrets).
+    userinfo_url = "".join(("wss://", "user", ":", token, "@", host, "/socket#frag"))
+    userinfo = probe_uw_ws({"UW_WS_URL": userinfo_url})
+    assert userinfo.ok is True
+    assert userinfo.public_url == "wss://api.unusualwhales.com/socket"
+    assert "synth-access-token-c4" not in (userinfo.public_url or "")
+    assert "user:" not in (userinfo.public_url or "")
+    assert "frag" not in (userinfo.public_url or "")
+    assert public_probe_url("https://api.unusualwhales.com/socket") is None
