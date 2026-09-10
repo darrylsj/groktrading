@@ -11,6 +11,10 @@ Sit-2 remains the I2 lean bar (hard reject when sit < 2). ``must_trade_small``
 skips only that reject and records ``must_trade_small_exception``. It does not
 relax freshness, matching ask, cash floor, qty=1, BTO-only, entry cutoff, or
 already-run. The ~11:00 PT daily-lot clock is Continual15 (not encoded here).
+
+Live requires ``candidate.executed_at`` (print clock) age ≤
+``SIT_MATCH_MAX_AGE_SEC`` (default 60s). Missing/unparseable/stale fails
+closed. Do not substitute ``created_ts`` / ``created_at`` / ``timestamp``.
 """
 
 from __future__ import annotations
@@ -28,6 +32,13 @@ from groktrading.models import (
 from groktrading.modes import OperatingMode
 from groktrading.policy import MUST_TRADE_SMALL_ASK_CAP, breaches_cash_floor
 from groktrading.quote_gate import normalize_occ, validate_candidate_quote
+from groktrading.sit_match import (
+    REASON_FUTURE,
+    REASON_MISSING,
+    REASON_STALE,
+    REASON_UNPARSEABLE,
+    evaluate_sit_match_freshness,
+)
 from groktrading.timeutil import is_stale, past_entry_cutoff
 
 CONTRACT_MULTIPLIER = Decimal("100")
@@ -59,6 +70,22 @@ def _derived_session_flags(
     return sit, already, first_red, extra
 
 
+def _live_print_reasons(candidate: Candidate, ctx: GateContext, *, live: bool) -> list[GateReason]:
+    """Live executor: ``executed_at`` only. No created_at/timestamp substitute."""
+    if not live:
+        return []
+    decision = evaluate_sit_match_freshness(candidate.executed_at, ctx.now)
+    if decision.allow:
+        return []
+    if decision.reason == REASON_MISSING:
+        return [GateReason.MISSING_EXECUTED_AT]
+    if decision.reason == REASON_UNPARSEABLE:
+        return [GateReason.UNPARSEABLE_EXECUTED_AT]
+    if decision.reason in {REASON_STALE, REASON_FUTURE}:
+        return [GateReason.STALE_PRINT]
+    return [GateReason.STALE_PRINT]
+
+
 def evaluate_gate(candidate: Candidate, ctx: GateContext) -> GateResult:
     reasons: list[GateReason] = []
     live = ctx.mode == OperatingMode.LIVE
@@ -71,6 +98,8 @@ def evaluate_gate(candidate: Candidate, ctx: GateContext) -> GateResult:
 
     if live and not ctx.live_explicitly_enabled:
         reasons.append(GateReason.LIVE_NOT_ENABLED)
+
+    reasons.extend(_live_print_reasons(candidate, ctx, live=live))
 
     if candidate.quantity != 1:
         reasons.append(GateReason.QUANTITY_NOT_ONE)

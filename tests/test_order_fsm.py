@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -123,6 +124,28 @@ def test_live_websocket_blocked_on_final_gate() -> None:
     ticket, _ = machine.preview(ticket.ticket_id, now)
     with pytest.raises(LiveGatingError, match="websocket"):
         machine.final_gate(ticket.ticket_id, candidate, passing_context(), now)
+    assert broker.submits == []
+
+
+def test_submit_refuses_after_gate_passed_ttl() -> None:
+    machine, broker = _machine()
+    now = morning_pt()
+    candidate = passing_candidate()
+    ticket = machine.receive(candidate, now)
+    ticket = machine.validate(ticket.ticket_id, now)
+    ticket = machine.attach_quote(ticket.ticket_id, now)
+    ticket, _ = machine.preview(ticket.ticket_id, now)
+    ticket, result = machine.final_gate(ticket.ticket_id, candidate, passing_context(), now)
+    assert result.allowed is True
+    assert ticket.state == OrderState.FINAL_GATE
+    assert ticket.gate_passed_ts == now
+    later = now + timedelta(seconds=6)
+    with pytest.raises(LiveGatingError, match="gate_passed_stale"):
+        machine.submit(ticket.ticket_id, later)
+    rejected = machine.store.get(ticket.ticket_id)
+    assert rejected is not None
+    assert rejected.state == OrderState.REJECTED
+    assert rejected.note == "gate_passed_stale"
     assert broker.submits == []
 
 

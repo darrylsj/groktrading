@@ -4,6 +4,12 @@ Durable lifecycle. Payload is immutable. Preview and submit use the same
 payload; only the preview flag changes. Live credentials are not required.
 An unknown submit is never blindly retried — query the broker by tag first.
 
+When the final gate passes, the ticket stores ``gate_passed_ts``.
+``submit()`` / FINAL_GATE→SUBMIT refuses if that stamp is older than
+``max_quote_age_seconds`` (from the gate context; policy default
+``DEFAULT_MAX_QUOTE_AGE_SECONDS`` = 5s, same as quote_gate). A prior
+pass does not keep a stale ticket submittable.
+
 Design references (not vendored): LEAN Tradier preview/submit, Nautilus
 reconciliation. Lumibot (GPL) and Optopsy (AGPL) are not imported.
 """
@@ -32,7 +38,8 @@ from groktrading.models import (
     OrderTicket,
 )
 from groktrading.modes import OperatingMode
-from groktrading.timeutil import UTC
+from groktrading.policy import DEFAULT_MAX_QUOTE_AGE_SECONDS
+from groktrading.timeutil import UTC, is_stale
 
 ALLOWED_TRANSITIONS: dict[OrderState, frozenset[OrderState]] = {
     OrderState.RECEIVED: frozenset({OrderState.VALIDATED, OrderState.REJECTED}),
@@ -293,7 +300,15 @@ class OrderMachine:
             updated = updated.model_copy(update={"note": result.note})
             self.store.put(updated)
             return updated, result
-        return self._transition(ticket, OrderState.FINAL_GATE, stamp), result
+        updated = self._transition(ticket, OrderState.FINAL_GATE, stamp)
+        updated = updated.model_copy(
+            update={
+                "gate_passed_ts": stamp,
+                "gate_max_quote_age_seconds": merged.max_quote_age_seconds,
+            }
+        )
+        self.store.put(updated)
+        return updated, result
 
     def submit(
         self, ticket_id: str, now: datetime | None = None
@@ -314,6 +329,17 @@ class OrderMachine:
         }:
             raise LiveGatingError("submit payload drifted from preview payload")
         stamp = _now(now)
+        if ticket.state == OrderState.FINAL_GATE:
+            max_age = (
+                ticket.gate_max_quote_age_seconds
+                if ticket.gate_max_quote_age_seconds is not None
+                else DEFAULT_MAX_QUOTE_AGE_SECONDS
+            )
+            if ticket.gate_passed_ts is None or is_stale(ticket.gate_passed_ts, stamp, max_age):
+                updated = self._transition(ticket, OrderState.REJECTED, stamp)
+                updated = updated.model_copy(update={"note": "gate_passed_stale"})
+                self.store.put(updated)
+                raise LiveGatingError("gate_passed_stale")
         submitted = self._transition(ticket, OrderState.SUBMIT, stamp)
         body = self.broker.submit_option_order(form)
         broker_id = body.get("id")

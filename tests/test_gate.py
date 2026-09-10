@@ -284,3 +284,53 @@ def test_ws_direct_live_forbidden() -> None:
     )
     assert GateReason.WS_DIRECT_LIVE_FORBIDDEN in result.reasons
 
+
+def test_live_missing_executed_at_rejected() -> None:
+    now = morning_pt()
+    result = evaluate_gate(
+        passing_candidate(created_ts=now),
+        passing_context(
+            now=now,
+            mode=OperatingMode.LIVE,
+            live_explicitly_enabled=True,
+        ),
+    )
+    assert result.allowed is False
+    assert GateReason.MISSING_EXECUTED_AT in result.reasons
+    assert "missing_executed_at" in result.note
+
+
+def test_live_stale_executed_at_rejected_does_not_use_created_ts() -> None:
+    now = morning_pt()
+    result = evaluate_gate(
+        passing_candidate(
+            created_ts=now,
+            executed_at=now - timedelta(seconds=61),
+        ),
+        passing_context(
+            now=now,
+            mode=OperatingMode.LIVE,
+            live_explicitly_enabled=True,
+        ),
+    )
+    assert result.allowed is False
+    assert GateReason.STALE_PRINT in result.reasons
+    assert "stale_print" in result.note
+    assert GateReason.MISSING_EXECUTED_AT not in result.reasons
+
+
+def test_live_fresh_executed_at_passes_other_gates() -> None:
+    now = morning_pt()
+    result = evaluate_gate(
+        passing_candidate(created_ts=now, executed_at=now - timedelta(seconds=5)),
+        passing_context(
+            now=now,
+            mode=OperatingMode.LIVE,
+            live_explicitly_enabled=True,
+        ),
+    )
+    assert result.allowed is True
+    assert GateReason.OK in result.reasons
+    assert GateReason.MISSING_EXECUTED_AT not in result.reasons
+    assert GateReason.STALE_PRINT not in result.reasons
+

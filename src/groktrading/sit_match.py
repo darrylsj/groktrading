@@ -14,7 +14,9 @@ does not copy ``ws_tape.py``. The append-only flow ledger
 (``groktrading.flow_ledger``) may store stale or clock-less prints for
 research; emission still uses this gate.
 
-Does not change Tradier quote / order gates.
+Emitter/inbox stay on this module. The live final gate also requires
+``candidate.executed_at`` (same clock, no ``created_at`` / ``timestamp``
+substitute). Quote freshness remains a separate Tradier quote-gate check.
 """
 
 from __future__ import annotations

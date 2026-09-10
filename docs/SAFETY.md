@@ -63,7 +63,7 @@ An external engineering note proposed flattening everything at 12:30 PT and forb
 
 ### P0.2 Broker-authoritative final gate
 
-`evaluate_gate` derives sit / already-run / duplicate / position from `SessionFacts` plus a fresh `AccountSnapshot` (cash, equity, working orders, open positions) and `ClockSnapshot`. Live without session facts fails closed. WebSocket cannot submit live.
+`evaluate_gate` derives sit / already-run / duplicate / position from `SessionFacts` plus a fresh `AccountSnapshot` (cash, equity, working orders, open positions) and `ClockSnapshot`. Live without session facts fails closed. WebSocket cannot submit live. Live also requires `candidate.executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s); missing/unparseable/stale print fails closed (`missing_executed_at` / `stale_print`) — no `created_at` / `timestamp` substitute. `AccountSnapshot` cash/BP come from nested `cash.cash_available` or `margin`/`pdt.option_buying_power`, never `total_cash` (unsettled inflates BP / GFV).
 
 ### P0.3 Preview → submit state machine
 
@@ -71,7 +71,7 @@ An external engineering note proposed flattening everything at 12:30 PT and forb
 
 `RECEIVED → VALIDATED → QUOTED → PREVIEW → FINAL_GATE → SUBMIT → ACK → FILLED|REJECTED|… → FLAT_RECONCILED`
 
-Rules: immutable payload; preview the exact payload; refresh quote and rerun the gate; submit the same payload with `preview=false`; `tag=signal_id`; persist `signal_id` / payload hash / broker id; **never blind-retry** an unknown submit — query Tradier (or the stub) by tag first.
+Rules: immutable payload; preview the exact payload; refresh quote and rerun the gate; submit the same payload with `preview=false`; `tag=signal_id`; persist `signal_id` / payload hash / broker id; store `gate_passed_ts` on a pass and refuse FINAL_GATE→SUBMIT if older than `max_quote_age_seconds` (policy default 5s, same as quote_gate); **never blind-retry** an unknown submit — query Tradier (or the stub) by tag first.
 
 ### P0.4 Entry-cutoff (rewritten)
 
