@@ -358,6 +358,22 @@ Do **not** add these to `pyproject.toml`. Licensing and product fit are the oper
 
 This package is **not** a LEAN/C#/Nautilus/Lumibot/Optopsy migration.
 
+## Fluid60 minute trading research
+
+[Fluid60](docs/FLUID60.md) adds a fluid/queue stock forecast, stock and option
+inventory optimization, and causal quote-based paper replay. It allows at most
+one buy and one sell across the research desk each minute, includes costs and a
+hold choice, and separates calibration, validation tuning, and test periods.
+
+```bash
+python -m pip install -e '.[fluid]'
+groktrading-fluid60 demo --out research-runs/fluid60-demo
+```
+
+The offline demo is synthetic and provides no evidence of profitability. Read-only
+Databento depth capture and Tradier quote snapshots support data integration.
+The module has no broker order path and does not change live or Opening15 behavior.
+
 ## License
 
 MIT — appropriate for a **public** GitHub reference package. Still: no warranty, no performance claims, no financial advice, no live trading by default.
