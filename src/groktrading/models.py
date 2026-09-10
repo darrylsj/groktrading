@@ -33,6 +33,8 @@ class GateReason(StrEnum):
     STALE_QUOTE = "stale_quote"
     MATCHING_ASK_FAILED = "matching_ask_failed"
     SIT2_INCOMPLETE = "sit2_incomplete"
+    MUST_TRADE_SMALL_EXCEPTION = "must_trade_small_exception"
+    ASK_ABOVE_SMALL_BAND = "ask_above_small_band"
     ALREADY_RUN = "already_run"
     FIRST_RED = "first_red"
     QUANTITY_NOT_ONE = "quantity_not_one"
@@ -99,6 +101,8 @@ class Candidate(StrictModel):
     ttl_seconds: float = Field(gt=0, default=15.0)
     from_websocket: bool = False
     executed_at: datetime | None = None
+    must_trade_small: bool = False
+    committed_i2: bool = False
 
 
 class AccountSnapshot(StrictModel):

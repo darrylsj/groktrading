@@ -49,7 +49,7 @@ An external engineering note proposed flattening everything at 12:30 PT and forb
 6. Buying power / cash vs ask × 100 × qty **and** cash/equity ≥20% after premium
 7. Quantity exactly 1
 8. Duplicate / working / in-position from **fresh broker** account + positions + orders (not candidate booleans alone)
-9. Sit-2 / already-run / first-red from **durable session facts** unioned with the candidate (candidate cannot clear a block)
+9. Sit-2 / already-run / first-red from **durable session facts** unioned with the candidate (candidate cannot clear a block). Sit-2 remains the **I2 lean bar**. `must_trade_small` is a logged I1 exception (daily-lot floor after ~11:00 PT; clock is Continual15, not this package) and skips only `SIT2_INCOMPLETE` — not freshness, matching ask, cash floor, qty, BTO-only, cutoff, or already-run.
 10. Market clock open
 11. Before 12:30 PT new-entry cutoff (not a forced flatten; overnight long options allowed)
 12. Preview-before-order for paper/live paths
@@ -95,7 +95,7 @@ This PR does **not** migrate the desk to LEAN, C#, Nautilus, Lumibot, or Optopsy
 
 ## Measurement
 
-- Freeze strategy parameters (sit-2, already-run, matching-ask, one-lot) except **safety** defaults (quote age, cash floor, cutoff).
+- Freeze strategy parameters (sit-2 as the I2 lean bar, already-run, matching-ask, one-lot) except **safety** defaults (quote age, cash floor, cutoff). `must_trade_small` is an explicit logged exception, not a silent sit-2 loosen.
 - Keep **selection / execution / risk** separate: Helsinki filters select; Grok approves/skips facts; the gate/executor owns risk and orders.
 - **n=3 live days ≠ edge.** Do not invent fills or claim profitability.
 

@@ -6,6 +6,11 @@ and derives sit / already-run / duplicate / position from durable session facts
 plus a fresh broker snapshot. Candidate-supplied booleans cannot pass live
 alone. Quantity is exactly 1. Cash/equity floor is ≥20% (max deploy 80%).
 12:30 PT is a new-entry cutoff only — overnight longs stay allowed.
+
+Sit-2 remains the I2 lean bar (hard reject when sit < 2). ``must_trade_small``
+skips only that reject and records ``must_trade_small_exception``. It does not
+relax freshness, matching ask, cash floor, qty=1, BTO-only, entry cutoff, or
+already-run. The ~11:00 PT daily-lot clock is Continual15 (not encoded here).
 """
 
 from __future__ import annotations
@@ -21,11 +26,12 @@ from groktrading.models import (
     SessionFacts,
 )
 from groktrading.modes import OperatingMode
-from groktrading.policy import breaches_cash_floor
+from groktrading.policy import MUST_TRADE_SMALL_ASK_CAP, breaches_cash_floor
 from groktrading.quote_gate import normalize_occ, validate_candidate_quote
 from groktrading.timeutil import is_stale, past_entry_cutoff
 
 CONTRACT_MULTIPLIER = Decimal("100")
+_INFORMATIONAL_REASONS = frozenset({GateReason.MUST_TRADE_SMALL_EXCEPTION})
 
 
 def _normalized_set(symbols: list[str]) -> set[str]:
@@ -73,8 +79,10 @@ def evaluate_gate(candidate: Candidate, ctx: GateContext) -> GateResult:
         candidate, ctx.session_facts, live=live
     )
     reasons.extend(session_reasons)
-    if sit < 2:
+    if sit < 2 and not candidate.must_trade_small:
         reasons.append(GateReason.SIT2_INCOMPLETE)
+    if candidate.must_trade_small:
+        reasons.append(GateReason.MUST_TRADE_SMALL_EXCEPTION)
     if already_run:
         reasons.append(GateReason.ALREADY_RUN)
     if first_red:
@@ -98,6 +106,16 @@ def evaluate_gate(candidate: Candidate, ctx: GateContext) -> GateResult:
     delta = abs(candidate.proposed_limit - ctx.quote.ask)
     if delta > ctx.matching_ask_tolerance:
         reasons.append(GateReason.MATCHING_ASK_FAILED)
+
+    if (
+        candidate.must_trade_small
+        and not candidate.committed_i2
+        and (
+            ctx.quote.ask > MUST_TRADE_SMALL_ASK_CAP
+            or candidate.proposed_limit > MUST_TRADE_SMALL_ASK_CAP
+        )
+    ):
+        reasons.append(GateReason.ASK_ABOVE_SMALL_BAND)
 
     occ = normalize_occ(candidate.option_symbol)
     working = _normalized_set(ctx.account.working_option_symbols)
@@ -143,11 +161,17 @@ def evaluate_gate(candidate: Candidate, ctx: GateContext) -> GateResult:
             unique.append(reason)
     reasons = unique
 
-    allowed = not reasons
-    note = "pass" if allowed else ",".join(r.value for r in reasons)
+    blocking = [r for r in reasons if r not in _INFORMATIONAL_REASONS]
+    allowed = not blocking
+    if allowed and not reasons:
+        note = "pass"
+        out_reasons = [GateReason.OK]
+    else:
+        note = ",".join(r.value for r in reasons)
+        out_reasons = reasons
     return GateResult(
         allowed=allowed,
-        reasons=reasons or [GateReason.OK],
+        reasons=out_reasons,
         signal_id=candidate.signal_id,
         mode=ctx.mode,
         note=note,
