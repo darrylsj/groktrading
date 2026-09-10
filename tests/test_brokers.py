@@ -99,9 +99,9 @@ def test_tradier_broker_venue_and_thin_quote_wrap() -> None:
             },
             "/accounts/PAPERACCOUNT/balances": {
                 "balances": {
-                    "total_cash": "600",
-                    "option_buying_power": "600",
+                    "account_type": "margin",
                     "total_equity": "600",
+                    "margin": {"option_buying_power": "600"},
                 }
             },
             "/accounts/PAPERACCOUNT/positions": {

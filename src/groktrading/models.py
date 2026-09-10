@@ -63,6 +63,9 @@ class GateReason(StrEnum):
     CASH_RESERVE = "cash_reserve"
     IN_POSITION = "in_position"
     SESSION_FACTS_REQUIRED = "session_facts_required"
+    MISSING_EXECUTED_AT = "missing_executed_at"
+    UNPARSEABLE_EXECUTED_AT = "unparseable_executed_at"
+    STALE_PRINT = "stale_print"
 
 
 class OptionQuote(StrictModel):
@@ -262,3 +265,5 @@ class OrderTicket(StrictModel):
     created_ts: datetime
     updated_ts: datetime
     note: str = ""
+    gate_passed_ts: datetime | None = None
+    gate_max_quote_age_seconds: float | None = None

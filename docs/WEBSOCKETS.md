@@ -75,7 +75,7 @@ Three independent locks (code, not prose):
 2. **Final gate** (`gate.evaluate_gate`): if `candidate.from_websocket` and mode is live → `GateReason.WS_DIRECT_LIVE_FORBIDDEN`.
 3. **`maybe_submit`**: live still requires `live_explicitly_enabled`, a passed gate, and a sink. It **previews first**. Live submit is `OrderMachine` after a **refreshed** Tradier production quote + rerun gate. Default mode is `signals_only`; `live_explicitly_enabled` defaults false.
 
-The final gate rechecks a **fresh Tradier production** option quote (OCC after normalize, `delayed==false`, provider `bid_date`/`ask_date` age, spread, matching ask). HTTP receive time is not freshness. Sandbox/synthetic quotes cannot pass live. See [SAFETY.md](SAFETY.md) P0.1 / P0.2 / P0.3.
+The final gate rechecks a **fresh Tradier production** option quote (OCC after normalize, `delayed==false`, provider `bid_date`/`ask_date` age, spread, matching ask) and, in live, `candidate.executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC`. HTTP receive time is not freshness. Sandbox/synthetic quotes cannot pass live. See [SAFETY.md](SAFETY.md) P0.1 / P0.2 / P0.3.
 
 Grok/LLM is **outside** the broker boundary: approve/skip on frozen facts only. It must not set OCC, qty, limit, account, or order action.
 
@@ -112,7 +112,7 @@ Helsinki’s `finnhub_adapter.py` is the live writer; this module is the referen
 - Candidate TTL expiry → `TTL_EXPIRED`.
 - Stale or missing Tradier production quote fields → quote-gate reasons (missing fields, delayed, sandbox, OCC mismatch, future timestamps, wide spread, no-chase).
 - Timeouts on UW/Tradier/Finnhub HTTP **fail closed** (no guessed series, no guessed NBBO).
-- **`sit_match` print age (emitter + inbox):** `groktrading.sit_match` requires `executed_at` and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60). This is **not** a Tradier order-gate change. Webhooks now carry `executed_at` so a consumer can reject stale facts the same way. Helsinki `ws_tape.py` must apply this before POST; merging this repo does not restart the host.
+- **`sit_match` print age (emitter + inbox + live final gate):** `groktrading.sit_match` requires `executed_at` and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60). The live executor gate uses the same clock (`missing_executed_at` / `stale_print`); `created_at` / `timestamp` are not substitutes. Webhooks carry `executed_at` so a consumer can reject stale facts the same way. Helsinki `ws_tape.py` must apply this before POST; merging this repo does not restart the host.
 
 ### Signed webhook
 

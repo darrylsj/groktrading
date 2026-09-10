@@ -7,6 +7,20 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- Claude P0 CHANGE 1: live `evaluate_gate` requires `candidate.executed_at`
+  age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s). Missing/unparseable/stale
+  fails closed (`missing_executed_at` / `stale_print`); no `created_at` /
+  `timestamp` substitute (C2 already on emit). `OrderMachine` stores
+  `gate_passed_ts` and refuses FINAL_GATE→SUBMIT when older than
+  `max_quote_age_seconds` (policy default 5s, same as quote_gate).
+- Claude P0 CHANGE 2: Tradier `feeds/tradier.py` balances use nested
+  `cash.cash_available` (cash) or `margin`/`pdt.option_buying_power`
+  (margin/PDT). Do not use `total_cash` (includes unsettled) as buying
+  power — closes executor GFV inflation. Missing nested fields raise
+  `BalancesParseError`. `must_trade_small` is unchanged.
+
 ### Added
 
 - Encoded I1 `must_trade_small` on `Candidate` / `evaluate_gate` (Astra

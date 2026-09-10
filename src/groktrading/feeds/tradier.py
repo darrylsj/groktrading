@@ -18,7 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal, Protocol
 
-from groktrading.errors import StaleDataError, TimeoutFailClosedError
+from groktrading.errors import BalancesParseError, StaleDataError, TimeoutFailClosedError
 from groktrading.models import AccountSnapshot, ClockSnapshot, MarketState, OptionQuote
 from groktrading.timeutil import UTC, is_stale
 
@@ -56,6 +56,61 @@ def rest_base(env: TradierEnv) -> str:
 
 def account_events_ws(env: TradierEnv) -> str:
     return PRODUCTION_ACCOUNT_WS if env == "production" else SANDBOX_ACCOUNT_WS
+
+
+def _nested_field(mapping: Any, *keys: str) -> Any:
+    """Descend one nested object. Same shape as research.collectors._nested_field."""
+    current: Any = mapping
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _known_decimal(*values: Any) -> Decimal | None:
+    """First present numeric amount. 0 is known; None/blank/nested dict are not."""
+    for value in values:
+        if value in (None, "", "null") or isinstance(value, dict):
+            continue
+        try:
+            return Decimal(str(value))
+        except (ArithmeticError, TypeError, ValueError):
+            continue
+    return None
+
+
+def parse_tradier_balances(balances: Any, *, as_of: datetime) -> AccountSnapshot:
+    """Map Tradier /balances onto cash + option buying power.
+
+    Documented nested fields (docs.tradier.com/docs/balances):
+
+    * cash account → ``cash.cash_available`` (not ``total_cash``, which
+      includes ``cash.unsettled_funds`` and can inflate BP / GFV)
+    * margin → ``margin.option_buying_power``
+    * pdt → ``pdt.option_buying_power``
+
+    If none of those nested fields are present, raise. Do not fall back to
+    top-level ``option_buying_power``, ``stock_buying_power``, or
+    ``total_cash``.
+    """
+    row = balances if isinstance(balances, dict) else {}
+    cash_available = _known_decimal(_nested_field(row, "cash", "cash_available"))
+    margin_obp = _known_decimal(_nested_field(row, "margin", "option_buying_power"))
+    pdt_obp = _known_decimal(_nested_field(row, "pdt", "option_buying_power"))
+    buying_power = _known_decimal(margin_obp, pdt_obp, cash_available)
+    if buying_power is None:
+        raise BalancesParseError(
+            "tradier_balances_missing_cash_available_or_option_buying_power"
+        )
+    cash = cash_available if cash_available is not None else buying_power
+    equity = _known_decimal(row.get("total_equity"), row.get("equity"))
+    return AccountSnapshot(
+        cash=cash,
+        buying_power=buying_power,
+        as_of=as_of,
+        equity=equity,
+    )
 
 
 def _parse_tradier_ts(value: Any) -> datetime | None:
@@ -154,17 +209,7 @@ class TradierClient:
     def balances(self) -> AccountSnapshot:
         body = self._get(f"/accounts/{self.account_id}/balances")
         balances = (body or {}).get("balances") or {}
-        cash = Decimal(str(balances.get("total_cash", balances.get("cash", "0"))))
-        option_bp = balances.get("option_buying_power", balances.get("stock_buying_power", cash))
-        bp = Decimal(str(option_bp))
-        equity_raw = balances.get("total_equity", balances.get("equity"))
-        equity = Decimal(str(equity_raw)) if equity_raw is not None else None
-        return AccountSnapshot(
-            cash=cash,
-            buying_power=bp,
-            as_of=self.clock.now(),
-            equity=equity,
-        )
+        return parse_tradier_balances(balances, as_of=self.clock.now())
 
     def position_symbols(self) -> list[str]:
         """GET /accounts/{id}/positions — used by the broker-authoritative final gate."""
