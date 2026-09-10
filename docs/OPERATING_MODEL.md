@@ -19,7 +19,7 @@ There is also a Tradier sandbox paper account. Operator goals are not forecasts.
 ## Live rules (operator policy encoded in the gate)
 
 1. One-lot options only (`quantity == 1`).
-2. Sit-2: at least two confirmations before candidacy.
+2. Sit-2 is the **I2 lean/hold bar**: at least two confirmations before candidacy, unless `Candidate.must_trade_small=True`. That flag is a **logged** I1 exception (`must_trade_small_exception` on the gate result). It skips **only** `SIT2_INCOMPLETE`. Freshness, matching ask, ≥20% cash, qty=1, BTO-only, entry cutoff, and already-run stay hard. The ~11:00 PT daily-lot clock is Grok Bot Continual15 (not encoded in this package). On that path, ask/limit > $1.50 is refused unless `committed_i2` is true. Live Bot cheap band on funded cash is ~$0.80–$1.50; `PREFERRED_ONE_LOT_NOTIONAL` ($200) is not a silent live default.
 3. Matching ask (limit equals fresh ask, optional tick tolerance).
 4. Skip already-run names/contracts for the session.
 5. No first-red.

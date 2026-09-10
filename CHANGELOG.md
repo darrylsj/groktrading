@@ -7,6 +7,19 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Encoded I1 `must_trade_small` on `Candidate` / `evaluate_gate` (Astra
+  profitability audit 2026-09-09 CHANGE + 48h Continual15 experiment). Sit-2
+  remains the I2 lean bar and still hard-rejects when the flag is false. When
+  true, skip only `SIT2_INCOMPLETE` and record `must_trade_small_exception`.
+  Freshness, matching ask, ≥20% cash, qty=1, BTO-only, entry cutoff, and
+  already-run stay hard. Optional `committed_i2` waives the $1.50 ask/limit
+  cap on that path only. The ~11:00 PT clock is Continual15 (not encoded).
+  Does not change `PREFERRED_ONE_LOT_NOTIONAL`; live Bot cheap band on funded
+  cash is ~$0.80–$1.50. No account-events, WS→orders, spray, credits, or
+  Opening15→live.
+
 ### Fixed
 
 - **C2** Execution-time freshness: `flow_ledger` / `sit_match` no longer treat

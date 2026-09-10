@@ -56,7 +56,100 @@ def test_matching_ask_threshold() -> None:
 
 def test_sit2() -> None:
     result = evaluate_gate(passing_candidate(sit_confirmations=1), passing_context())
+    assert result.allowed is False
     assert GateReason.SIT2_INCOMPLETE in result.reasons
+    assert GateReason.MUST_TRADE_SMALL_EXCEPTION not in result.reasons
+
+
+def test_must_trade_small_sit1_skips_only_sit2() -> None:
+    result = evaluate_gate(
+        passing_candidate(sit_confirmations=1, must_trade_small=True),
+        passing_context(),
+    )
+    assert result.allowed is True
+    assert GateReason.SIT2_INCOMPLETE not in result.reasons
+    assert GateReason.MUST_TRADE_SMALL_EXCEPTION in result.reasons
+    assert "must_trade_small_exception" in result.note
+
+
+def test_must_trade_small_does_not_bypass_cash_qty_or_matching_ask() -> None:
+    now = morning_pt()
+    cash_account = AccountSnapshot(
+        cash=Decimal("150"),
+        buying_power=Decimal("150"),
+        as_of=now,
+        equity=Decimal("150"),
+    )
+    cash = evaluate_gate(
+        passing_candidate(sit_confirmations=1, must_trade_small=True),
+        passing_context(account=cash_account),
+    )
+    assert cash.allowed is False
+    assert GateReason.CASH_RESERVE in cash.reasons
+    assert GateReason.SIT2_INCOMPLETE not in cash.reasons
+    assert GateReason.MUST_TRADE_SMALL_EXCEPTION in cash.reasons
+
+    qty = evaluate_gate(
+        passing_candidate(sit_confirmations=1, must_trade_small=True, quantity=2),
+        passing_context(),
+    )
+    assert qty.allowed is False
+    assert GateReason.QUANTITY_NOT_ONE in qty.reasons
+    assert GateReason.SIT2_INCOMPLETE not in qty.reasons
+
+    ask = evaluate_gate(
+        passing_candidate(
+            sit_confirmations=1,
+            must_trade_small=True,
+            proposed_limit=Decimal("1.24"),
+        ),
+        passing_context(matching_ask_tolerance=Decimal("0")),
+    )
+    assert ask.allowed is False
+    assert GateReason.MATCHING_ASK_FAILED in ask.reasons
+    assert GateReason.SIT2_INCOMPLETE not in ask.reasons
+
+
+def test_must_trade_small_refuses_ask_above_small_band_unless_committed_i2() -> None:
+    now = morning_pt()
+    quote = OptionQuote(
+        option_symbol="SPY260903C00600000",
+        bid=Decimal("1.55"),
+        ask=Decimal("1.60"),
+        quote_ts=now,
+        source="tradier_production",
+        delayed=False,
+        bid_date=now,
+        ask_date=now,
+        received_ts=now,
+        provider_symbol="SPY260903C00600000",
+    )
+    blocked = evaluate_gate(
+        passing_candidate(
+            sit_confirmations=1,
+            must_trade_small=True,
+            proposed_limit=Decimal("1.60"),
+            created_ts=now,
+        ),
+        passing_context(now=now, quote=quote),
+    )
+    assert blocked.allowed is False
+    assert GateReason.ASK_ABOVE_SMALL_BAND in blocked.reasons
+    assert GateReason.SIT2_INCOMPLETE not in blocked.reasons
+
+    waived = evaluate_gate(
+        passing_candidate(
+            sit_confirmations=1,
+            must_trade_small=True,
+            committed_i2=True,
+            proposed_limit=Decimal("1.60"),
+            created_ts=now,
+        ),
+        passing_context(now=now, quote=quote),
+    )
+    assert waived.allowed is True
+    assert GateReason.ASK_ABOVE_SMALL_BAND not in waived.reasons
+    assert GateReason.MUST_TRADE_SMALL_EXCEPTION in waived.reasons
 
 
 def test_already_run() -> None:

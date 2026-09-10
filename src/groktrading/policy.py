@@ -17,6 +17,9 @@ from groktrading.timeutil import entry_cutoff_deadline_pt, past_entry_cutoff, se
 CASH_EQUITY_FLOOR = Decimal("0.20")
 MAX_DEPLOY_RATIO = Decimal("0.80")
 PREFERRED_ONE_LOT_NOTIONAL = Decimal("200")
+# I1 must_trade_small ask/limit cap only. Live Bot cheap band on funded cash is
+# ~$0.80–$1.50; this is not a silent rewrite of PREFERRED_ONE_LOT_NOTIONAL.
+MUST_TRADE_SMALL_ASK_CAP = Decimal("1.50")
 OVERNIGHT_LONG_OPTIONS_ALLOWED = True
 ENTRY_CUTOFF_FLATTENS_BOOK = False
 DEFAULT_MAX_QUOTE_AGE_SECONDS = 5.0
@@ -167,6 +170,7 @@ class PolicyCard:
             "12:30 PT is a new-entry cutoff only (fail-closed = no new risk).",
             "Live orders are never triggered by WebSocket alone.",
             "Grok/LLM is outside the broker execution boundary.",
+            "Sit-2 is the I2 lean bar; must_trade_small is a logged I1 exception.",
         ]
     )
 

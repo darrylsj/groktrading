@@ -33,6 +33,14 @@
       "type": ["string", "null"],
       "format": "date-time",
       "description": "UW option-trades print time. Required on sit_match webhooks; age ≤ SIT_MATCH_MAX_AGE_SEC."
+    },
+    "must_trade_small": {
+      "type": "boolean",
+      "description": "Logged I1 exception: skip only sit-2 / SIT2_INCOMPLETE. Default false."
+    },
+    "committed_i2": {
+      "type": "boolean",
+      "description": "When true with must_trade_small, waive the $1.50 ask/limit cap."
     }
   }
 }
