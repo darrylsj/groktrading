@@ -96,7 +96,13 @@ and it is **not** an order router.
   claim these processes are live on Helsinki.
 - **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
-  emit. `created_at` / `timestamp` are **not** the execution clock.
+  emit. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the
+  execution clock. `print_age_sec` is overwritten from `executed_at` at POST
+  and cannot claim “fresh” against a minutes-old print. Re-check immediately
+  before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`; debounce
+  OCC+`executed_at`. Call `prepare_sit_match_outbound` on the host tape
+  (`ws_tape.py`) at POST, not at detect. Simulate: `scripts/simulate_sit_match_webhook.py`
+  (local 127.0.0.1 only; does not read `grok-webhook.env`).
   Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`.
   Ledger may still **store** stale or clock-less prints for research
   (`groktrading.flow_ledger`); freshness-sensitive use (sit_match, quote

@@ -14,6 +14,13 @@ does not copy ``ws_tape.py``. The append-only flow ledger
 (``groktrading.flow_ledger``) may store stale or clock-less prints for
 research; emission still uses this gate.
 
+``print_age_sec`` is derived from ``executed_at`` vs wall clock at POST. A
+payload field that claims 1–10s while ``executed_at`` is minutes old is a
+lie — never use it as the freshness clock. Call
+``prepare_sit_match_outbound`` immediately before HTTP POST (not at match
+detect / enqueue). Stamp ``emitted_at``. Debounce OCC+executed_at so the
+same print cannot re-fire from a rolling digest.
+
 Emitter/inbox stay on this module. The live final gate also requires
 ``candidate.executed_at`` (same clock, no ``created_at`` / ``timestamp``
 substitute). Quote freshness remains a separate Tradier quote-gate check.
@@ -37,8 +44,14 @@ DEFAULT_SIT_MATCH_MAX_AGE_SEC = 60.0
 REASON_MISSING = "sit_match_missing_executed_at"
 REASON_UNPARSEABLE = "sit_match_unparseable_executed_at"
 REASON_STALE = "sit_match_stale"
+REASON_STALE_AT_POST = "sit_match_stale_at_post"
 REASON_FUTURE = "sit_match_future_executed_at"
 REASON_INVALID_MAX_AGE = "sit_match_invalid_max_age"
+REASON_PRINT_AGE_CONTRADICTS = "sit_match_print_age_contradicts"
+REASON_OCC_EXECUTED_AT_DEBOUNCE = "sit_match_occ_executed_at_debounce"
+PRINT_AGE_SLACK_SEC = 2.0
+# OCC aliases match flow_ledger; sit_match must not import the ledger.
+OCC_ALIAS_KEYS: tuple[str, ...] = ("occ", "option_symbol", "option_chain_id", "option_chain")
 
 
 @dataclass(frozen=True)
@@ -49,6 +62,36 @@ class SitMatchFreshness:
     age_seconds: float | None
     executed_at_iso: str | None
     max_age_sec: float | None
+
+
+@dataclass(frozen=True)
+class SitMatchOutbound:
+    """POST-time decision. ``payload`` is set only when ``allow`` is True."""
+
+    allow: bool
+    reason: str | None
+    freshness: SitMatchFreshness
+    payload: dict[str, Any] | None
+    print_age_sec: float | None
+    emitted_at: str | None
+    print_key: str | None
+
+    def log_fields(self) -> dict[str, Any]:
+        """Secret-free hop log shape for ``trading-desk-tape`` journalctl."""
+        hop = None
+        if self.payload is not None:
+            raw_hop = self.payload.get("hop")
+            hop = raw_hop if isinstance(raw_hop, dict) else None
+        return {
+            "event": SIT_MATCH_EVENT,
+            "allow": self.allow,
+            "reason": self.reason,
+            "executed_at": self.freshness.executed_at_iso,
+            "print_age_sec": self.print_age_sec,
+            "emitted_at": self.emitted_at,
+            "print_key": self.print_key,
+            "hop": hop,
+        }
 
 
 def _finite_max_age(value: object) -> float | None:
@@ -228,3 +271,179 @@ def attach_executed_at(
         nested["executed_at"] = decision.executed_at_iso
         out["candidate"] = nested
     return out
+
+
+def extract_occ(payload: Mapping[str, Any]) -> str | None:
+    """OCC from top-level aliases or nested ``candidate.option_symbol``."""
+    for key in OCC_ALIAS_KEYS:
+        raw = payload.get(key)
+        if raw not in (None, ""):
+            text = str(raw).strip()
+            if text:
+                return text
+    candidate = payload.get("candidate")
+    if isinstance(candidate, Mapping):
+        for key in ("option_symbol", "occ"):
+            raw = candidate.get(key)
+            if raw not in (None, ""):
+                text = str(raw).strip()
+                if text:
+                    return text
+    return None
+
+
+def extract_print_age_sec(payload: Mapping[str, Any]) -> float | None:
+    """Inbound ``print_age_sec`` if finite and ≥0. Never a freshness clock."""
+    raw = payload.get("print_age_sec")
+    if raw in (None, ""):
+        return None
+    if isinstance(raw, bool):
+        return None
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed) or parsed < 0:
+        return None
+    return parsed
+
+
+def print_age_contradicts(
+    claimed: float,
+    true_age: float,
+    *,
+    slack_sec: float = PRINT_AGE_SLACK_SEC,
+) -> bool:
+    """True when claimed print age is not the executed_at age."""
+    return abs(claimed - true_age) > slack_sec
+
+
+def sit_match_print_key(occ: str | None, executed_at_iso: str | None) -> str | None:
+    """Durable debounce identity: one POST per OCC+executed_at print."""
+    if not occ or not executed_at_iso:
+        return None
+    return f"{occ.strip().upper()}|{executed_at_iso}"
+
+
+def _extract_optional_ts(payload: Mapping[str, Any], *keys: str) -> object:
+    hop = payload.get("hop")
+    hop_map = hop if isinstance(hop, Mapping) else {}
+    for key in keys:
+        raw = payload.get(key)
+        if raw not in (None, ""):
+            return raw
+        nested = hop_map.get(key)
+        if nested not in (None, ""):
+            return nested
+    return None
+
+
+def attach_sit_match_clocks(
+    payload: Mapping[str, Any],
+    decision: SitMatchFreshness,
+    now: datetime,
+    *,
+    detected_at: object | None = None,
+    enqueued_at: object | None = None,
+) -> dict[str, Any]:
+    """Stamp truthful ``print_age_sec`` + ``emitted_at``. Overwrite any lie."""
+    if decision.age_seconds is None:
+        raise ValueError("cannot attach sit_match clocks without a print age")
+    out = attach_executed_at(payload, decision)
+    stamp = as_utc(now)
+    emitted_iso = executed_at_iso(stamp)
+    out["print_age_sec"] = decision.age_seconds
+    out["emitted_at"] = emitted_iso
+    hop: dict[str, Any] = {}
+    existing = out.get("hop")
+    if isinstance(existing, Mapping):
+        hop.update({k: v for k, v in existing.items() if k not in {"print_age_sec"}})
+    detected_raw = detected_at if detected_at not in (None, "") else _extract_optional_ts(
+        payload, "detected_at"
+    )
+    enqueued_raw = enqueued_at if enqueued_at not in (None, "") else _extract_optional_ts(
+        payload, "enqueued_at"
+    )
+    detected = parse_executed_at(detected_raw)
+    enqueued = parse_executed_at(enqueued_raw)
+    if detected is not None:
+        hop["detected_at"] = executed_at_iso(detected)
+        hop["detect_to_emit_sec"] = quote_age_seconds(detected, stamp)
+    if enqueued is not None:
+        hop["enqueued_at"] = executed_at_iso(enqueued)
+        hop["enqueue_to_emit_sec"] = quote_age_seconds(enqueued, stamp)
+    hop["emitted_at"] = emitted_iso
+    hop["print_age_sec"] = decision.age_seconds
+    hop["executed_at_age_sec"] = decision.age_seconds
+    out["hop"] = hop
+    if detected is not None:
+        out["detected_at"] = hop["detected_at"]
+    if enqueued is not None:
+        out["enqueued_at"] = hop["enqueued_at"]
+    return out
+
+
+def prepare_sit_match_outbound(
+    payload: Mapping[str, Any],
+    now: datetime,
+    *,
+    detected_at: object | None = None,
+    enqueued_at: object | None = None,
+    max_age_sec: float | None = None,
+    env: Mapping[str, str] | None = None,
+    stale_at_post: bool = False,
+) -> SitMatchOutbound:
+    """Single POST gate. Call immediately before HTTP, not at match detect.
+
+    Freshness is ``executed_at`` only. ``print_age_sec`` / ``created_at`` /
+    ``timestamp`` / ``detected_at`` cannot pass a stale print. A claimed
+    ``print_age_sec`` that looks fresh while ``executed_at`` is stale is
+    ``sit_match_print_age_contradicts``. When ``stale_at_post`` is set, a
+    late re-check uses ``sit_match_stale_at_post``.
+    """
+    freshness = evaluate_sit_match_payload(
+        payload, now, max_age_sec=max_age_sec, env=env
+    )
+    claimed = extract_print_age_sec(payload)
+    lie = (
+        claimed is not None
+        and freshness.age_seconds is not None
+        and print_age_contradicts(claimed, freshness.age_seconds)
+    )
+    if not freshness.allow:
+        reason = freshness.reason
+        if (
+            lie
+            and freshness.reason == REASON_STALE
+            and freshness.max_age_sec is not None
+            and claimed is not None
+            and claimed <= freshness.max_age_sec
+        ):
+            reason = REASON_PRINT_AGE_CONTRADICTS
+        elif stale_at_post and freshness.reason == REASON_STALE:
+            reason = REASON_STALE_AT_POST
+        return SitMatchOutbound(
+            allow=False,
+            reason=reason,
+            freshness=freshness,
+            payload=None,
+            print_age_sec=freshness.age_seconds,
+            emitted_at=None,
+            print_key=sit_match_print_key(extract_occ(payload), freshness.executed_at_iso),
+        )
+    outbound = attach_sit_match_clocks(
+        payload,
+        freshness,
+        now,
+        detected_at=detected_at,
+        enqueued_at=enqueued_at,
+    )
+    return SitMatchOutbound(
+        allow=True,
+        reason=None,
+        freshness=freshness,
+        payload=outbound,
+        print_age_sec=freshness.age_seconds,
+        emitted_at=outbound["emitted_at"],
+        print_key=sit_match_print_key(extract_occ(outbound), freshness.executed_at_iso),
+    )

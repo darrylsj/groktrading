@@ -19,7 +19,7 @@ Treat this as ops context. Do not invent a preview→submit path on the host.
 | Webhook idempotency | In-memory debounce **~90s** only — causes weekend same-digest spam |
 | Live card on the host | Overnight longs allowed; 12:30 PT = new-entry cutoff only; cash/equity ≥20% |
 
-Package hardening (quote gate, final gate, order FSM, durable idempotency, `sit_match` `executed_at` freshness) is the correct **first ship**. Copy `ws_tape` debounce/idempotency and the sit_match age gate later. **An operator must authorize any Helsinki restart** of `trading-desk-tape`. This repository must not perform that restart. Without that host patch, UW `option-trades` rows can linger for hours and re-fire `sit_match` after live Tradier ask has moved (90s OCC debounce is not freshness).
+Package hardening (quote gate, final gate, order FSM, durable idempotency, `sit_match` `executed_at` freshness + POST-time `print_age_sec` overwrite / `emitted_at` / OCC+`executed_at` debounce) is the correct **first ship**. Copy `ws_tape` debounce/idempotency and call `prepare_sit_match_outbound` immediately before POST later. **An operator must authorize any Helsinki restart** of `trading-desk-tape`. This repository must not perform that restart. Without that host patch, UW `option-trades` rows can linger for hours and re-fire `sit_match` after live Tradier ask has moved (90s OCC debounce is not freshness; inbound `print_age_sec` can lie fresh).
 
 The installer default remains `/opt/groktrading` + `groktrading-*.service`. Running it with defaults must not overwrite `/opt/trading-desk` or `trading-desk-*.service`.
 

@@ -9,6 +9,22 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Fixed
 
+- `sit_match` POST-time hop chase (2026-09-11 Helsinki → Grok Bot latency):
+  inbound `print_age_sec` can claim 1–10s while `executed_at` is 600–1900s
+  old. `prepare_sit_match_outbound` is the single POST gate — freshness is
+  `executed_at` only; `print_age_sec` is overwritten from that clock;
+  `emitted_at` + hop timestamps (`detected_at`, `enqueued_at`,
+  `detect_to_emit_sec`, `enqueue_to_emit_sec`, `post_ms`) are stamped.
+  Sender re-checks immediately before HTTP (`sit_match_stale_at_post`).
+  A lying-fresh `print_age_sec` on a stale print is
+  `sit_match_print_age_contradicts` and is never POSTed. Same
+  OCC+`executed_at` is `sit_match_occ_executed_at_debounce` (morning digest
+  replay). Inbox + live I1 still refuse stale `executed_at` at wake, so a
+  delayed Bot queue cannot trade. Local proof:
+  `scripts/simulate_sit_match_webhook.py` (127.0.0.1; no `grok-webhook.env`).
+  `ws_tape.py` remains host-owned — operator must call the helper at POST
+  and restart `trading-desk-tape`. No prices invented; no secrets.
+
 - Claude P0 CHANGE 1: live `evaluate_gate` requires `candidate.executed_at`
   age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s). Missing/unparseable/stale
   fails closed (`missing_executed_at` / `stale_print`); no `created_at` /

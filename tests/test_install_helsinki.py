@@ -96,6 +96,8 @@ def test_script_encodes_hard_rules() -> None:
         "ws_tape.py",
         "SIT_MATCH_MAX_AGE_SEC",
         "groktrading.sit_match",
+        "prepare_sit_match_outbound",
+        "print_age_sec",
         "sensor farm",
         "FLOW_LEDGER_PATH",
         "account-events",

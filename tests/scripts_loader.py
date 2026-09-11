@@ -29,3 +29,6 @@ tide_companion = load("tide_companion", "scripts/tide_companion.py")
 screener_companion = load("screener_companion", "scripts/screener_companion.py")
 quote_interest_companion = load("quote_interest_companion", "scripts/quote_interest_companion.py")
 hot_ledger_retain_script = load("hot_ledger_retain_script", "scripts/hot_ledger_retain.py")
+simulate_sit_match_webhook = load(
+    "simulate_sit_match_webhook", "scripts/simulate_sit_match_webhook.py"
+)
