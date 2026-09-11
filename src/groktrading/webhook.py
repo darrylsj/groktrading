@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Protocol
@@ -20,11 +21,9 @@ from typing import Any, Protocol
 from groktrading.idempotency import DurableIdempotency
 from groktrading.redaction import redact_mapping
 from groktrading.sit_match import (
-    REASON_OCC_EXECUTED_AT_DEBOUNCE,
     SIT_MATCH_EVENT,
-    extract_occ,
+    SitMatchEmitMemory,
     prepare_sit_match_outbound,
-    sit_match_print_key,
 )
 from groktrading.timeutil import UTC, as_utc, quote_age_seconds
 
@@ -78,9 +77,11 @@ class SignedWebhookSender:
     cooldown: timedelta = DEFAULT_COOLDOWN
     store: DurableIdempotency | None = None
     clock_state: str | None = None
+    env: Mapping[str, str] | None = None
+    mute_path: str | None = None
+    sit_memory: SitMatchEmitMemory = field(default_factory=SitMatchEmitMemory)
     _last_sent: dict[str, datetime] = field(default_factory=dict)
     _sent_keys: set[str] = field(default_factory=set)
-    _sit_print_keys: set[str] = field(default_factory=set)
 
     def send(
         self,
@@ -95,23 +96,22 @@ class SignedWebhookSender:
         hop: dict[str, Any] | None = None
         print_age_sec: float | None = None
         emitted_at: str | None = None
+        sit_occ: str | None = None
         if event_type == SIT_MATCH_EVENT:
-            first = prepare_sit_match_outbound(payload, now, enqueued_at=now)
+            first = prepare_sit_match_outbound(
+                payload,
+                now,
+                enqueued_at=now,
+                env=self.env,
+                memory=self.sit_memory,
+                mute_path=self.mute_path,
+            )
             if not first.allow:
                 return WebhookSendResult(
                     sent=False,
                     status_code=None,
                     idempotency_key=idempotency_key,
                     skipped_reason=first.reason,
-                    print_age_sec=first.print_age_sec,
-                    hop=first.log_fields(),
-                )
-            if first.print_key is not None and first.print_key in self._sit_print_keys:
-                return WebhookSendResult(
-                    sent=False,
-                    status_code=None,
-                    idempotency_key=idempotency_key,
-                    skipped_reason=REASON_OCC_EXECUTED_AT_DEBOUNCE,
                     print_age_sec=first.print_age_sec,
                     hop=first.log_fields(),
                 )
@@ -124,6 +124,9 @@ class SignedWebhookSender:
                 detected_at=payload.get("detected_at"),
                 enqueued_at=now,
                 stale_at_post=True,
+                env=self.env,
+                memory=self.sit_memory,
+                mute_path=self.mute_path,
             )
             if not second.allow:
                 return WebhookSendResult(
@@ -134,18 +137,10 @@ class SignedWebhookSender:
                     print_age_sec=second.print_age_sec,
                     hop=second.log_fields(),
                 )
-            if second.print_key is not None and second.print_key in self._sit_print_keys:
-                return WebhookSendResult(
-                    sent=False,
-                    status_code=None,
-                    idempotency_key=idempotency_key,
-                    skipped_reason=REASON_OCC_EXECUTED_AT_DEBOUNCE,
-                    print_age_sec=second.print_age_sec,
-                    hop=second.log_fields(),
-                )
             outbound = second.payload or payload
             print_age_sec = second.print_age_sec
             emitted_at = second.emitted_at
+            sit_occ = second.occ
             hop = dict(outbound.get("hop") or {})
         if self.store is not None:
             decision = self.store.claim_outbox(
@@ -199,13 +194,8 @@ class SignedWebhookSender:
         if self.store is None:
             self._sent_keys.add(idempotency_key)
             self._last_sent[event_type] = now
-        if event_type == SIT_MATCH_EVENT and isinstance(outbound, dict):
-            print_key = sit_match_print_key(
-                extract_occ(outbound),
-                str(outbound.get("executed_at") or "") or None,
-            )
-            if print_key:
-                self._sit_print_keys.add(print_key)
+        if event_type == SIT_MATCH_EVENT and sit_occ:
+            self.sit_memory.remember(sit_occ, post_ended)
         return WebhookSendResult(
             sent=True,
             status_code=status,
@@ -233,7 +223,9 @@ class WebhookInbox:
         clock_state: str | None = None,
     ) -> bool:
         if event_type == SIT_MATCH_EVENT:
-            prepared = prepare_sit_match_outbound(payload, as_utc(now))
+            prepared = prepare_sit_match_outbound(
+                payload, as_utc(now), apply_rate_limits=False
+            )
             if not prepared.allow:
                 return False
         return self.store.claim_inbox(

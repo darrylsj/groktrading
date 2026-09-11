@@ -94,20 +94,34 @@ and it is **not** an order router.
   them.** **emit_sit_match=False.** Flow-alerts material is local JSONL
   only (no Grok webhook). Authorization Bearer is runtime env only. Not a
   claim these processes are live on Helsinki.
-- **`sit_match` freshness:** UW `option-trades` `executed_at` age ≤
+- **`sit_match` freshness + producer rate (live Helsinki 2026-09-11):**
+  **Root cause:** ~20+/min POSTs queued Cursor wakes (p50 ~16m) while HTTP
+  itself was always ~0.5–0.7s. UW `option-trades` `executed_at` age ≤
   `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Missing/unparseable/stale → do not
   emit. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the
   execution clock. `print_age_sec` is overwritten from `executed_at` at POST
   and cannot claim “fresh” against a minutes-old print. Re-check immediately
-  before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`; debounce
-  OCC+`executed_at`. Call `prepare_sit_match_outbound` on the host tape
-  (`ws_tape.py`) at POST, not at detect. Simulate: `scripts/simulate_sit_match_webhook.py`
-  (local 127.0.0.1 only; does not read `grok-webhook.env`).
-  Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`.
-  Ledger may still **store** stale or clock-less prints for research
-  (`groktrading.flow_ledger`); freshness-sensitive use (sit_match, quote
-  interest) fail-closes. Flow-alerts reuse the same gate when a row is
-  sit_match-shaped.
+  before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only**
+  debounce (not per OCC|`executed_at` print) plus `SIT_MATCH_MIN_INTERVAL_SEC`
+  default **60** (15 still outran Cursor ~22s wakes) → POSTs ≤1/min. Mute:
+  `SIT_MATCH_WEBHOOK=0` and/or mute file
+  `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`.
+  Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST,
+  not at detect. Host contract: `deploy/examples/helsinki/ws_tape_sit_match.py`.
+  Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does
+  not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed.
+  Package: `groktrading.sit_match`. Ledger may still **store** stale or
+  clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive
+  use (sit_match, quote interest) fail-closes. Flow-alerts reuse the same gate
+  when a row is sit_match-shaped.
+
+  **Unmute checklist (operator):** remove the mute file; set `SIT_MATCH_WEBHOOK=1`
+  or unset it; restart `trading-desk-tape` only with authorization; journal
+  must not log `sit_match_webhook_muted`; POST rate ≤1/min.
+
+  **Verify:** sim POST RTT ≪1s (`post_ms` ~0.5s on the desk, ~17ms local);
+  live POST rate ≤1/min; wake lag should fall after the old Cursor queue
+  drains (residual ~6m was backlog, not HTTP).
 - **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
   fills/cancels keep `in_position` honest after flatten. Never a submit path.
   Package helper: `groktrading.feeds.account_events`. Example unit

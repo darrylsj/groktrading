@@ -8,8 +8,10 @@ from groktrading.models import AssembledFacts, Candidate
 from groktrading.sit_match import (
     DEFAULT_SIT_MATCH_MAX_AGE_SEC,
     REASON_INVALID_MAX_AGE,
+    REASON_MIN_INTERVAL,
     REASON_MISSING,
-    REASON_OCC_EXECUTED_AT_DEBOUNCE,
+    REASON_MUTED,
+    REASON_OCC_DEBOUNCE,
     REASON_PRINT_AGE_CONTRADICTS,
     REASON_STALE,
     REASON_STALE_AT_POST,
@@ -22,7 +24,8 @@ from groktrading.sit_match import (
     prepare_sit_match_outbound,
     print_age_contradicts,
     sit_match_max_age_sec,
-    sit_match_print_key,
+    sit_match_occ_key,
+    sit_match_webhook_enabled,
 )
 from groktrading.sit_match_sim import result_document, simulate_sit_match_http
 from groktrading.timeutil import UTC
@@ -351,37 +354,118 @@ def test_stale_at_post_skips_after_enqueue_clock_jump() -> None:
     assert http.calls == []
 
 
-def test_occ_executed_at_debounce_blocks_replay() -> None:
-    inbound = {
-        "event": "sit_match",
-        "occ": "NVDA260918P00170000",
-        "executed_at": "2026-09-09T16:29:40Z",
-    }
+def test_occ_only_debounce_blocks_new_print_on_same_occ() -> None:
     http = CaptureHttp()
     sender = SignedWebhookSender(
         secret=b"test-secret-not-production",
         http=http,
         clock=FrozenClock(NOW),
+        env={"SIT_MATCH_MIN_INTERVAL_SEC": "60"},
+        mute_path="/nonexistent/sit_match_webhook_muted",
     )
     first = sender.send(
         "https://example.invalid/hook",
-        inbound,
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": "2026-09-09T16:29:40Z",
+        },
         idempotency_key="print-a",
         event_type="sit_match",
     )
     second = sender.send(
         "https://example.invalid/hook",
-        inbound,
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": "2026-09-09T16:29:50Z",
+        },
         idempotency_key="print-b",
         event_type="sit_match",
     )
     assert first.sent is True
     assert second.sent is False
-    assert second.skipped_reason == REASON_OCC_EXECUTED_AT_DEBOUNCE
+    assert second.skipped_reason == REASON_OCC_DEBOUNCE
     assert len(http.calls) == 1
-    assert sit_match_print_key("nvda260918p00170000", "2026-09-09T16:29:40Z") == (
-        "NVDA260918P00170000|2026-09-09T16:29:40Z"
+    assert sit_match_occ_key("nvda260918p00170000") == "NVDA260918P00170000"
+
+
+def test_min_interval_caps_global_post_rate() -> None:
+    http = CaptureHttp()
+    clock = FrozenClock(NOW)
+    sender = SignedWebhookSender(
+        secret=b"test-secret-not-production",
+        http=http,
+        clock=clock,
+        env={"SIT_MATCH_MIN_INTERVAL_SEC": "60"},
+        mute_path="/nonexistent/sit_match_webhook_muted",
     )
+    first = sender.send(
+        "https://example.invalid/hook",
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": "2026-09-09T16:29:40Z",
+        },
+        idempotency_key="nvda-1",
+        event_type="sit_match",
+    )
+    other = sender.send(
+        "https://example.invalid/hook",
+        {
+            "event": "sit_match",
+            "occ": "AAPL260918C00200000",
+            "executed_at": "2026-09-09T16:29:50Z",
+        },
+        idempotency_key="aapl-1",
+        event_type="sit_match",
+    )
+    assert first.sent is True
+    assert other.sent is False
+    assert other.skipped_reason == REASON_MIN_INTERVAL
+    clock.now_value = NOW + timedelta(seconds=61)
+    later = sender.send(
+        "https://example.invalid/hook",
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": executed_at_iso(NOW + timedelta(seconds=55)),
+        },
+        idempotency_key="nvda-2",
+        event_type="sit_match",
+    )
+    assert later.sent is True
+    assert len(http.calls) == 2
+
+
+def test_sit_match_webhook_mute_env_and_file(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    mute = tmp_path / "sit_match_webhook_muted"
+    assert sit_match_webhook_enabled({"SIT_MATCH_WEBHOOK": "1"}, mute) is True
+    assert sit_match_webhook_enabled({"SIT_MATCH_WEBHOOK": "0"}, mute) is False
+    mute.write_text("", encoding="utf-8")
+    assert sit_match_webhook_enabled({"SIT_MATCH_WEBHOOK": "1"}, mute) is False
+
+    http = CaptureHttp()
+    sender = SignedWebhookSender(
+        secret=b"test-secret-not-production",
+        http=http,
+        clock=FrozenClock(NOW),
+        env={"SIT_MATCH_WEBHOOK": "0"},
+        mute_path=str(tmp_path / "absent"),
+    )
+    result = sender.send(
+        "https://example.invalid/hook",
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": "2026-09-09T16:29:40Z",
+        },
+        idempotency_key="muted-1",
+        event_type="sit_match",
+    )
+    assert result.sent is False
+    assert result.skipped_reason == REASON_MUTED
+    assert http.calls == []
 
 
 def test_sender_stamps_truthful_print_age_and_emitted_at() -> None:
@@ -457,6 +541,27 @@ def test_simulate_stale_and_lie_never_post() -> None:
     assert lie.sent is False
     assert lie.http_received is False
     assert lie.skipped_reason == REASON_PRINT_AGE_CONTRADICTS
+
+
+def test_host_contract_mute_skips_injected_post(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from scripts_loader import ws_tape_sit_match
+
+    mute = tmp_path / "sit_match_webhook_muted"
+    mute.write_text("", encoding="utf-8")
+    ws_tape_sit_match.HOST_MUTE_FILE = mute
+    posted: list[object] = []
+    result = ws_tape_sit_match.maybe_post_sit_match(
+        {
+            "event": "sit_match",
+            "occ": "NVDA260918P00170000",
+            "executed_at": executed_at_iso(NOW - timedelta(seconds=5)),
+        },
+        now=NOW,
+        post=posted.append,
+    )
+    assert result.allow is False
+    assert result.reason == REASON_MUTED
+    assert posted == []
 
 
 def test_simulate_script_lie_print_age_exits_zero() -> None:

@@ -105,4 +105,4 @@ Env files on a host: **root-owned, mode 0600**. Examples under `deploy/examples/
 
 ## This cloud agent
 
-Must not deploy to, SSH to, or restart Helsinki systemd units. Helsinki deploy of this hardening is a **follow-up**: copy `ws_tape` debounce/idempotency later; apply `sit_match` `prepare_sit_match_outbound` at POST (`executed_at` ≤ `SIT_MATCH_MAX_AGE_SEC`, overwrite `print_age_sec`, stamp `emitted_at`, OCC+`executed_at` debounce) on the live tape; wire account-events / flow ledger / Box rotate only after an operator authorizes any restart. **Grok Update Computer does not rebuild Helsinki.**
+Must not deploy to, SSH to, or restart Helsinki systemd units. Helsinki deploy of this hardening is a **follow-up**: keep live `ws_tape.py` on `prepare_sit_match_outbound` at POST (`executed_at` ≤ `SIT_MATCH_MAX_AGE_SEC`, overwrite `print_age_sec`, stamp `emitted_at`, OCC-only debounce, `SIT_MATCH_MIN_INTERVAL_SEC` default 60, mute via `SIT_MATCH_WEBHOOK=0` or `/opt/trading-desk/state/sit_match_webhook_muted`); wire account-events / flow ledger / Box rotate only after an operator authorizes any restart. **Grok Update Computer does not rebuild Helsinki.**

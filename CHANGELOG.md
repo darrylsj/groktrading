@@ -11,19 +11,23 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 - `sit_match` POST-time hop chase (2026-09-11 Helsinki → Grok Bot latency):
   inbound `print_age_sec` can claim 1–10s while `executed_at` is 600–1900s
-  old. `prepare_sit_match_outbound` is the single POST gate — freshness is
-  `executed_at` only; `print_age_sec` is overwritten from that clock;
-  `emitted_at` + hop timestamps (`detected_at`, `enqueued_at`,
-  `detect_to_emit_sec`, `enqueue_to_emit_sec`, `post_ms`) are stamped.
-  Sender re-checks immediately before HTTP (`sit_match_stale_at_post`).
-  A lying-fresh `print_age_sec` on a stale print is
-  `sit_match_print_age_contradicts` and is never POSTed. Same
-  OCC+`executed_at` is `sit_match_occ_executed_at_debounce` (morning digest
-  replay). Inbox + live I1 still refuse stale `executed_at` at wake, so a
-  delayed Bot queue cannot trade. Local proof:
-  `scripts/simulate_sit_match_webhook.py` (127.0.0.1; no `grok-webhook.env`).
-  `ws_tape.py` remains host-owned — operator must call the helper at POST
-  and restart `trading-desk-tape`. No prices invented; no secrets.
+  old. Desk evidence: ~20+/min POSTs queued Cursor wakes (p50 ~16m) while
+  HTTP was always ~0.5–0.7s. `prepare_sit_match_outbound` is the single
+  POST gate — freshness is `executed_at` only; `print_age_sec` is overwritten
+  from that clock; `emitted_at` + hop timestamps are stamped. Sender
+  re-checks immediately before HTTP (`sit_match_stale_at_post`). A
+  lying-fresh `print_age_sec` on a stale print is
+  `sit_match_print_age_contradicts`. Live producer (already on
+  `/opt/trading-desk/ws_tape.py`): **OCC-only** debounce (not
+  OCC+`executed_at`) plus `SIT_MATCH_MIN_INTERVAL_SEC` default **60**
+  (15 outran Cursor ~22s wakes) → POSTs ≤1/min. Mute:
+  `SIT_MATCH_WEBHOOK=0` and/or `/opt/trading-desk/state/sit_match_webhook_muted`
+  (`sit_match_webhook_muted`). Inbox + live I1 still refuse stale
+  `executed_at` at wake. Residual ~6m wake lag after the 60s gate was the
+  old queue draining. Contract:
+  `deploy/examples/helsinki/ws_tape_sit_match.py`. Local proof:
+  `scripts/simulate_sit_match_webhook.py`. `ws_tape.py` remains host-owned.
+  No prices invented; no secrets.
 
 - Claude P0 CHANGE 1: live `evaluate_gate` requires `candidate.executed_at`
   age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s). Missing/unparseable/stale

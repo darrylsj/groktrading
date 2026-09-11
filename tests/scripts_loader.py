@@ -32,3 +32,6 @@ hot_ledger_retain_script = load("hot_ledger_retain_script", "scripts/hot_ledger_
 simulate_sit_match_webhook = load(
     "simulate_sit_match_webhook", "scripts/simulate_sit_match_webhook.py"
 )
+ws_tape_sit_match = load(
+    "ws_tape_sit_match", "deploy/examples/helsinki/ws_tape_sit_match.py"
+)

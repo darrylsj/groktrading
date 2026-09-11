@@ -18,8 +18,11 @@ research; emission still uses this gate.
 payload field that claims 1–10s while ``executed_at`` is minutes old is a
 lie — never use it as the freshness clock. Call
 ``prepare_sit_match_outbound`` immediately before HTTP POST (not at match
-detect / enqueue). Stamp ``emitted_at``. Debounce OCC+executed_at so the
-same print cannot re-fire from a rolling digest.
+detect / enqueue). Stamp ``emitted_at``. Live Helsinki producer (2026-09-11):
+OCC-only debounce plus ``SIT_MATCH_MIN_INTERVAL_SEC`` (default **60**) so
+one OCC cannot firehose (~20+/min POSTs queued Cursor wakes to p50 ~16m;
+HTTP was always ~0.5–0.7s). Mute with ``SIT_MATCH_WEBHOOK=0`` and/or
+``/opt/trading-desk/state/sit_match_webhook_muted``.
 
 Emitter/inbox stay on this module. The live final gate also requires
 ``candidate.executed_at`` (same clock, no ``created_at`` / ``timestamp``
@@ -31,8 +34,9 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from groktrading.timeutil import UTC, as_utc, is_future_ts, is_stale, quote_age_seconds
@@ -40,6 +44,10 @@ from groktrading.timeutil import UTC, as_utc, is_future_ts, is_stale, quote_age_
 SIT_MATCH_EVENT = "sit_match"
 SIT_MATCH_MAX_AGE_ENV = "SIT_MATCH_MAX_AGE_SEC"
 DEFAULT_SIT_MATCH_MAX_AGE_SEC = 60.0
+SIT_MATCH_MIN_INTERVAL_ENV = "SIT_MATCH_MIN_INTERVAL_SEC"
+DEFAULT_SIT_MATCH_MIN_INTERVAL_SEC = 60.0
+SIT_MATCH_WEBHOOK_ENV = "SIT_MATCH_WEBHOOK"
+DEFAULT_SIT_MATCH_MUTE_FILE = "/opt/trading-desk/state/sit_match_webhook_muted"
 
 REASON_MISSING = "sit_match_missing_executed_at"
 REASON_UNPARSEABLE = "sit_match_unparseable_executed_at"
@@ -47,8 +55,11 @@ REASON_STALE = "sit_match_stale"
 REASON_STALE_AT_POST = "sit_match_stale_at_post"
 REASON_FUTURE = "sit_match_future_executed_at"
 REASON_INVALID_MAX_AGE = "sit_match_invalid_max_age"
+REASON_INVALID_MIN_INTERVAL = "sit_match_invalid_min_interval"
 REASON_PRINT_AGE_CONTRADICTS = "sit_match_print_age_contradicts"
-REASON_OCC_EXECUTED_AT_DEBOUNCE = "sit_match_occ_executed_at_debounce"
+REASON_OCC_DEBOUNCE = "sit_match_occ_debounce"
+REASON_MIN_INTERVAL = "sit_match_min_interval"
+REASON_MUTED = "sit_match_webhook_muted"
 PRINT_AGE_SLACK_SEC = 2.0
 # OCC aliases match flow_ledger; sit_match must not import the ledger.
 OCC_ALIAS_KEYS: tuple[str, ...] = ("occ", "option_symbol", "option_chain_id", "option_chain")
@@ -75,6 +86,7 @@ class SitMatchOutbound:
     print_age_sec: float | None
     emitted_at: str | None
     print_key: str | None
+    occ: str | None = None
 
     def log_fields(self) -> dict[str, Any]:
         """Secret-free hop log shape for ``trading-desk-tape`` journalctl."""
@@ -90,6 +102,7 @@ class SitMatchOutbound:
             "print_age_sec": self.print_age_sec,
             "emitted_at": self.emitted_at,
             "print_key": self.print_key,
+            "occ": self.occ,
             "hop": hop,
         }
 
@@ -318,11 +331,90 @@ def print_age_contradicts(
     return abs(claimed - true_age) > slack_sec
 
 
-def sit_match_print_key(occ: str | None, executed_at_iso: str | None) -> str | None:
-    """Durable debounce identity: one POST per OCC+executed_at print."""
-    if not occ or not executed_at_iso:
+def sit_match_occ_key(occ: str | None) -> str | None:
+    """OCC-only debounce identity. One hot name cannot firehose unique prints."""
+    if not occ:
         return None
-    return f"{occ.strip().upper()}|{executed_at_iso}"
+    text = occ.strip().upper()
+    return text or None
+
+
+def sit_match_min_interval_sec(env: Mapping[str, str] | None = None) -> float | None:
+    """Seconds between sit_match POSTs. Default 60. None if env is invalid."""
+    source = os.environ if env is None else env
+    raw = source.get(SIT_MATCH_MIN_INTERVAL_ENV)
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_SIT_MATCH_MIN_INTERVAL_SEC
+    return _finite_max_age(str(raw).strip())
+
+
+def sit_match_mute_path(
+    env: Mapping[str, str] | None = None,
+    mute_path: Path | str | None = None,
+) -> Path:
+    if mute_path is not None:
+        return Path(mute_path)
+    source = os.environ if env is None else env
+    raw = source.get("SIT_MATCH_MUTE_FILE")
+    if raw is not None and str(raw).strip():
+        return Path(str(raw).strip())
+    return Path(DEFAULT_SIT_MATCH_MUTE_FILE)
+
+
+def sit_match_webhook_enabled(
+    env: Mapping[str, str] | None = None,
+    mute_path: Path | str | None = None,
+) -> bool:
+    """False when ``SIT_MATCH_WEBHOOK=0`` or the mute file exists."""
+    path = sit_match_mute_path(env, mute_path)
+    try:
+        if path.is_file():
+            return False
+    except OSError:
+        return False
+    source = os.environ if env is None else env
+    raw = source.get(SIT_MATCH_WEBHOOK_ENV)
+    if raw is None or str(raw).strip() == "":
+        return True
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+
+
+@dataclass
+class SitMatchEmitMemory:
+    """In-process last-POST clocks. OCC-only; not OCC|executed_at."""
+
+    last_any: datetime | None = None
+    last_occ: dict[str, datetime] = field(default_factory=dict)
+
+    def remember(self, occ: str, when: datetime) -> None:
+        stamp = as_utc(when)
+        self.last_any = stamp
+        self.last_occ[occ] = stamp
+
+
+def evaluate_sit_match_rate(
+    occ: str | None,
+    now: datetime,
+    memory: SitMatchEmitMemory | None,
+    *,
+    env: Mapping[str, str] | None = None,
+    min_interval_sec: float | None = None,
+) -> str | None:
+    """Return a skip reason when global or per-OCC interval has not elapsed."""
+    resolved = min_interval_sec if min_interval_sec is not None else sit_match_min_interval_sec(env)
+    if resolved is None:
+        return REASON_INVALID_MIN_INTERVAL
+    if memory is None:
+        return None
+    stamp = as_utc(now)
+    key = sit_match_occ_key(occ)
+    if key is not None:
+        last_occ = memory.last_occ.get(key)
+        if last_occ is not None and quote_age_seconds(last_occ, stamp) < resolved:
+            return REASON_OCC_DEBOUNCE
+    if memory.last_any is not None and quote_age_seconds(memory.last_any, stamp) < resolved:
+        return REASON_MIN_INTERVAL
+    return None
 
 
 def _extract_optional_ts(payload: Mapping[str, Any], *keys: str) -> object:
@@ -392,6 +484,10 @@ def prepare_sit_match_outbound(
     max_age_sec: float | None = None,
     env: Mapping[str, str] | None = None,
     stale_at_post: bool = False,
+    memory: SitMatchEmitMemory | None = None,
+    mute_path: Path | str | None = None,
+    min_interval_sec: float | None = None,
+    apply_rate_limits: bool = True,
 ) -> SitMatchOutbound:
     """Single POST gate. Call immediately before HTTP, not at match detect.
 
@@ -400,16 +496,33 @@ def prepare_sit_match_outbound(
     ``print_age_sec`` that looks fresh while ``executed_at`` is stale is
     ``sit_match_print_age_contradicts``. When ``stale_at_post`` is set, a
     late re-check uses ``sit_match_stale_at_post``.
+
+    Live producer controls (Helsinki ``ws_tape.py`` 2026-09-11): mute via
+    ``SIT_MATCH_WEBHOOK=0`` or the mute file; OCC-only debounce plus
+    ``SIT_MATCH_MIN_INTERVAL_SEC`` (default 60). Inbox should pass
+    ``apply_rate_limits=False`` so a delayed wake is freshness-only.
     """
     freshness = evaluate_sit_match_payload(
         payload, now, max_age_sec=max_age_sec, env=env
     )
+    occ = sit_match_occ_key(extract_occ(payload))
     claimed = extract_print_age_sec(payload)
     lie = (
         claimed is not None
         and freshness.age_seconds is not None
         and print_age_contradicts(claimed, freshness.age_seconds)
     )
+    if apply_rate_limits and not sit_match_webhook_enabled(env, mute_path):
+        return SitMatchOutbound(
+            allow=False,
+            reason=REASON_MUTED,
+            freshness=freshness,
+            payload=None,
+            print_age_sec=freshness.age_seconds,
+            emitted_at=None,
+            print_key=occ,
+            occ=occ,
+        )
     if not freshness.allow:
         reason = freshness.reason
         if stale_at_post and freshness.reason == REASON_STALE:
@@ -431,8 +544,24 @@ def prepare_sit_match_outbound(
             payload=None,
             print_age_sec=freshness.age_seconds,
             emitted_at=None,
-            print_key=sit_match_print_key(extract_occ(payload), freshness.executed_at_iso),
+            print_key=occ,
+            occ=occ,
         )
+    if apply_rate_limits:
+        rate_reason = evaluate_sit_match_rate(
+            occ, now, memory, env=env, min_interval_sec=min_interval_sec
+        )
+        if rate_reason is not None:
+            return SitMatchOutbound(
+                allow=False,
+                reason=rate_reason,
+                freshness=freshness,
+                payload=None,
+                print_age_sec=freshness.age_seconds,
+                emitted_at=None,
+                print_key=occ,
+                occ=occ,
+            )
     outbound = attach_sit_match_clocks(
         payload,
         freshness,
@@ -440,6 +569,8 @@ def prepare_sit_match_outbound(
         detected_at=detected_at,
         enqueued_at=enqueued_at,
     )
+    if occ is None:
+        occ = sit_match_occ_key(extract_occ(outbound))
     return SitMatchOutbound(
         allow=True,
         reason=None,
@@ -447,5 +578,6 @@ def prepare_sit_match_outbound(
         payload=outbound,
         print_age_sec=freshness.age_seconds,
         emitted_at=outbound["emitted_at"],
-        print_key=sit_match_print_key(extract_occ(outbound), freshness.executed_at_iso),
+        print_key=occ,
+        occ=occ,
     )
