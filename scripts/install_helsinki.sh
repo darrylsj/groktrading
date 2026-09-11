@@ -130,9 +130,16 @@ tape_poller.py. groktrading-tape writes a signals-only skeleton only.
 Migrating the live UW+Tradier tape is a separate operator step.
 This installer never embeds or overwrites ws_tape.py. sit_match freshness
 (SIT_MATCH_MAX_AGE_SEC, default 60s, executed_at on the payload) lives in
-the package (groktrading.sit_match). After merge, an operator must apply
-that gate in the live Helsinki sit_match branch and restart
-trading-desk-tape.
+the package (groktrading.sit_match). Call prepare_sit_match_outbound
+immediately before POST: overwrite print_age_sec from executed_at, stamp
+emitted_at, skip sit_match_stale_at_post / sit_match_print_age_contradicts,
+OCC-only debounce, SIT_MATCH_MIN_INTERVAL_SEC default 60. Mute:
+SIT_MATCH_WEBHOOK=0 and/or /opt/trading-desk/state/sit_match_webhook_muted
+(sit_match_webhook_muted). Contract:
+deploy/examples/helsinki/ws_tape_sit_match.py. Local hop chase:
+scripts/simulate_sit_match_webhook.py (127.0.0.1; no grok-webhook.env).
+After merge, an operator must keep the live Helsinki sit_match branch on
+this contract and restart trading-desk-tape.
 
 Helsinki sensor farm (package helpers; host-owned live tape unchanged):
   - Flow ledger: groktrading.flow_ledger (SQLite under STATE_DIR/ledger)

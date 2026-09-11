@@ -96,6 +96,11 @@ def test_script_encodes_hard_rules() -> None:
         "ws_tape.py",
         "SIT_MATCH_MAX_AGE_SEC",
         "groktrading.sit_match",
+        "prepare_sit_match_outbound",
+        "print_age_sec",
+        "SIT_MATCH_MIN_INTERVAL_SEC",
+        "SIT_MATCH_WEBHOOK",
+        "sit_match_webhook_muted",
         "sensor farm",
         "FLOW_LEDGER_PATH",
         "account-events",
@@ -126,6 +131,8 @@ def test_trading_desk_env_example_matches_observed_key_names() -> None:
     ):
         assert f"{key}=YOUR_" in text, key
     assert "SIT_MATCH_MAX_AGE_SEC" in text
+    assert "SIT_MATCH_MIN_INTERVAL_SEC" in text
+    assert "SIT_MATCH_WEBHOOK" in text
     assert "60" in text
     assert "FLOW_LEDGER_PATH" in text
     assert "FLOW_LEDGER_KEEP_HOT_DAYS" in text

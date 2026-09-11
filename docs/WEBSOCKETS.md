@@ -85,7 +85,7 @@ Helsinki pushes **material events only**. No LLM polling.
 
 | Event | Meaning on the live card |
 | --- | --- |
-| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). `created_at` / `timestamp` are not substitutes. Missing/unparseable/`executed_at` older than the cap / non-finite max-age → **do not emit**. Payload includes `executed_at`. 90s per-OCC debounce is not a freshness gate — stale UW rows can linger for hours. |
+| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). `created_at` / `timestamp` / inbound `print_age_sec` are not substitutes. Missing/unparseable/`executed_at` older than the cap / non-finite max-age / lying `print_age_sec` → **do not emit**. Payload includes `executed_at`, truthful `print_age_sec`, and `emitted_at`. Re-check at POST (`sit_match_stale_at_post`). **OCC-only** debounce + `SIT_MATCH_MIN_INTERVAL_SEC` default **60** (not per OCC\|`executed_at`; 15 outran Cursor ~22s wakes). Mute: `SIT_MATCH_WEBHOOK=0` or `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. |
 | `in_position` | Broker already holds the OCC / underlying — do not spray a second entry |
 | `cash_up` | 12:30 PT **entry-cutoff** notice. Flag: `entry_cutoff_only_no_flatten`. Existing overnight longs stay. |
 | `day_win_target` | Informational. `auto_flatten: false` — **not** a liquidation trigger |
@@ -112,7 +112,32 @@ Helsinki’s `finnhub_adapter.py` is the live writer; this module is the referen
 - Candidate TTL expiry → `TTL_EXPIRED`.
 - Stale or missing Tradier production quote fields → quote-gate reasons (missing fields, delayed, sandbox, OCC mismatch, future timestamps, wide spread, no-chase).
 - Timeouts on UW/Tradier/Finnhub HTTP **fail closed** (no guessed series, no guessed NBBO).
-- **`sit_match` print age (emitter + inbox + live final gate):** `groktrading.sit_match` requires `executed_at` and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60). The live executor gate uses the same clock (`missing_executed_at` / `stale_print`); `created_at` / `timestamp` are not substitutes. Webhooks carry `executed_at` so a consumer can reject stale facts the same way. Helsinki `ws_tape.py` must apply this before POST; merging this repo does not restart the host.
+- **`sit_match` print age (emitter + inbox + live final gate):** `groktrading.sit_match` requires `executed_at` and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60). The live executor gate uses the same clock (`missing_executed_at` / `stale_print`); `created_at` / `timestamp` / inbound `print_age_sec` are not substitutes. Call `prepare_sit_match_outbound` **immediately before HTTP POST** (not at match detect or enqueue). That helper overwrites `print_age_sec` from `executed_at`, stamps `emitted_at`, and records hop clocks (`detected_at`, `enqueued_at`, `detect_to_emit_sec`, `enqueue_to_emit_sec`). A claimed `print_age_sec` ≤60s against a minutes-old `executed_at` is `sit_match_print_age_contradicts` and is never POSTed. A row that was fresh at detect but stale at POST is `sit_match_stale_at_post`. Live producer: OCC-only debounce (`sit_match_occ_debounce`) plus `SIT_MATCH_MIN_INTERVAL_SEC` default **60** (`sit_match_min_interval`) — one OCC cannot firehose unique prints; POSTs ≤1/min. Mute with `SIT_MATCH_WEBHOOK=0` or `/opt/trading-desk/state/sit_match_webhook_muted` (`sit_match_webhook_muted`). Inbox + I1 still refuse stale `executed_at` at wake (inbox does not apply mute/interval). Helsinki `ws_tape.py` must apply this before POST; merging this repo does not restart the host. Contract: `deploy/examples/helsinki/ws_tape_sit_match.py`. Local hop chase: `python scripts/simulate_sit_match_webhook.py` (127.0.0.1 only; does not read `grok-webhook.env`).
+
+### Hop timing (where minutes are lost)
+
+Instrument every emit. Secret-free journal shape (`trading-desk-tape`):
+
+```text
+sit_match allow=… reason=… executed_at=… print_age_sec=… emitted_at=… hop={detected_at,enqueued_at,detect_to_emit_sec,enqueue_to_emit_sec,post_ms}
+```
+
+| Hop | Clock | Expected when healthy |
+| --- | --- | --- |
+| Match detect | `detected_at` | `executed_at` age already ≤60s or drop |
+| Enqueue | `enqueued_at` | milliseconds after detect |
+| HTTP POST start/end | `emitted_at` / `post_ms` | `prepare_sit_match_outbound` then POST; `post_ms` typically <100ms to a nearby inbox |
+| Consumer receive / Grok wake | `now - emitted_at` | If this is minutes while `emitted_at` is fresh, the firehose/queue is on the Bot side. I1 (`executed_at` ≤60s) must refuse; do not trade. |
+
+**2026-09-11 root cause (desk evidence):** ~20+/min `sit_match` POSTs queued Cursor wakes (p50 ~16m). HTTP POST was always ~0.5–0.7s. A lying `print_age_sec` plus no POST-time `executed_at` recheck made I1 refuse a “fresh” payload. After the 60s OCC-only gate: POSTs ≤1/min; sim HTTP ~549ms; residual wake lag ~6m was the old queue draining.
+
+### Verify on Helsinki (`trading-desk-tape`)
+
+1. Live host `/opt/trading-desk/ws_tape.py` already has this producer gate. In-repo contract: `deploy/examples/helsinki/ws_tape_sit_match.py`. Call `prepare_sit_match_outbound` immediately before POST. Do **not** gate on inbound `print_age_sec`. Restart `trading-desk-tape` only with operator authorization. This repo must not SSH or restart the unit.
+2. `journalctl -u trading-desk-tape -f` — `print_age_sec` must equal `executed_at` age (±2s). Old UW rows log `sit_match_stale` / `sit_match_stale_at_post` / `sit_match_print_age_contradicts`. Rate skips: `sit_match_occ_debounce` / `sit_match_min_interval`. Mute: `sit_match_webhook_muted`.
+3. Sim POST RTT ≪1s: `PYTHONPATH=src python scripts/simulate_sit_match_webhook.py` — expect `sent=true`, `http_received=true`, `post_ms` ≪ 1000. Desk sim was ~549ms. Then `--lie-print-age` — expect no HTTP receive.
+4. Live POST rate ≤1/min (`SIT_MATCH_MIN_INTERVAL_SEC=60`). Wake lag should fall after the old Cursor queue drains (residual ~6m is backlog, not HTTP).
+5. **Unmute:** `rm -f /opt/trading-desk/state/sit_match_webhook_muted`; `SIT_MATCH_WEBHOOK=1` or unset; operator-authorized restart of `trading-desk-tape`; journal no longer logs `sit_match_webhook_muted`.
 
 ### Signed webhook
 
@@ -126,7 +151,7 @@ Helsinki’s `finnhub_adapter.py` is the live writer; this module is the referen
 
 | Runtime | Behavior |
 | --- | --- |
-| Helsinki emitter today | In-memory debounce **~90s** only. Weekend same-digest **spam** is a known gap. |
+| Helsinki emitter today | sit_match: OCC-only + `SIT_MATCH_MIN_INTERVAL_SEC` default **60**. Other events: in-memory debounce **~90s**. Weekend same-digest **spam** is a known gap. |
 | This package | `idempotency.DurableIdempotency` (SQLite WAL) for **outbox** (emitter) and **inbox** (Grok consumer). |
 
 Package rules (`idempotency.py`):

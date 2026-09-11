@@ -111,13 +111,22 @@ Do **not** enable timers from this repo.
 
 **`sit_match` freshness (after merge):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than
-`SIT_MATCH_MAX_AGE_SEC` (default 60s) and puts `executed_at` on the webhook
-payload. `created_at` / `timestamp` are **not** substituted for the
-execution clock. Non-finite freshness limits (`inf` / `NaN`) fail closed
-in env parsing and explicit args. The installer still does **not** embed
-or overwrite `ws_tape.py`.
-An operator must patch the live Helsinki sit_match branch the same way and
-**restart `trading-desk-tape`** (this repo must not do that restart).
+`SIT_MATCH_MAX_AGE_SEC` (default 60s). Call `prepare_sit_match_outbound`
+immediately before HTTP POST: it overwrites `print_age_sec` from
+`executed_at`, stamps `emitted_at`, and skips `sit_match_stale_at_post` /
+`sit_match_print_age_contradicts`. `created_at` / `timestamp` / inbound
+`print_age_sec` are **not** substituted for the execution clock. Live
+producer: OCC-only debounce + `SIT_MATCH_MIN_INTERVAL_SEC` default **60**;
+mute with `SIT_MATCH_WEBHOOK=0` or
+`/opt/trading-desk/state/sit_match_webhook_muted`. Non-finite freshness
+limits (`inf` / `NaN`) fail closed in env parsing and explicit args. Local
+prove-HTTP-is-fast: `scripts/simulate_sit_match_webhook.py` (127.0.0.1; does
+not read `grok-webhook.env`). Host contract:
+`deploy/examples/helsinki/ws_tape_sit_match.py`. The installer still does
+**not** embed or overwrite `ws_tape.py`.
+An operator must keep the live Helsinki sit_match branch on this contract and
+**restart `trading-desk-tape`** only when changing it (this repo must not
+do that restart). See [WEBSOCKETS.md](WEBSOCKETS.md) hop table.
 
 ---
 
