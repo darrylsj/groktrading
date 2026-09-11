@@ -23,7 +23,6 @@ from groktrading.sit_match import (
 from groktrading.timeutil import UTC, as_utc, quote_age_seconds
 from groktrading.webhook import SignedWebhookSender
 
-
 SIM_OCC = "NVDA260918P00170000"
 SIM_SECRET = b"simulate-sit-match-not-production"
 
@@ -122,7 +121,10 @@ def simulate_sit_match_http(
     server = ThreadingHTTPServer(("127.0.0.1", 0), listener.handler())
     thread = Thread(target=server.serve_forever, name="sit-match-sim", daemon=True)
     thread.start()
-    host, port = server.server_address[:2]
+    bound = server.server_address
+    host, port = bound[0], bound[1]
+    if not isinstance(host, str) or not isinstance(port, int):
+        raise TypeError("sit_match sim requires an IPv4 listener")
     url = f"http://{host}:{port}/sit_match"
     try:
         enqueue = as_utc(datetime.now(tz=UTC))

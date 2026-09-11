@@ -412,7 +412,11 @@ def prepare_sit_match_outbound(
     )
     if not freshness.allow:
         reason = freshness.reason
-        if (
+        if stale_at_post and freshness.reason == REASON_STALE:
+            # Enqueue-time print_age_sec becomes a "lie" after a queue delay;
+            # the hop that failed is POST, not a forged inbound age.
+            reason = REASON_STALE_AT_POST
+        elif (
             lie
             and freshness.reason == REASON_STALE
             and freshness.max_age_sec is not None
@@ -420,8 +424,6 @@ def prepare_sit_match_outbound(
             and claimed <= freshness.max_age_sec
         ):
             reason = REASON_PRINT_AGE_CONTRADICTS
-        elif stale_at_post and freshness.reason == REASON_STALE:
-            reason = REASON_STALE_AT_POST
         return SitMatchOutbound(
             allow=False,
             reason=reason,
