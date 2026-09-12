@@ -7,6 +7,20 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Changed
+
+- README current-desk refresh (Mon 2026-09-14 readers): live hunt is
+  **Continual15**; Opening15 demoted to paper/research. Live card cites
+  `live_order_gate` BTO/STC (PR #35) and Friday operator-stated book
+  (open $421.74 → flat $460.56; `QQQ260911P00717000` 1.06→1.45;
+  `close_pl` +$39; take-gain TRIAL n=1 — not locked). Document package
+  `SIT_MATCH_MIN_INTERVAL_SEC` default **60** vs host Mon prep **300s**
+  unmuted / consume 60s; hunt is Continual15-only (300s producer vs
+  60s consume is near-empty).
+  Host trading routines `CRON_TZ=America/New_York`; close card 16:00 ET.
+  Helsinki map is "as of PR #35 on main" — no old SHA, no deploy claim.
+  **Merge ≠ Helsinki restart.** No secrets; no invented prices.
+
 ### Added
 
 - In-repo `tools/live_order_gate` (dry-run only; never POSTs). Grok box
