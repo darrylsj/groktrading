@@ -27,6 +27,10 @@
 #   - Host companions under deploy/examples/systemd/host-companions/ are
 #     operator-wired only. This installer does not copy, enable, or start
 #     them. emit_sit_match=False. No webhook firehose from flow-alerts.
+#   - Thin ranker examples under deploy/examples/systemd/shortlist-ranker/
+#     are operator-wired only. Not copied, enabled, or started. Hunt is
+#     three planes (docs/REALTIME_PLANES.md); sit_match POSTs are not the
+#     hunt bus. SIT_MATCH_MIN_INTERVAL_SEC is a Cursor bandage, not latency.
 #   - Reinstall must not clobber dest-only ws_tape.py or live env files.
 #     Merging this repo does not rebuild Helsinki. Grok Update Computer
 #     does not rebuild Helsinki. Operator SSH + systemd restart is required.
@@ -154,6 +158,9 @@ Helsinki sensor farm (package helpers; host-owned live tape unchanged):
     this installer does not copy, enable, or start them).
     emit_sit_match=False. No webhook firehose from flow-alerts.
     Live ws_tape.py is host-owned.
+    Shortlist ranker examples (deploy/examples/systemd/shortlist-ranker/)
+    are not installed or enabled. Hunt is three planes; 300s sit_match
+    interval is not the trading latency target.
   - Box cold-rotate: scripts/box_cold_rotate.py — deny-list .env/tokens;
     delete only after verified upload or --confirm-delete.
   - Grok Update Computer does not rebuild Helsinki. SSH/systemd on the
@@ -557,6 +564,8 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
      deploy/examples/systemd/host-companions/ — wire them yourself.
      This installer does not copy, enable, or start those units.
      emit_sit_match=False. No webhook firehose from flow-alerts by default.
+     Shortlist ranker timer (deploy/examples/systemd/shortlist-ranker/) is
+     not installed. Hunt is three planes; 300s sit_match is not latency.
      Merge ≠ Helsinki restart. Live ws_tape.py stays host-owned.
 
   3b. Hot ledger / Box cold-rotate (no secrets):

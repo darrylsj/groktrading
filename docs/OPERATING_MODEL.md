@@ -34,7 +34,7 @@ Sandbox market data is delayed. Paper fills are **artifacts**. **Tradier product
 
 ## LLM
 
-The LLM thesis / approve-skip path is not in the broker path and must not call Tradier. Helsinki does not poll the model; it **pushes** signed facts. A skip is always valid. An approve still cannot bypass the gate. The deterministic gate / executor **does** use Tradier production for fresh OCC quotes and live orders.
+The LLM thesis / approve-skip path is not in the broker path and must not call Tradier. Helsinki does not poll the model. Hunt is three planes ([REALTIME_PLANES.md](REALTIME_PLANES.md)): tape stays hot; a thin ranker may write `shortlist.json`; Continual15 **pulls** frozen facts. `sit_match` POSTs are not the hunt bus. A skip is always valid. An approve still cannot bypass the gate. The deterministic gate / executor **does** use Tradier production for fresh OCC quotes and live orders.
 
 ## Reviewer
 

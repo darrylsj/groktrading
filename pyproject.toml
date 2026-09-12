@@ -53,6 +53,7 @@ groktrading-screener = "groktrading.cli:screener_snapshot_main"
 groktrading-shadow-marks = "groktrading.cli:shadow_marks_main"
 groktrading-uw-ws-probe = "groktrading.cli:uw_ws_probe_main"
 groktrading-replay-scorecard = "groktrading.cli:replay_scorecard_main"
+groktrading-shortlist = "groktrading.shortlist:main"
 
 [project.urls]
 Documentation = "https://github.com/darrylsj/groktrading"

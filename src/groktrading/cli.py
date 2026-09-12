@@ -328,6 +328,13 @@ def uw_ws_probe_main(argv: list[str] | None = None) -> int:
     return 0 if probe.ok else 2
 
 
+def shortlist_main(argv: list[str] | None = None) -> int:
+    """Thin ranker skeleton. Writes shortlist.json. Never emits sit_match."""
+    from groktrading.shortlist import main as shortlist_ranker_main
+
+    return shortlist_ranker_main(argv)
+
+
 def replay_scorecard_main(argv: list[str] | None = None) -> int:
     """Read a local flow ledger and write a deterministic scorecard. No PnL."""
     parser = argparse.ArgumentParser(

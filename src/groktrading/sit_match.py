@@ -27,6 +27,14 @@ HTTP was always ~0.5–0.7s). Mute with ``SIT_MATCH_WEBHOOK=0`` and/or
 Emitter/inbox stay on this module. The live final gate also requires
 ``candidate.executed_at`` (same clock, no ``created_at`` / ``timestamp``
 substitute). Quote freshness remains a separate Tradier quote-gate check.
+
+Hunt architecture (2026-09-12): ``sit_match`` POSTs are **not** the
+selection loop. Prefer ``SIT_MATCH_WEBHOOK`` off for hunt (optional rare
+alert mode only). ``SIT_MATCH_MIN_INTERVAL_SEC`` is a Cursor wake bandage
+— default hunt must not depend on it and must not raise
+``SIT_MATCH_MAX_AGE_SEC`` to match it. Continual15 pulls
+``shortlist.json`` (``groktrading.shortlist``). See
+``docs/REALTIME_PLANES.md``.
 """
 
 from __future__ import annotations
@@ -48,6 +56,9 @@ SIT_MATCH_MIN_INTERVAL_ENV = "SIT_MATCH_MIN_INTERVAL_SEC"
 DEFAULT_SIT_MATCH_MIN_INTERVAL_SEC = 60.0
 SIT_MATCH_WEBHOOK_ENV = "SIT_MATCH_WEBHOOK"
 DEFAULT_SIT_MATCH_MUTE_FILE = "/opt/trading-desk/state/sit_match_webhook_muted"
+# Hunt path prefers webhooks off. Unset still means the optional alert
+# producer may emit unless muted — hunt must not depend on that.
+HUNT_SIT_MATCH_WEBHOOK_DEFAULT = False
 
 REASON_MISSING = "sit_match_missing_executed_at"
 REASON_UNPARSEABLE = "sit_match_unparseable_executed_at"
@@ -365,7 +376,12 @@ def sit_match_webhook_enabled(
     env: Mapping[str, str] | None = None,
     mute_path: Path | str | None = None,
 ) -> bool:
-    """False when ``SIT_MATCH_WEBHOOK=0`` or the mute file exists."""
+    """False when ``SIT_MATCH_WEBHOOK=0`` or the mute file exists.
+
+    Hunt prefers this off (``HUNT_SIT_MATCH_WEBHOOK_DEFAULT``). Unset still
+    allows the optional rare-alert producer unless muted. Continual15 +
+    shortlist is the default hunt path.
+    """
     path = sit_match_mute_path(env, mute_path)
     try:
         if path.is_file():

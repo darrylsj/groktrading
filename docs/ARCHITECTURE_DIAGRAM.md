@@ -4,7 +4,7 @@ Runtime split for GrokTrading: outside APIs, Helsinki (always-on, non-LLM), the 
 
 ![GrokTrading architecture](groktrading-architecture.png)
 
-Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). API surfaces: [API_MATRIX.md](API_MATRIX.md). Reviewer: [REVIEWER.md](REVIEWER.md).
+Longer prose: [ARCHITECTURE.md](ARCHITECTURE.md). Hunt planes: [REALTIME_PLANES.md](REALTIME_PLANES.md). WebSockets: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). API surfaces: [API_MATRIX.md](API_MATRIX.md). Reviewer: [REVIEWER.md](REVIEWER.md).
 
 ## Legend
 
@@ -33,11 +33,12 @@ flowchart LR
     TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
     FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
     FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 20% cash"]
-    HOOK["Signed webhook outbox\nmaterial events only"]
+    RANK["Thin ranker 5–15s\nshortlist.json"]
+    HOOK["Signed webhook outbox\nin_position / fills / login_dead"]
     NIGHT["Nightly print scorer cron"]
   end
   subgraph Grok["Grok Bot computer — LLM"]
-    LLM["Thesis / approve-skip\non frozen facts only"]
+    LLM["Continual15 thesis / approve-skip\non frozen facts only"]
     GATE["Final gate\nfresh Tradier OCC quote TTL\nqty=1 · duplicates\n12:30 new-entry cutoff"]
     EXEC["Preview → submit\nlive orders"]
     AUDIT["Audit pack\nLESSONS · trades.jsonl\nCHANGELOG"]
@@ -50,8 +51,10 @@ flowchart LR
   TP --> GATE
   TAPE --> FILT
   FHSVC --> FILT
+  FILT --> RANK
+  RANK -->|"pull shortlist"| LLM
   FILT --> HOOK
-  HOOK -->|"sit_match / cash_up"| LLM
+  HOOK -->|"in_position / cash_up"| LLM
   LLM --> GATE
   GATE --> EXEC
   EXEC -->|"live"| TP

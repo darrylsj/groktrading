@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/shortlist.json",
+  "title": "Shortlist",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "ranked_at",
+    "max_print_age_sec",
+    "cadence_sec",
+    "max_candidates",
+    "premium_lo",
+    "premium_hi",
+    "emit_sit_match",
+    "candidates",
+    "skipped_count",
+    "skip_tally",
+    "empty_reason"
+  ],
+  "properties": {
+    "schema": { "const": "groktrading.shortlist.v1" },
+    "kind": { "const": "shortlist" },
+    "ranked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ranker emit clock. Continual15 refuses when older than SHORTLIST_STALE_SEC (default 30s). Not print age."
+    },
+    "max_print_age_sec": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "executed_at age cap used at rank (I1 default 60; optional tighten 15–30). Never raised to match SIT_MATCH_MIN_INTERVAL_SEC."
+    },
+    "cadence_sec": {
+      "type": "number",
+      "minimum": 5,
+      "maximum": 15
+    },
+    "max_candidates": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "premium_lo": {
+      "type": "string",
+      "description": "Per-share ask/print floor as decimal string (documented I1 cheap band 0.80)."
+    },
+    "premium_hi": {
+      "type": "string",
+      "description": "Per-share ask/print cap as decimal string (MUST_TRADE_SMALL_ASK_CAP 1.50)."
+    },
+    "emit_sit_match": { "const": false },
+    "candidates": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "skipped_count": { "type": "integer", "minimum": 0 },
+    "skip_tally": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "empty_reason": {
+      "type": ["string", "null"],
+      "enum": ["no_input", "no_fresh_prints", "all_filtered", null]
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occ",
+        "underlying",
+        "option_type",
+        "executed_at",
+        "print_age_sec",
+        "premium",
+        "source"
+      ],
+      "properties": {
+        "occ": { "type": "string" },
+        "underlying": { "type": "string" },
+        "option_type": { "enum": ["call", "put"] },
+        "executed_at": { "type": "string", "format": "date-time" },
+        "print_age_sec": { "type": "number", "minimum": 0 },
+        "premium": {
+          "type": "string",
+          "description": "Per-share ask/print. Not UW dollar premium."
+        },
+        "source": { "type": "string" }
+      }
+    }
+  }
+}

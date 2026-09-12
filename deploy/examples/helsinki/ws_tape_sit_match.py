@@ -1,6 +1,11 @@
-"""Live Helsinki sit_match POST contract (2026-09-11).
+"""Live Helsinki sit_match POST contract (optional rare alert — not hunt).
 
 Not a port of /opt/trading-desk/ws_tape.py. Never places orders. No secrets.
+
+Hunt is three planes (``docs/REALTIME_PLANES.md``): hot tape → thin
+``shortlist.json`` → Continual15. ``sit_match`` POSTs are deprecated as
+the hunt bus. Prefer ``SIT_MATCH_WEBHOOK=0``. ``MIN_INTERVAL`` is a
+Cursor bandage, not trading latency.
 
 Host tape must call ``prepare_sit_match_outbound`` immediately before HTTP
 POST. This file is the in-repo SoT for the producer controls already

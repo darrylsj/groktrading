@@ -15,7 +15,7 @@ Treat this as ops context. Do not invent a preview→submit path on the host.
 | Git on host | **No** `.git` under `/opt/trading-desk` |
 | GitHub `main` at map time | `e297a0af…` |
 | Order path | Helsinki has **no** preview→submit. It webhooks candidates |
-| Webhook events | `sit_match`, `in_position`, `cash_up` with `entry_cutoff_only_no_flatten`, `day_win_target` with `auto_flatten: false` |
+| Webhook events | `sit_match` (deprecated as hunt bus; host weekend-muted), `in_position`, `cash_up` with `entry_cutoff_only_no_flatten`, `day_win_target` with `auto_flatten: false` |
 | Webhook idempotency | In-memory debounce **~90s** only — causes weekend same-digest spam |
 | Live card on the host | Overnight longs allowed; 12:30 PT = new-entry cutoff only; cash/equity ≥20% |
 
@@ -33,7 +33,9 @@ operator cutover. **Merging this repo does not restart Helsinki.** Wire
 companion units separately (`deploy/examples/systemd/host-companions/` —
 not auto-enabled). Account-events stays files-only / disabled.
 `emit_sit_match=False`. Flow-alerts material is local JSONL only (no Grok webhook).
-**Grok Update Computer does not rebuild Helsinki.**
+Hunt is three planes ([REALTIME_PLANES.md](REALTIME_PLANES.md)); the shortlist
+timer is an example only and is **not** observed as deployed. **Grok Update
+Computer does not rebuild Helsinki.**
 
 ## What was observed
 

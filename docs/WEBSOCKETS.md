@@ -2,7 +2,9 @@
 
 This page is for an **external auditor** who has never seen the Helsinki host. It describes what each stream **carries**, what it **does not carry**, and why a WebSocket event **cannot** become a live Tradier order.
 
-Related: [ARCHITECTURE.md](ARCHITECTURE.md), [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md), [SAFETY.md](SAFETY.md), [API_MATRIX.md](API_MATRIX.md), [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). Live card: [README.md](../README.md).
+Related: [REALTIME_PLANES.md](REALTIME_PLANES.md) (authoritative hunt), [ARCHITECTURE.md](ARCHITECTURE.md), [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md), [SAFETY.md](SAFETY.md), [API_MATRIX.md](API_MATRIX.md), [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md). Live card: [README.md](../README.md).
+
+**Hunt is three planes, not `sit_match` POSTs.** Hot sensor (Helsinki, no LLM) writes the tape continuously. Thin ranker (no LLM, 5–15s) writes `shortlist.json` (≤1–3 OCCs). Continual15 pulls that file + fresh Tradier quotes. `sit_match` POSTs are **deprecated as the hunt bus**. Prefer `SIT_MATCH_WEBHOOK` off. `SIT_MATCH_MIN_INTERVAL_SEC` (host often 300) is a Cursor wake bandage — **not** the trading latency target. Do **not** raise `SIT_MATCH_MAX_AGE_SEC` (60, I1 print freshness) to match it.
 
 **Hard rule:** WebSocket events never place live orders. The final gate rechecks a **fresh Tradier production** option quote before any preview→submit path. Default package mode remains `signals_only`.
 
@@ -61,7 +63,7 @@ Account-event WebSockets report broker session events. They are **not** a submit
 
 **Position truth (package helper):** `feeds/account_events.py` parses `order` / `heartbeat` frames, reconnects with the same 1s ×2 / 60s cap as Finnhub, and updates a local symbol set so **`in_position` does not stay stale after flatten**. Material events (fill, partial, cancel, reject, expire) can signal webhook consumers to refresh. Missing symbol on a material event → fail-closed **REST refresh** flag. The helper **never** calls preview/submit. Example unit: `deploy/examples/systemd/groktrading-account-events.service` (installer copies the file; does **not** enable/start it). Live `ws_tape.py` is still host-owned.
 
-Helsinki **sensor farm**: always-on listen; **Grok Bot decides**. Hot UW rows live in `groktrading.flow_ledger` (7–14 days). Cold packs rotate to Box (`docs/BOX_ARCHIVE.md`). `sit_match` emission still requires `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s).
+Helsinki **sensor farm**: always-on listen (plane 1); thin ranker (plane 2) may write `shortlist.json`; **Grok Bot decides** (plane 3 / Continual15). Hot UW rows live in `groktrading.flow_ledger` (7–14 days). Cold packs rotate to Box (`docs/BOX_ARCHIVE.md`). Hunt does **not** depend on `sit_match` POSTs. If a rare `sit_match` alert is enabled, emission still requires `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s).
 
 **P0 is merged** (flow ledger, account-events helper, Box rotate, sit_match freshness). **P1/P2 landed as package helpers** — package CLIs are offline skeletons, not a claim they are running on live Helsinki. **Merging this repo does not restart Helsinki.** Host companion scripts (Helsinki 2026-09-08 **urllib** `UrllibHttp`, not httpx) live under `scripts/` with example units in `deploy/examples/systemd/host-companions/`. They are **operator-wired**; `install_helsinki.sh` does **not** enable them. urllib GETs do not follow redirects. **`emit_sit_match=False`.** Flow-alerts material is local JSONL only (no Grok webhook). Account-events stays **files-only / disabled**. Live `ws_tape.py` stays host-owned: the quote interest helper only maintains a symbol set. shadow marks stay package-only. The replay scorecard reads the hot ledger and optional marks; it never invents PnL.
 
@@ -85,7 +87,7 @@ Helsinki pushes **material events only**. No LLM polling.
 
 | Event | Meaning on the live card |
 | --- | --- |
-| `sit_match` | Sit-2 + matching-ask candidate facts for Grok approve/skip. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). `created_at` / `timestamp` / inbound `print_age_sec` are not substitutes. Missing/unparseable/`executed_at` older than the cap / non-finite max-age / lying `print_age_sec` → **do not emit**. Payload includes `executed_at`, truthful `print_age_sec`, and `emitted_at`. Re-check at POST (`sit_match_stale_at_post`). **OCC-only** debounce + `SIT_MATCH_MIN_INTERVAL_SEC` default **60** (not per OCC\|`executed_at`; 15 outran Cursor ~22s wakes). Mute: `SIT_MATCH_WEBHOOK=0` or `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. |
+| `sit_match` | **Deprecated as hunt bus.** Optional rare alert only. Prefer `SIT_MATCH_WEBHOOK=0`. Continual15 + `shortlist.json` is the selection loop ([REALTIME_PLANES.md](REALTIME_PLANES.md)). If used: sit-2 + matching-ask facts. **Freshness:** UW `option-trades` `executed_at` must be present, parseable (ISO-8601 `Z` or offset), and age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Do **not** raise 60s to match `SIT_MATCH_MIN_INTERVAL_SEC` (Cursor bandage; host Mon prep 300). `created_at` / `timestamp` / inbound `print_age_sec` are not substitutes. Missing/unparseable/`executed_at` older than the cap / non-finite max-age / lying `print_age_sec` → **do not emit**. Payload includes `executed_at`, truthful `print_age_sec`, and `emitted_at`. Re-check at POST (`sit_match_stale_at_post`). **OCC-only** debounce + `SIT_MATCH_MIN_INTERVAL_SEC` default **60**. Mute: `SIT_MATCH_WEBHOOK=0` or `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. |
 | `in_position` | Broker already holds the OCC / underlying — do not spray a second entry |
 | `cash_up` | 12:30 PT **entry-cutoff** notice. Flag: `entry_cutoff_only_no_flatten`. Existing overnight longs stay. |
 | `day_win_target` | Informational. `auto_flatten: false` — **not** a liquidation trigger |
@@ -174,8 +176,9 @@ sequenceDiagram
   participant TP as Tradier production
   participant Tape as Helsinki tape<br/>trading-desk-tape / finnhub
   participant Filt as Deterministic filters
-  participant Hook as Signed webhook<br/>sit_match / cash_up / …
-  participant Grok as Grok approve/skip<br/>frozen facts only
+  participant Rank as Thin ranker 5–15s<br/>shortlist.json
+  participant Hook as Signed webhook<br/>in_position / fills / login_dead
+  participant Grok as Continual15 approve/skip<br/>frozen facts only
   participant Gate as Final gate<br/>fresh Tradier OCC quote
   participant Exec as Preview → submit<br/>never from WS
 
@@ -184,9 +187,11 @@ sequenceDiagram
   TP->>Tape: production quotes / balances
   Tape->>Filt: live_tape / finnhub_tape
   Filt->>Filt: sit-2 · matching ask · skip already-run · ≥20% cash
-  Filt->>Hook: material events only
-  Note over Hook: HMAC + idempotency<br/>AH/weekend digest coalesce (package)
-  Hook->>Grok: sit_match / in_position / cash_up / day_win_target
+  Filt->>Rank: rate-limit candidates not the tape
+  Rank->>Grok: pull ≤1–3 OCCs (not a webhook)
+  Filt->>Hook: in_position / fills / login_dead only
+  Note over Hook: sit_match POSTs deprecated as hunt bus<br/>HMAC + idempotency still apply
+  Hook->>Grok: in_position / cash_up / day_win_target
   Grok->>Grok: approve or skip (no broker calls)
   alt skip or signals_only (default)
     Grok-->>Gate: no order path
@@ -209,7 +214,8 @@ sequenceDiagram
 - [ ] Helsinki tape path (UW+Tradier) distinguished from package `feeds/`.
 - [ ] WS → live submit is **impossible** without violating executor + gate + explicit-enable locks.
 - [ ] Final gate rechecks **fresh Tradier production** quotes (not the tick that woke the loop).
-- [ ] Webhook event set and flags match the live card (`entry_cutoff_only_no_flatten`, `auto_flatten: false`).
+- [ ] Hunt documented as three planes (tape → shortlist 5–15s → Continual15), not 300s `sit_match`.
+- [ ] Webhook event set and flags match the live card (`entry_cutoff_only_no_flatten`, `auto_flatten: false`). `sit_match` marked deprecated as hunt bus.
 - [ ] Reconnect/backoff, TTL fail-closed, HMAC, and AH/weekend digest coalesce are described without host secrets.
 - [ ] Account-events documented as **position truth**, not a submit path.
 - [ ] P1/P2 helpers documented as **package-only**; host companions are **operator-wired**; merge ≠ Helsinki restart.
