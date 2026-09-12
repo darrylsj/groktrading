@@ -1,6 +1,6 @@
 # Architecture
 
-Visual: [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) and [groktrading-architecture.png](groktrading-architecture.png). WebSockets, Helsinki tape vs package `feeds/`, webhook events, and the print→submit sequence: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md).
+Visual: [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md) and [groktrading-architecture.png](groktrading-architecture.png). Hunt planes (tape → shortlist 5–15s → Continual15): [REALTIME_PLANES.md](REALTIME_PLANES.md). WebSockets, Helsinki tape vs package `feeds/`, webhook events, and the print→submit sequence: [WEBSOCKETS.md](WEBSOCKETS.md). Auditor brief: [OPENAI_AUDIT_BRIEF.md](OPENAI_AUDIT_BRIEF.md).
 
 This repository is a **public reference and deployment package** intended for external audit. It is not itself a live trading deployment. Default mode is `signals_only`. Paper is explicit. Live order placement is never the default and cannot be driven by WebSocket callbacks. Live trading is operator-gated.
 
@@ -26,11 +26,12 @@ flowchart LR
     NORM[Normalize + freshness]
     FILT[Filter sit-2 / no-spray]
     TAPE[Normalized tape JSON]
-    WH[Signed webhook]
+    RANK[Thin ranker shortlist.json]
+    WH[Signed webhook in_position / fills]
   end
 
   subgraph Decision
-    GROK[Grok thesis approve/skip]
+    GROK[Continual15 thesis approve/skip]
   end
 
   subgraph Gate["Deterministic gate"]
@@ -50,7 +51,8 @@ flowchart LR
   UW --> ING
   TRP --> ING
   ING --> NORM --> FILT --> TAPE
-  TAPE --> WH --> GROK
+  TAPE --> RANK --> GROK
+  TAPE --> WH -.-> GROK
   GROK --> G
   TRP --> G
   G -->|signals_only default| AUDIT
@@ -71,7 +73,8 @@ flowchart LR
 | Normalize | Typed models, UTC timestamps, redaction before disk |
 | Freshness | TTL fail-closed; stale UW/Tradier/Finnhub data cannot pass the gate |
 | Filter | Sit-2, skip already-run, no first-red, no spray, one-lot only |
-| Webhook | Signed HMAC, idempotency key, cooldown; **no LLM polling** |
+| Rank | Optional 5–15s `shortlist.json` (≤1–3 OCCs). Not auto-deployed. Rate-limit candidates, not the tape |
+| Webhook | Signed HMAC for `in_position` / fills / `login_dead`. `sit_match` POSTs are **not** the hunt bus |
 | Paper vs live | Separate env files and account IDs; production NBBO is pricing truth |
 | systemd | Units load root-only `0600` env files; examples live under `deploy/examples/` |
 

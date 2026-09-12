@@ -1,0 +1,31 @@
+# Thin ranker (plane 2). Example only — not copied, enabled, or started by
+# install_helsinki.sh. Merge ≠ Helsinki restart. Host wiring is an operator
+# step: point at a local flow ledger and/or live_tape JSON, write
+# /opt/trading-desk/state/shortlist.json. Continual15 pulls that file.
+#
+# emit_sit_match=false. SIT_MATCH_WEBHOOK=0 (hunt default off).
+# Never places orders. No LLM. No grok-webhook.env.
+#
+# Least privilege: User=tradingdesk (not root).
+
+[Unit]
+Description=GrokTrading thin shortlist ranker (no LLM; never orders)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=-/etc/trading-desk/unusual-whales.env
+Environment=SHORTLIST_PATH=/opt/trading-desk/state/shortlist.json
+Environment=FLOW_LEDGER_PATH=/var/lib/trading-desk/ledger/uw_flow.sqlite
+Environment=LIVE_TAPE_PATH=/opt/trading-desk/live_tape.json
+Environment=SHORTLIST_CADENCE_SEC=10
+Environment=SIT_MATCH_MAX_AGE_SEC=60
+Environment=SIT_MATCH_WEBHOOK=0
+Environment=EMIT_SIT_MATCH=0
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/shortlist_ranker.py --out /opt/trading-desk/state/shortlist.json
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

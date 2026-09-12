@@ -1,0 +1,17 @@
+# Example timer: emit shortlist.json every 10s (documented window 5–15s).
+# Copy only. Do NOT enable from this repo or a cloud agent.
+# Pair with groktrading-shortlist.service after an operator wires inputs.
+# Merge ≠ Helsinki restart. This is not the hunt LLM loop.
+
+[Unit]
+Description=GrokTrading thin shortlist ranker (5–15s cadence)
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=10s
+AccuracySec=1s
+Persistent=false
+Unit=groktrading-shortlist.service
+
+[Install]
+WantedBy=timers.target

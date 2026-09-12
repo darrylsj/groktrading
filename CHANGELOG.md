@@ -7,6 +7,20 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Three-plane realtime desk: hot sensor (Helsinki, no LLM) → thin ranker
+  (`groktrading.shortlist` / `scripts/shortlist_ranker.py`, 5–15s,
+  `shortlist.json` ≤1–3 OCCs) → Continual15 + `live_order_gate`.
+  `sit_match` POSTs deprecated as hunt bus. Prefer `SIT_MATCH_WEBHOOK`
+  off. `SIT_MATCH_MIN_INTERVAL_SEC` (host 300) is a Cursor bandage, **not**
+  the trading latency target; do not raise `SIT_MATCH_MAX_AGE_SEC` (60).
+  Example timer under `deploy/examples/systemd/shortlist-ranker/` is
+  **not auto-enabled**. Docs: [REALTIME_PLANES.md](docs/REALTIME_PLANES.md),
+  [astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md).
+  Ranker contract is testable without secrets. No host auto-deploy.
+  **Merge ≠ Helsinki restart.** No invented prices.
+
 ### Changed
 
 - README current-desk refresh (Mon 2026-09-14 readers): live hunt is

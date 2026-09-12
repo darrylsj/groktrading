@@ -22,9 +22,25 @@ As of **PR #35 on `main`** (2026-09-11/12). Encoded cutoff and session labels us
 
 OpenAI P0.4 flatten-everything / no-overnight is **rejected**. Checklist: [docs/SAFETY.md](docs/SAFETY.md). Gate: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
 
+## Three-plane realtime desk
+
+**This is the realtime design.** It replaces webhook→LLM `sit_match` firehose. Full write-up: [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md). Audit: [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md).
+
+| Plane | Who | Cadence | LLM? |
+| --- | --- | --- | --- |
+| **1 Hot sensor** | Helsinki UW / Finnhub / Tradier → ledger/tape | Continuous | No |
+| **2 Thin ranker** | `groktrading.shortlist` → `shortlist.json` (≤1–3 OCCs) | **5–15s** (default 10) | No |
+| **3 Decision** | **Continual15** + fresh Tradier quotes → thesis → `live_order_gate` | Rolling 15-minute RTH looks | Grok on frozen facts |
+
+Rate-limit **candidates**, not the tape. No per-print Grok wake. Host path (ops docs, **not** a deploy claim): `/opt/trading-desk/state/shortlist.json`. Example timer: `deploy/examples/systemd/shortlist-ranker/` — **not auto-enabled.** Merge ≠ Helsinki restart.
+
+`SIT_MATCH_MAX_AGE_SEC=60` is **print freshness (I1)**. Do **not** raise it to match any producer interval. `SIT_MATCH_MIN_INTERVAL_SEC` (package 60; Host Mon prep **300**) is a **Cursor wake bandage**, not the trading latency target and **not the realtime design**. Hunt must not depend on it. Prefer `SIT_MATCH_WEBHOOK` **off** for hunt; optional rare alert only. Webhooks stay for `in_position` / fills / `login_dead`.
+
+Until the ranker file is actually refreshing on the host, Monday hunt is **Continual15-only**. Weekend sit_match mute may stay; open-card unmute is optional.
+
 ## Decision loop: Continual15 (live hunt)
 
-**Live hunt is Continual15** — rolling 15-minute RTH looks **after** the 9:30–9:45 ET open stand-down, through **15:00 ET** (before the 12:30 PT / 15:30 ET new-entry cutoff). Grok decides on frozen facts. Helsinki does not.
+**Live hunt is Continual15** — plane 3. Rolling 15-minute RTH looks **after** the 9:30–9:45 ET open stand-down, through **15:00 ET** (before the 12:30 PT / 15:30 ET new-entry cutoff). Pull shortlist + fresh Tradier quotes when that file is live; otherwise hunt without the sit_match bus. Grok decides on frozen facts. Helsinki does not.
 
 **Opening15** (first-15-minute / ten-stock, Tuesday 2026-09-08 paper pilot) is **research-only**. It is **not** the live strategy. Capture/monitor/report stay quote-only; **no broker order path**. Protocol: [Opening15 decision protocol](docs/OPENING15_DECISION_PROTOCOL.md). Paper runbook: [Opening15 experiment](docs/OPENING15_EXPERIMENT.md). Tuesday readiness notes stay paper: [Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md).
 
@@ -39,28 +55,32 @@ In-repo source of truth: `tools/live_order_gate`. **This package never POSTs** (
 
 Closes go through `live_order_gate`, not `Executor.maybe_submit`. Details: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
 
-## Helsinki sit_match (freshness, rate, mute, Mon posture)
+## Helsinki sit_match (deprecated as hunt bus)
 
-Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router.
+Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
 
 | Role | Who |
 | --- | --- |
-| Listen / normalize / freshness / filter / signed webhook | **Helsinki** (no LLM) |
+| Listen / normalize / freshness / filter / ledger | **Helsinki** (no LLM) |
+| Thin shortlist (≤1–3 OCCs, 5–15s) | **Helsinki ranker** (no LLM) — package helper, host-wired |
 | Decide / place orders | **Grok Bot only** |
 
-**Freshness:** UW `option-trades` `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). `created_at` / `timestamp` / inbound `print_age_sec` are **not** the execution clock. `print_age_sec` is overwritten from `executed_at` at POST and cannot claim “fresh” against a minutes-old print. Re-check immediately before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only** debounce (not per OCC\|`executed_at`). Mute: `SIT_MATCH_WEBHOOK=0` and/or mute file `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST, not at detect. **PR #34** is the lying-`print_age_sec` / firehose throttle. Inbox + I1 still refuse stale `executed_at` at consume.
+`sit_match` POSTs are **deprecated as the hunt bus** (PR #34 stopped the firehose; it did not become the realtime design). Prefer `SIT_MATCH_WEBHOOK` **off** for hunt. Optional rare alert mode only. Weekend-muted on the host is fine; open-card unmute is optional.
 
-| Knob | Package default (this tree) | Host Mon prep (ops fact) |
-| --- | --- | --- |
-| `SIT_MATCH_MIN_INTERVAL_SEC` | **60** (unmute checklist was ≤1/min) | **300** |
-| `SIT_MATCH_MAX_AGE_SEC` | **60** (inbox + I1 consume) | **60** — do **not** raise to match producer |
-| Mute | file + `SIT_MATCH_WEBHOOK` | **Unmuted** (Mon prep) |
+**Freshness (I1, still 60s):** UW `option-trades` `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Do **not** raise this to match `SIT_MATCH_MIN_INTERVAL_SEC`. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the execution clock. `print_age_sec` is overwritten from `executed_at` at POST. Re-check immediately before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only** debounce (not per OCC\|`executed_at`). Mute: `SIT_MATCH_WEBHOOK=0` and/or mute file `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST, not at detect. Inbox + I1 still refuse stale `executed_at` at consume.
+
+| Knob | Package default (this tree) | Host ops fact | Hunt role |
+| --- | --- | --- | --- |
+| `SIT_MATCH_MIN_INTERVAL_SEC` | **60** | **300** (Mon prep bandage) | **Not** trading latency. Hunt must not depend on it |
+| `SIT_MATCH_MAX_AGE_SEC` | **60** (inbox + I1 + ranker print clock) | **60** | Print freshness. Do **not** raise to match producer |
+| `SIT_MATCH_WEBHOOK` | unset = optional producer may emit unless muted | Weekend-muted | Hunt default **off** |
+| Ranker cadence | 10s (clamp 5–15) | Not claimed deployed | Plane 2 |
 
 Package default may still differ until the host copies this tree. **Merge ≠ Helsinki restart.** Do not claim this commit is live on `/opt/trading-desk`.
 
-**Mon hunt posture (Astra audit):** 300s producer ∩ 60s consume is **near-empty**. Hunt is **Continual15-only**. Leave `sit_match` muted-capable; if left on at 300s it is a rare fresh-print nudge, not the selection loop. Reserve webhooks for **`in_position` / fills / working-order** events (not UW print-age gated). Do not “fix” this by widening consume age.
+**Mon hunt posture:** 300s producer ∩ 60s consume is **near-empty**. That is why 300s is not the design. Hunt is **Continual15** (+ shortlist when the host file is live). Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. Do not “fix” emptiness by widening consume age.
 
-Host contract: `deploy/examples/helsinki/ws_tape_sit_match.py`. Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`. Ledger may still **store** stale or clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive use fail-closes.
+Host contract (rare alert): `deploy/examples/helsinki/ws_tape_sit_match.py`. Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`. Ledger may still **store** stale or clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive use fail-closes.
 
 ## Clocks
 
@@ -93,6 +113,8 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md)
 - **live_order_gate:** [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
+- **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
+- **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Also: [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · [docs/CLAUDE_AUDIT.md](docs/CLAUDE_AUDIT.md) · [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md)
 
@@ -100,7 +122,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 
 ![GrokTrading architecture](docs/groktrading-architecture.png)
 
-**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM: `trading-desk-tape` and `trading-desk-finnhub` write tape JSON, deterministic filters apply sit-2 / matching ask / skip already-run / 20% cash reserve, a signed webhook outbox emits material events only, and a nightly cron precomputes print scores. The **Grok Bot** writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit; **Continual15** is the live RTH loop; routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
+**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM (planes 1–2): `trading-desk-tape` and `trading-desk-finnhub` write tape JSON continuously; a thin ranker may emit `shortlist.json` every 5–15s (≤1–3 OCCs; **not auto-deployed**); deterministic filters apply sit-2 / matching ask / skip already-run / 20% cash reserve; signed webhooks are reserved for `in_position` / fills / `login_dead` (not the hunt bus). The **Grok Bot** (plane 3, **Continual15**) writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit. Routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
 
 **Hard rules**
 
@@ -125,7 +147,8 @@ flowchart LR
     TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
     FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
     FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 20% cash"]
-    HOOK["Signed webhook outbox\nmaterial events only"]
+    RANK["Thin ranker 5–15s\nshortlist.json ≤1–3 OCCs"]
+    HOOK["Signed webhook outbox\nin_position / fills / login_dead"]
     NIGHT["Nightly print scorer cron"]
   end
   subgraph Grok["Grok Bot computer — LLM"]
@@ -142,8 +165,10 @@ flowchart LR
   TP --> GATE
   TAPE --> FILT
   FHSVC --> FILT
+  FILT --> RANK
+  RANK -->|"pull shortlist"| LLM
   FILT --> HOOK
-  HOOK -->|"in_position / fills / sit_match"| LLM
+  HOOK -->|"in_position / fills / login_dead"| LLM
   LLM --> GATE
   GATE --> EXEC
   EXEC -->|"live"| TP
@@ -154,7 +179,7 @@ flowchart LR
   AUDIT --> REV
 ```
 
-Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, **pushes a signed webhook**, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM polling**. The **LLM thesis / approve-skip** path works on **frozen facts only** and must not call Tradier. The **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for fresh OCC quotes and live orders. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)).
+Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, optionally ranks a shortlist, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM on Helsinki** and **no per-print Grok wake**. The **LLM thesis / approve-skip** path (Continual15) works on **frozen facts only** and must not call Tradier. The **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for fresh OCC quotes and live orders. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)). Webhook outbox is **not** the hunt bus.
 
 ## Helsinki vs this package
 
@@ -165,7 +190,7 @@ As of **PR #35 on `main`** (package truth). Not a claim this commit is deployed.
 | Tree | Hand-built `/opt/trading-desk` (no `.git`) | Git repo; installer default `/opt/groktrading` |
 | Units | `trading-desk-tape.service` (`ws_tape.py`) + `trading-desk-finnhub.service` | Example `groktrading-*.service` |
 | Orders | **No** preview→submit. Webhooks: `sit_match`, `in_position`, `cash_up` (`entry_cutoff_only_no_flatten`), `day_win_target` (`auto_flatten: false`) | Stub-safe `OrderMachine` (BTO) + dry-run `live_order_gate` (BTO entry / named STC exits) on the Grok consumer side |
-| `sit_match` interval | Host Mon prep **300s** (unmuted); consume still **60s** | Default `SIT_MATCH_MIN_INTERVAL_SEC` **60** |
+| `sit_match` interval | Host Mon prep **300s** (weekend-muted; bandage, not hunt) | Default `SIT_MATCH_MIN_INTERVAL_SEC` **60** |
 | Other webhooks | In-memory debounce ~90s (weekend same-digest spam) | SQLite WAL inbox/outbox + AH/weekend digest coalesce |
 | Trading clocks | Host routines **`CRON_TZ=America/New_York`** | Encoded cutoff 12:30 PT; example crons often `America/Los_Angeles` |
 
@@ -349,6 +374,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/feeds/flow_alerts.py` | P1 UW flow-alerts poller; emit on new alert id only |
 | `src/groktrading/feeds/tide_state.py` | P1 market-tide + optional net-prem → `tide_state.json` |
 | `src/groktrading/feeds/quote_subscribe.py` | P1 bounded Tradier quote interest; `ws_tape.py` is host-owned |
+| `src/groktrading/shortlist.py` | Plane 2 thin ranker; `shortlist.json` ≤1–3 OCCs; no sit_match; no LLM |
+| `scripts/shortlist_ranker.py` | Ranker CLI (offline-safe). Host path `/opt/trading-desk/state/shortlist.json` is docs, not auto-deploy |
 | `src/groktrading/feeds/screener_snapshot.py` | P1 thin RTH screener snapshot; no sit_match spray |
 | `src/groktrading/feeds/shadow_marks.py` | P2 shadow minute-marks (quotes only; no orders) |
 | `src/groktrading/feeds/uw_ws.py` | P2 `UW_WS_URL` probe stub; fail-closed if unset; no invented protocol |
@@ -369,6 +396,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/paper.py` | Paper ledger |
 | `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
 | `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) |
+| `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |
+| `docs/astra_realtime_planes_audit_20260912.md` | Astra A–F on planes vs 300s sit_match |
 | `docs/astra_friday_desk_audit_20260911.md` | Fri 2026-09-11 process vs outcome; Mon refuse list |
 | `schemas/` | JSON Schema for tape/gate/LLM artifacts |
 

@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 WEBSOCKETS = ROOT / "docs" / "WEBSOCKETS.md"
+PLANES = ROOT / "docs" / "REALTIME_PLANES.md"
+PLANES_AUDIT = ROOT / "docs" / "astra_realtime_planes_audit_20260912.md"
 AUDIT = ROOT / "docs" / "OPENAI_AUDIT_BRIEF.md"
 CLAUDE_AUDIT = ROOT / "docs" / "CLAUDE_AUDIT.md"
 LICENSE = ROOT / "LICENSE"
@@ -43,6 +45,8 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "docs/WEBSOCKETS.md",
         "docs/ARCHITECTURE.md",
         "docs/astra_friday_desk_audit_20260911.md",
+        "docs/REALTIME_PLANES.md",
+        "docs/astra_realtime_planes_audit_20260912.md",
         "CRON_TZ=America/New_York",
         "sell_to_close",
         "QQQ260911P00717000",
@@ -64,6 +68,11 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "wire companion units",
         "host-companions",
         "emit_sit_match=False",
+        "Three-plane",
+        "shortlist.json",
+        "not the trading latency",
+        "not the realtime design",
+        "groktrading.shortlist",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -111,8 +120,60 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "quote interest",
         "shadow marks",
         "replay scorecard",
+        "REALTIME_PLANES",
+        "deprecated as hunt bus",
+        "shortlist.json",
+        "three planes",
     ):
         assert needle in text, needle
+
+
+def test_realtime_planes_doc_states_design() -> None:
+    text = PLANES.read_text(encoding="utf-8")
+    for needle in (
+        "Three-plane",
+        "Hot sensor",
+        "Thin ranker",
+        "Continual15",
+        "shortlist.json",
+        "/opt/trading-desk/state/shortlist.json",
+        "SIT_MATCH_MAX_AGE_SEC",
+        "SIT_MATCH_MIN_INTERVAL_SEC",
+        "not the trading latency target",
+        "not the realtime design",
+        "Do **not** raise",
+        "SIT_MATCH_WEBHOOK",
+        "emit_sit_match",
+        "Merge ≠ Helsinki restart",
+        "5–15s",
+        "META",
+        "SPCX",
+        "INTC",
+        "in_position",
+        "login_dead",
+        "not auto-enabled",
+    ):
+        assert needle in text, needle
+    audit = PLANES_AUDIT.read_text(encoding="utf-8")
+    for needle in (
+        "## A)",
+        "## B)",
+        "## C)",
+        "## D)",
+        "## E)",
+        "## F)",
+        "421.74",
+        "460.56",
+        "PR #34",
+        "PR #35",
+        "PR #36",
+        "Weekend-muted",
+        "shortlist + Continual15",
+        "shortlist_stale",
+        "America/New_York",
+        "invented=false",
+    ):
+        assert needle in audit, needle
 
 
 def test_openai_audit_brief_states_scope_and_ask() -> None:
