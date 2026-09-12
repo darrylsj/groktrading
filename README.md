@@ -351,6 +351,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
 | `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
+| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) |
+| `docs/astra_friday_desk_audit_20260911.md` | Fri 2026-09-11 process vs outcome; Mon refuse list |
 | `schemas/` | JSON Schema for tape/gate/LLM artifacts |
 
 ## Hardening (package-first)

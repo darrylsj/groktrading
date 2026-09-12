@@ -66,18 +66,19 @@ include = [
   "/deploy",
   "/scripts",
   "/schemas",
+  "/tools",
   "/README.md",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-pythonpath = ["src", "tests", "scripts"]
+pythonpath = ["src", "tests", "scripts", "."]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests", "scripts"]
+src = ["src", "tests", "scripts", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -92,7 +93,7 @@ select = ["E", "F", "I", "UP", "B"]
 "scripts/quote_interest_companion.py" = ["UP017"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["groktrading", "helpers", "helsinki_http"]
+known-first-party = ["groktrading", "helpers", "helsinki_http", "tools"]
 
 [tool.mypy]
 python_version = "3.11"
