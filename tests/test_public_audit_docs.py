@@ -13,16 +13,27 @@ CLAUDE_AUDIT = ROOT / "docs" / "CLAUDE_AUDIT.md"
 LICENSE = ROOT / "LICENSE"
 
 
-def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
+def test_readme_leads_with_public_audit_and_current_desk() -> None:
     text = README.read_text(encoding="utf-8")
     assert text.startswith("# GrokTrading\n")
-    head = text[:2500]
+    first_h2 = next(line for line in text.splitlines() if line.startswith("## "))
+    assert first_h2.startswith("## Current live card"), first_h2
+    assert text.find("Continual15") < text.find("Opening15")
+    assert "e297a0af" not in text
+    head = text[:4000]
     for needle in (
         "Public reference package",
         "external audit",
         "not financial advice",
         "operator-gated",
         "signals-only",
+        "Continual15",
+        "docs/LIVE_ORDER_GATE.md",
+        "docs/SAFETY.md",
+    ):
+        assert needle in head, needle
+    assert "Live orders are never placed by default" in text
+    for needle in (
         "YOLO",
         "capital expansion",
         "$25,000",
@@ -30,12 +41,11 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
         "docs/OPENAI_AUDIT_BRIEF.md",
         "docs/CLAUDE_AUDIT.md",
         "docs/WEBSOCKETS.md",
-        "docs/SAFETY.md",
         "docs/ARCHITECTURE.md",
-    ):
-        assert needle in head, needle
-    assert "Live orders are never placed by default" in text
-    for needle in (
+        "docs/astra_friday_desk_audit_20260911.md",
+        "CRON_TZ=America/New_York",
+        "sell_to_close",
+        "QQQ260911P00717000",
         "Helsinki sensor farm",
         "always-on listen",
         "Grok Bot only",
@@ -58,6 +68,9 @@ def test_readme_leads_with_public_audit_and_yolo_mandate() -> None:
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
     assert "Tradier live cash on the order of **$600**" not in text
+    # Host Mon interval is ops fact; package default stays 60.
+    assert "Host Mon prep" in text
+    assert "**300**" in text
 
 
 def test_websockets_doc_covers_auditor_topics() -> None:
