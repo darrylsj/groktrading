@@ -7,6 +7,20 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- In-repo `tools/live_order_gate` (dry-run only; never POSTs). Grok box
+  had a hot-patch so Friday STC could close; GitHub `main` was still
+  BTO-only at submit. Entry stays fail-closed (`buy_to_open`, 12:30 PT
+  cutoff, cash debit, exact-side credit/STO ban, alphanumeric tag,
+  thesis TTL). Named exits (`take_gain_exit`, …) may `sell_to_close` /
+  `buy_to_close`; skip cutoff + cash debit; thesis required; no
+  credit-ban false positive on STC or thesis prose. `close --form-json`
+  is optional and must match the thesis-built form. Audit:
+  [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md),
+  [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md). Take-gain remains
+  TRIAL n=1 — not locked. No live fills invented; no secrets.
+
 ### Fixed
 
 - `sit_match` POST-time hop chase (2026-09-11 Helsinki → Grok Bot latency):
