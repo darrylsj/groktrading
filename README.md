@@ -213,8 +213,8 @@ Hot research window is SQLite / day packs on limited disk (**7–14 days**). Col
   performance evidence.
 - **Recovery:** SSH + systemd on the host. **Merging this repo does not
   deploy Helsinki** and does **not** restart live units. After merge, an
-  operator must copy helpers into the live tape if needed and **wire
-  companion units separately** (copy `deploy/examples/systemd/host-companions/`
+  operator must copy helpers into the live tape if needed and **wire companion units
+  separately** (copy `deploy/examples/systemd/host-companions/`
   yourself). `ws_tape.py` stays host-owned. Account-events stays **files-only /
   disabled**. **Merge ≠ Helsinki restart.**
 
