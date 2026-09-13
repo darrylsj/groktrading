@@ -65,7 +65,18 @@ Operator intent **2026-09-12** ([docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.m
 - **Wed 2026-09-16 open card** = unlock review. Default bias = drop the **blanket** ban and **allowlist defined-risk I4** through `live_order_gate` (flag + shape checks). **Not** a raw POST
 - **Naked STO stays refused** after unlock
 - Checklist FAIL → name the gap + next review **≤3 RTH days** (no open-ended ban)
-- After unlock kills: ungated live credit → re-ban+audit; **−1× max_loss twice in 5 sessions** → pause live I4
+- After unlock kills: ungated live credit → re-ban+audit; **−1× max_loss twice in 5 sessions** → pause live I4 (**blocks new entries, preserves exits**)
+
+Local Codex gpt-6-astra: **PASS-WITH-FIXES** (not forever-ban). Gaps before Wed unlock:
+
+1. gate still single-leg submit — need full audited spread path before live allowlist
+2. validate OCC root/expiry/type/width/$1/protective direction at live submit
+3. define cash budget / spread max-loss vs ≥20% floor
+4. exit evidence must require confirmed fills (not ack=closed)
+5. fix settlement language — SPY/QQQ American/physical; timed pre-expiry close; paper intrinsic = simulation
+6. refuse-only Mon–Tue ≠ lifecycle proof; require deterministic lifecycle test if no paper trade
+7. one unlock authority (Trading Bot on Wed open checklist PASS) + controlled flag; pause blocks new entries, preserves exits
+8. naked STO stays refused — do not keep a forever ban
 
 I4 is **not** I1 print freshness, **not** I1 `must_trade_small`, **not** I2 sit-2, and **not** a Wheel Desk (CSP/CC). Continual15 remains BTO debit hunt. This PR does **not** flip the gate.
 

@@ -74,6 +74,7 @@ Paper **only**. Not live. Not a raw POST. Not Continual15 BTO hunt.
 | Underlyings | **SPY / QQQ** only |
 | Quantity | **1** |
 | Venue of this experiment | **Paper** (sandbox / journal). Production NBBO remains pricing truth. |
+| Settlement (Codex) | **SPY/QQQ American / physical.** Timed **pre-expiry close**. Paper intrinsic = **simulation** — not assignment truth. |
 
 This is **I4** (defined-risk credit vertical). It is **not**:
 
@@ -97,7 +98,11 @@ That is **not** “credits are free.” After a PASS card:
 - Defined-risk I4 may be live **only** via the gate allowlist (flag +
   shape checks). **Not** a raw POST. **Not** WebSocket-triggered.
 - **Naked STO stays refused.**
-- Cash/equity **≥20%** (max deploy 80%) is unchanged.
+- **One unlock authority:** Trading Bot on Wed open checklist PASS +
+  controlled flag. Not a raw POST. Not a silent merge.
+- **Pause** (post-unlock kill) **blocks new entries, preserves exits.**
+- Cash/equity **≥20%** (max deploy 80%) is unchanged. Define the cash
+  budget / spread max-loss **against that floor** — do not lower it.
 - 12:30 PT remains a **new-entry cutoff only** (not a flatten).
 - `evaluate_gate` / `OrderPayload.side` staying BTO-only on the package
   FSM is fine; I4 live (when/if) is a `live_order_gate` path, not a
@@ -126,6 +131,8 @@ names the gap.
    After unlock this remains true.
 4. **Paper scorecard Mon+Tue** — both sessions have a scorecard **or** a
    logged **no-0DTE refuse**. Silence is not a scorecard.
+   **Refuse-only Mon–Tue ≠ lifecycle proof**; if there is no paper
+   trade, require a **deterministic lifecycle test**.
 5. **Gate allowlist flag ready (not raw POST)** — a named, default-off
    flag in `live_order_gate` (or the Bot wrapper that **only** submits
    what the gate emits). Operator HTTP is still a separate step. There
@@ -146,9 +153,10 @@ Wed.
 | Ungated live credit (raw POST, WS→order, or submit that skipped `live_order_gate`) | **Re-ban + audit** |
 | **−1× max_loss** twice in **5 sessions** | **Pause live I4** |
 
-Pause ≠ forever ban. A pause is a new dated hold + a named next review
-(again ≤3 RTH days if the card FAILs). Re-ban+audit is a process event,
-not a personality change.
+Pause ≠ forever ban. **Pause blocks new entries, preserves exits.** A
+pause is a new dated hold + a named next review (again ≤3 RTH days if
+the card FAILs). Re-ban+audit is a process event, not a personality
+change. Do **not** recommend keeping a forever ban.
 
 ---
 
@@ -175,7 +183,26 @@ deploy claim.
 
 Auditor posture: process contract vs coded unlock are different
 questions. Do not grade the operator for writing a dated hold. Do not
-grade the repo as if Wed already happened.
+grade the repo as if Wed already happened. **Do not recommend keeping a
+forever ban.** Naked STO stays refused.
+
+### Local Codex gpt-6-astra (pack unlock review)
+
+**PASS-WITH-FIXES** (not forever-ban). Gaps before Wed unlock — Codex
+bullets, almost verbatim:
+
+1. gate still single-leg submit — need full audited spread path before live allowlist
+2. validate OCC root/expiry/type/width/$1/protective direction at live submit
+3. define cash budget / spread max-loss vs ≥20% floor
+4. exit evidence must require confirmed fills (not ack=closed)
+5. fix settlement language — SPY/QQQ American/physical; timed pre-expiry close; paper intrinsic = simulation
+6. refuse-only Mon–Tue ≠ lifecycle proof; require deterministic lifecycle test if no paper trade
+7. one unlock authority (Trading Bot on Wed open checklist PASS) + controlled flag; pause blocks new entries, preserves exits
+8. naked STO stays refused — do not keep a forever ban
+
+These seven engineering gaps plus the standing eighth (naked STO
+refused / no forever ban) are the pre-Wed bar. A PASS card without
+them is a process wish, not a live allowlist.
 
 ### Is the plan clear, dated, and non-arbitrary?
 
@@ -228,8 +255,26 @@ allowlist**, not “never sell premium again.”
    `PaperLedger.reconcile` into that role — it does not cancel anything.
 6. **Single-leg Tradier form.** Even a perfect flag cannot emit a
    defined-risk vertical until the form grows two legs (or two linked
-   tickets with a documented atomic preview). That is a pre-Wed
-   engineering item, not a README wish.
+   tickets with a documented atomic preview). Codex: **need full
+   audited spread path before live allowlist.**
+7. **OCC / width / protective direction not validated at submit.**
+   Live I4 must check root (SPY/QQQ), expiry, type, **$1 width**, and
+   protective direction. Missing any of those is a naked-shaped hole.
+8. **Cash budget vs ≥20% floor is undefined for spreads.** Max-loss
+   must sit **inside** the cash floor math. Do not lower
+   `CASH_EQUITY_FLOOR` to “make room.”
+9. **Exit evidence is ack-shaped today.** Confirmed **fills**, not
+   `ack=closed`. Same bar for paper I4 entry=exit audit.
+10. **Settlement language was ETF-casual.** SPY/QQQ options are
+    **American / physical**. Require a **timed pre-expiry close**.
+    Paper intrinsic marks are **simulation**, not assignment truth.
+11. **Refuse-only Mon–Tue is not a lifecycle.** If no paper trade
+    prints, run a **deterministic lifecycle test** (open→hold→close
+    or documented refuse-at-each-step). Logged no-0DTE refuse alone
+    does not prove the book can flatten a credit.
+12. **Unlock authority must be singular.** Trading Bot on **Wed open
+    checklist PASS** + **controlled flag**. Pause **blocks new
+    entries, preserves exits.** Not N people flipping env.
 
 ### What this audit refuses to “fix”
 
@@ -251,33 +296,35 @@ allowlist**, not “never sell premium again.”
 | Coded live-I4 ready? | **FAIL** — correctly. Docs-first. Do not flip the gate in this PR. |
 | Forever-ban language vs hold? | **PASS** after this PR’s refuse-string / comment soften. Code still refuses. |
 
-A clean **PASS** as README contract would also require: (a) the allowlist
-flag **named** in `live_order_gate` while still default-refusing, and
-(b) `reconcile-book` pointed at a real command. Those are **pre-Wed**
-code/ops items, not reasons to keep a forever ban in the README.
+A clean **PASS** as README contract would also require Codex’s pre-Wed
+gaps closed (audited spread path, OCC/width/direction checks, cash
+budget vs ≥20% floor, fill-not-ack exits, settlement language,
+lifecycle test if no paper trade, one Trading Bot unlock authority +
+controlled flag). Those are **pre-Wed** code/ops items, **not** reasons
+to keep a forever ban in the README.
 
 ---
 
 ## Top fixes before Wed 2026-09-16 unlock
 
 Do these **before** the open card if the default bias is to allowlist.
-None of these is “lift the hold early.”
+None of these is “lift the hold early.” Codex gpt-6-astra list, almost
+verbatim — plus the standing refuse:
 
-1. **Name the flag** in `live_order_gate` (default off). Refuse copy
-   already points here. Do not read env from a WS callback.
-2. **Specify the 2-leg form** (Tradier multileg or two preview-linked
-   legs) with width=$1, SPY/QQQ, qty=1, `max_loss ≤ cash`. Naked /
-   1-leg `sell_to_open` still `credit_or_sto_banned`.
-3. **Stand up paper I4 scorecards** for Mon 2026-09-14 and Tue
-   2026-09-15 (or write the no-0DTE refuse). Entry=exit on every ticket.
-   Pack toolkit or `tools/i4_credit_paper` — this stub is not enough
-   by itself.
-4. **Point `reconcile-book` at a real cancel path** for orphan credits
-   (host script is fine). Prove it on paper/sandbox first.
-5. **Keep the three rails:** cash floor, WS→orders forbidden,
-   `live_order_gate` required. If a change would weaken one of those,
-   it is out of scope for unlock.
+1. gate still single-leg submit — need full audited spread path before live allowlist
+2. validate OCC root/expiry/type/width/$1/protective direction at live submit
+3. define cash budget / spread max-loss vs ≥20% floor
+4. exit evidence must require confirmed fills (not ack=closed)
+5. fix settlement language — SPY/QQQ American/physical; timed pre-expiry close; paper intrinsic = simulation
+6. refuse-only Mon–Tue ≠ lifecycle proof; require deterministic lifecycle test if no paper trade
+7. one unlock authority (Trading Bot on Wed open checklist PASS) + controlled flag; pause blocks new entries, preserves exits
+8. naked STO stays refused — do not keep a forever ban
 
-After the Wed card: only an **operator-authorized** code PR should flip
-the allowlist default, and only if all six checklist lines PASS.
-**Merge ≠ Helsinki restart. Merge ≠ live I4.**
+Also still required (prior audit, not a substitute for the list above):
+name the default-off flag in `live_order_gate`; point `reconcile-book`
+at a real orphan-credit cancel; keep cash floor, WS→orders forbidden,
+and no raw POST.
+
+After the Wed card: **one unlock authority** — Trading Bot on open
+checklist PASS + controlled flag. **Merge ≠ Helsinki restart. Merge ≠
+live I4.** Pause later **blocks new entries, preserves exits.**

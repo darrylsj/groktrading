@@ -139,6 +139,16 @@ def test_sto_unlock_plan_is_readme_contract() -> None:
         "Wed 2026-09-16 open card",
         "Naked STO stays refused",
         "tools/i4_credit_paper",
+        "PASS-WITH-FIXES",
+        "gate still single-leg submit",
+        "full audited spread path",
+        "protective direction",
+        "spread max-loss vs ≥20% floor",
+        "confirmed fills (not ack=closed)",
+        "SPY/QQQ American/physical",
+        "refuse-only Mon–Tue ≠ lifecycle proof",
+        "one unlock authority (Trading Bot on Wed open checklist PASS)",
+        "naked STO stays refused — do not keep a forever ban",
     ):
         assert needle in readme, needle
     text = STO_UNLOCK.read_text(encoding="utf-8")
@@ -158,6 +168,14 @@ def test_sto_unlock_plan_is_readme_contract() -> None:
         "cash floor",
         "WebSocket",
         "tools/i4_credit_paper",
+        "gpt-6-astra",
+        "gate still single-leg submit",
+        "confirmed fills (not ack=closed)",
+        "American / physical",
+        "deterministic lifecycle test",
+        "Trading Bot on Wed open checklist PASS",
+        "pause blocks new entries, preserves exits",
+        "do not keep a forever ban",
     ):
         assert needle in text, needle
     assert "forever ban" in text.lower()

@@ -10,7 +10,9 @@ journal helper lands here.
 
 Mon–Tue paper (2026-09-14 and 2026-09-15): **SPY/QQQ $1-wide defined-risk
 vertical**, qty=1, paper only. Unlock review is the **Wed 2026-09-16 open
-card**. Naked STO stays refused.
+card**. Naked STO stays refused. Settlement: SPY/QQQ **American /
+physical**; timed **pre-expiry close**; paper intrinsic = **simulation**.
+Refuse-only days ≠ lifecycle proof.
 
 Contract, checklist, kills, and Codex/Astra audit:
 
