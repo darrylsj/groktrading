@@ -68,6 +68,7 @@ include = [
   "/scripts",
   "/schemas",
   "/tools",
+  "/config",
   "/README.md",
 ]
 
