@@ -9,6 +9,25 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Observational **strategy-factory** hypothesis ledger
+  [`tools/strategy_factory`](tools/strategy_factory) (ported from the
+  Trading Desk pack). Stage machine
+  `candidate → paper → validated → live_allow → killed|retired` plus
+  `reject` from earlier stages. Desk defaults in
+  [`config/strategy_factory.json`](config/strategy_factory.json)
+  (`max_active_per_category_per_session=3`, 2 confirmations for
+  validated / 3 for `live_allow`, mechanism + falsifier required,
+  confirmation allowlist). Pack paths under `STRATEGY_FACTORY_PACK`:
+  `evidence/strategy_factory_events.jsonl`,
+  `evidence/strategy_factory_ledger.jsonl`,
+  `state/strategy_factory_active.json`. CLI: `propose`, `confirm`,
+  `advance`, `reject`, `kill`, `retire`, `list`, `status`, `score-day`.
+  **`live_gate=false` forced** — never calls Tradier/UW, never invents
+  prices, does **not** replace `live_order_gate`, does **not** unlock
+  STO/I4. Doc: [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md).
+
+### Added
+
 - STO / I4 **dated hold** contract (operator intent 2026-09-12):
   [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md). Live credit/STO
   held through **Tue 2026-09-15 RTH**; paper I4 Mon–Tue (SPY/QQQ $1

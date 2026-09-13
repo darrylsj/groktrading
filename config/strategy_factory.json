@@ -1,0 +1,28 @@
+{
+  "kind": "strategy_factory_config",
+  "live_gate": false,
+  "places_orders": false,
+  "max_active_per_category_per_session": 3,
+  "min_confirmations_for_validated": 2,
+  "min_confirmations_for_live_allow": 3,
+  "require_falsifier_for_live_allow": true,
+  "require_mechanism_for_validated": true,
+  "confirmation_sources": [
+    "uw_print",
+    "tradier_fresh_ask",
+    "gex_agree",
+    "shortlist_hit",
+    "helsinki_fresh",
+    "mechanism_named",
+    "falsifier_named"
+  ],
+  "categories": [
+    "flow_debit_bto",
+    "i4_defined_risk_credit",
+    "gex_shadow_obs",
+    "overnight_carry",
+    "external_shadow",
+    "other"
+  ],
+  "note": "Observational ledger only. live_gate is forced false in code and cannot flip the live order path. Does not replace live_order_gate. STO/I4 remain on the dated unlock plan."
+}

@@ -89,6 +89,21 @@ in [`tools/gex_shadow`](tools/gex_shadow) (`live_gate=false`; never invents
 marks). Helsinki **shortlist deploy is operator-side**. Note:
 [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md).
 
+## Strategy factory (observational ledger)
+
+Hypothesis ledger for continuous strategy discovery
+(generate → paper → validate → kill). **Observational only.** Ported from
+the Trading Desk pack so Continual15 prompts stay portable.
+
+- Never calls Tradier / UW; never invents prices or P&L
+- `live_gate=false` always — does **not** flip `live_order_gate`
+- STO / I4 remain on the dated unlock plan
+- Does **not** replace `live_order_gate` / `evaluate_gate`
+
+In-repo SoT: [`tools/strategy_factory`](tools/strategy_factory). Desk
+defaults: [`config/strategy_factory.json`](config/strategy_factory.json).
+Doc: [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md).
+
 ## Helsinki sit_match (deprecated as hunt bus)
 
 Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
@@ -148,6 +163,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **live_order_gate:** [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md)
 - **STO / I4 dated unlock:** [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
 - **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
+- **Strategy factory (observational):** [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
 - **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
@@ -434,6 +450,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). Credit/STO is a **dated hold** through Tue 2026-09-15 RTH (naked STO stays refused). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) · [STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md) |
 | `tools/i4_credit_paper/` | Stub README for paper I4 (SPY/QQQ $1 defined-risk vertical). Pack-first; not an executor. |
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
+| `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
+| `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
 | `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |
 | `docs/astra_realtime_planes_audit_20260912.md` | Astra A–F on planes vs 300s sit_match |
