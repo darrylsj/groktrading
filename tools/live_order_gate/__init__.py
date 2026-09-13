@@ -1,5 +1,10 @@
 """Tradier one-lot live order gate (entry BTO + exit STC/BTC). Never POSTs."""
 
+from tools.live_order_gate.carry import (
+    carry_gate_document,
+    overnight_carry_notes_required,
+    stamp_thesis_artifacts,
+)
 from tools.live_order_gate.gate import (
     ENTRY_SIDES,
     EXIT_SIDES,
@@ -22,8 +27,11 @@ __all__ = [
     "Thesis",
     "assert_submit_policy",
     "build_tradier_form_from_thesis",
+    "carry_gate_document",
     "close_with_audit",
     "evaluate_close_policy",
     "evaluate_submit_policy",
+    "overnight_carry_notes_required",
+    "stamp_thesis_artifacts",
     "write_thesis",
 ]

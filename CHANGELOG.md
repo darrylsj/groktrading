@@ -9,6 +9,22 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Optional overnight-carry fields on `tools/live_order_gate` `write-thesis`
+  (`overnight_carry`, `carry_dte`, `carry_event_risk`, `carry_rationale`).
+  Soft notes only: same-day entries may omit them; `--overnight-carry`
+  requires the three carry notes. `how_it_dies` / `falsifier` required on
+  every written thesis. Stamped on receipt JSON, evidence markdown, and a
+  `thinking.jsonl` `gates/carry` row. Does **not** auto-flatten, change the
+  cash floor, or lift the credit/STO ban.
+- Shadow GEX 60-minute paired scorer `tools/gex_shadow` (`live_gate=false`).
+  One-lot ask→bid $ for baseline vs agree-only; missing marks unscored;
+  OCC deduped; marks never invented. Kill criteria in the tool README.
+- [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
+  — pointer to both optional tools; Helsinki shortlist deploy remains
+  operator-side.
+
+### Added
+
 - Three-plane realtime desk: hot sensor (Helsinki, no LLM) → thin ranker
   (`groktrading.shortlist` / `scripts/shortlist_ranker.py`, 5–15s,
   `shortlist.json` ≤1–3 OCCs) → Continual15 + `live_order_gate`.

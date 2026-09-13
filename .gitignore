@@ -33,6 +33,7 @@ venv/
 # Runtime artifacts
 *.jsonl
 !logs/trades.jsonl
+!tests/fixtures/**/*.jsonl
 live_tape.json
 paper_state.json
 .coverage

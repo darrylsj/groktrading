@@ -55,6 +55,13 @@ In-repo source of truth: `tools/live_order_gate`. **This package never POSTs** (
 
 Closes go through `live_order_gate`, not `Executor.maybe_submit`. Details: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
 
+Optional green-week (2026-09-12) add-ons — **not live gates**: overnight
+carry notes on `write-thesis` (`--overnight-carry` requires DTE / event risk /
+rationale; `how_it_dies` still required); shadow GEX 60-minute paired scorer
+in [`tools/gex_shadow`](tools/gex_shadow) (`live_gate=false`; never invents
+marks). Helsinki **shortlist deploy is operator-side**. Note:
+[docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md).
+
 ## Helsinki sit_match (deprecated as hunt bus)
 
 Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
@@ -112,6 +119,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **Safety:** [docs/SAFETY.md](docs/SAFETY.md)
 - **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md)
 - **live_order_gate:** [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md)
+- **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
 - **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
@@ -395,7 +403,9 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
 | `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
-| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) |
+| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) |
+| `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
+| `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |
 | `docs/astra_realtime_planes_audit_20260912.md` | Astra A–F on planes vs 300s sit_match |
 | `docs/astra_friday_desk_audit_20260911.md` | Fri 2026-09-11 process vs outcome; Mon refuse list |

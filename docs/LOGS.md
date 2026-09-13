@@ -26,4 +26,7 @@ Daily flat sessions and “do not chase” reminders belong in the changelog. Th
 
 ## Git
 
-`*.jsonl` remains gitignored as a runtime pattern. `logs/trades.jsonl` is the explicit exception so the journal can be committed without dragging in `thinking.jsonl` or other tapes.
+`*.jsonl` remains gitignored as a runtime pattern. `logs/trades.jsonl` is the
+explicit journal exception. `tests/fixtures/**/*.jsonl` is also excepted so
+labeled synthetic fixtures (for example the GEX shadow pair file) can be
+committed without dragging in `thinking.jsonl` or other tapes.

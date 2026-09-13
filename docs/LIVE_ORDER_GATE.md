@@ -14,7 +14,19 @@ could not emit `sell_to_close`.
 PYTHONPATH=src:. python -m tools.live_order_gate write-thesis --out thesis.json \
   --signal-id sig1 --option-symbol SPY260903C00600000 --side buy_to_open \
   --limit 1.25 --strategy must_trade_small --thesis-text "…" \
-  --written-at 2026-09-03T14:30:00+00:00
+  --written-at 2026-09-03T14:30:00+00:00 \
+  --how-it-dies "bid <= 0.80 or thesis dead"
+
+# Overnight hold: carry notes become required.
+PYTHONPATH=src:. python -m tools.live_order_gate write-thesis --out thesis.json \
+  --signal-id sig1 --option-symbol SPY260903C00600000 --side buy_to_open \
+  --limit 1.25 --strategy must_trade_small --thesis-text "…" \
+  --written-at 2026-09-03T14:30:00+00:00 \
+  --falsifier "spot through the wall" \
+  --overnight-carry --carry-dte 4 \
+  --carry-event-risk "Monday gap into CPI" \
+  --carry-rationale "Pin still below the gamma wall; 1% gap does not kill it." \
+  --receipt receipt.json --evidence evidence.md --thinking thinking.jsonl
 
 PYTHONPATH=src:. python -m tools.live_order_gate submit --thesis thesis.json --cash 600
 
@@ -29,6 +41,14 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 ## Entry (fail-closed)
 
 - Thesis required (`written_at` timezone-aware).
+- `how_it_dies` / `falsifier` required on every **written** thesis
+  (`write-thesis`). Alias accepted. Missing either name still fails.
+- Overnight carry fields are **soft** (not a live flatten / cash-floor
+  change). Same-day new entries may omit them. `--overnight-carry` /
+  `overnight_carry=true` requires `carry_dte`, `carry_event_risk`, and
+  `carry_rationale` (mechanism survival — not "cash floor OK"). Stamped on
+  the thesis JSON, optional receipt JSON, evidence markdown, and a
+  `thinking.jsonl` row under `gates/carry`.
 - Side `buy_to_open` only.
 - 12:30 PT new-entry cutoff (`past_entry_cutoff`).
 - Cash debit: `limit × 100 × qty`; `cash_required` / `insufficient_cash`.
@@ -53,4 +73,7 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 Take-gain math (arm +40% / ratchet 50%) stays Bot process — **TRIAL n=1,
 do not lock**. `evaluate_gate` / `OrderPayload.side` remain BTO-only so the
 package FSM does not silently grow a credit type. This tool is the Bot
-submit/close SoT, not a rewrite of `gate.py`.
+submit/close SoT, not a rewrite of `gate.py`. Overnight carry notes do
+**not** auto-flatten, do **not** change the cash floor, and do **not**
+allow credits/STO. Optional green-week note:
+[GREEN_WEEK_OPTIONAL_20260912.md](GREEN_WEEK_OPTIONAL_20260912.md).

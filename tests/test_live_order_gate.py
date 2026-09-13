@@ -242,6 +242,207 @@ def test_form_json_optional_must_match_thesis() -> None:
     assert "form_thesis_mismatch" in mismatch.reasons
 
 
+def test_write_thesis_missing_falsifier_fails() -> None:
+    now = morning_pt()
+    with pytest.raises(PolicyError) as exc:
+        write_thesis(**_entry_kwargs(now, falsifier=None, how_it_dies=None))  # type: ignore[arg-type]
+    assert exc.value.code == "falsifier_required"
+
+
+def test_write_thesis_how_it_dies_alias_satisfies_falsifier() -> None:
+    now = morning_pt()
+    ticket = write_thesis(
+        **_entry_kwargs(now, falsifier=None, how_it_dies="bid <= 0.50 or thesis dead")
+    )  # type: ignore[arg-type]
+    assert ticket.falsifier == "bid <= 0.50 or thesis dead"
+    assert ticket.to_dict()["how_it_dies"] == ticket.falsifier
+
+
+def test_overnight_carry_true_without_rationale_fails() -> None:
+    now = morning_pt()
+    with pytest.raises(PolicyError) as exc:
+        write_thesis(
+            **_entry_kwargs(
+                now,
+                overnight_carry=True,
+                carry_dte=5,
+                carry_event_risk="CPI gap",
+            )
+        )  # type: ignore[arg-type]
+    assert exc.value.code == "carry_rationale_required"
+
+
+def test_overnight_carry_true_cash_floor_rationale_fails() -> None:
+    now = morning_pt()
+    with pytest.raises(PolicyError) as exc:
+        write_thesis(
+            **_entry_kwargs(
+                now,
+                overnight_carry=True,
+                carry_dte="5",
+                carry_event_risk="FOMC",
+                carry_rationale="cash floor OK",
+            )
+        )  # type: ignore[arg-type]
+    assert exc.value.code == "carry_rationale_not_cash_floor"
+
+
+def test_overnight_carry_false_or_omitted_ok_without_carry_fields() -> None:
+    now = morning_pt()
+    omitted = write_thesis(**_entry_kwargs(now))  # type: ignore[arg-type]
+    assert omitted.overnight_carry is None
+    assert omitted.carry_rationale is None
+    same_day = write_thesis(**_entry_kwargs(now, overnight_carry=False))  # type: ignore[arg-type]
+    assert same_day.overnight_carry is False
+    assert same_day.carry_dte is None
+    assert same_day.carry_event_risk is None
+    assert same_day.carry_rationale is None
+
+
+def test_overnight_carry_true_stamps_receipt_evidence_thinking(tmp_path: Path) -> None:
+    now = morning_pt()
+    receipt = tmp_path / "receipt.json"
+    evidence = tmp_path / "evidence.md"
+    thinking = tmp_path / "thinking.jsonl"
+    ticket = write_thesis(
+        **_entry_kwargs(
+            now,
+            overnight_carry=True,
+            carry_dte=4,
+            carry_event_risk="Monday gap into CPI",
+            carry_rationale="Gamma wall still above spot; 4 DTE pin holds a 1% gap.",
+        ),
+        receipt_path=receipt,
+        evidence_path=evidence,
+        thinking_path=thinking,
+    )  # type: ignore[arg-type]
+    assert ticket.overnight_carry is True
+    assert ticket.carry_dte == 4
+    assert ticket.carry_gate()["soft"] is True
+    assert ticket.carry_gate()["auto_flatten"] is False
+    assert ticket.carry_gate()["changes_cash_floor"] is False
+    assert ticket.carry_gate()["live_gate"] is False
+    doc = json.loads(receipt.read_text(encoding="utf-8"))
+    assert doc["kind"] == "live_order_gate_thesis_receipt"
+    assert doc["gates"]["carry"]["overnight_carry"] is True
+    assert doc["gates"]["carry"]["carry_rationale"] == ticket.carry_rationale
+    assert doc["how_it_dies"] == ticket.falsifier
+    md = evidence.read_text(encoding="utf-8")
+    assert "## gates/carry" in md
+    assert "Gamma wall still above spot" in md
+    assert "## how_it_dies / falsifier" in md
+    row = json.loads(thinking.read_text(encoding="utf-8").splitlines()[0])
+    assert row["gates"]["carry"]["overnight_carry"] is True
+    assert row["places_orders"] is False
+
+
+def test_cli_overnight_carry_requires_notes_and_same_day_ok(tmp_path: Path) -> None:
+    now = morning_pt()
+    out = tmp_path / "thesis.json"
+    missing = gate_main(
+        [
+            "write-thesis",
+            "--out",
+            str(out),
+            "--signal-id",
+            "sigcarry",
+            "--option-symbol",
+            _OCC,
+            "--side",
+            "buy_to_open",
+            "--limit",
+            "1.25",
+            "--strategy",
+            "must_trade_small",
+            "--thesis-text",
+            "Same-day I1.",
+            "--written-at",
+            now.isoformat(),
+            "--falsifier",
+            "bid <= 0.80",
+            "--overnight-carry",
+        ]
+    )
+    assert missing == 2
+
+    same_day = tmp_path / "same_day.json"
+    assert (
+        gate_main(
+            [
+                "write-thesis",
+                "--out",
+                str(same_day),
+                "--signal-id",
+                "sigday",
+                "--option-symbol",
+                _OCC,
+                "--side",
+                "buy_to_open",
+                "--limit",
+                "1.25",
+                "--strategy",
+                "must_trade_small",
+                "--thesis-text",
+                "Same-day I1.",
+                "--written-at",
+                now.isoformat(),
+                "--how-it-dies",
+                "bid <= 0.80",
+            ]
+        )
+        == 0
+    )
+    written = json.loads(same_day.read_text(encoding="utf-8"))
+    assert written["overnight_carry"] is None
+    assert written["how_it_dies"] == "bid <= 0.80"
+
+    overnight = tmp_path / "overnight.json"
+    receipt = tmp_path / "r.json"
+    thinking = tmp_path / "t.jsonl"
+    assert (
+        gate_main(
+            [
+                "write-thesis",
+                "--out",
+                str(overnight),
+                "--signal-id",
+                "sigovn",
+                "--option-symbol",
+                _OCC,
+                "--side",
+                "buy_to_open",
+                "--limit",
+                "1.25",
+                "--strategy",
+                "must_trade_small",
+                "--thesis-text",
+                "Hold the pin.",
+                "--written-at",
+                now.isoformat(),
+                "--falsifier",
+                "spot through 599",
+                "--overnight-carry",
+                "--carry-dte",
+                "3",
+                "--carry-event-risk",
+                "Monday gap",
+                "--carry-rationale",
+                "Pin mechanism still intact below the wall.",
+                "--receipt",
+                str(receipt),
+                "--thinking",
+                str(thinking),
+            ]
+        )
+        == 0
+    )
+    ovn = json.loads(overnight.read_text(encoding="utf-8"))
+    assert ovn["overnight_carry"] is True
+    assert ovn["carry_dte"] == 3
+    stamped = json.loads(receipt.read_text(encoding="utf-8"))
+    assert stamped["gates"]["carry"]["carry_event_risk"] == "Monday gap"
+
+
 def test_cli_close_dry_run_and_submit_cutoff(tmp_path: Path) -> None:
     now = morning_pt()
     exit_path = tmp_path / "exit.json"
