@@ -11,8 +11,11 @@ Entry (``intent=entry`` / ``buy_to_open``):
   - thesis required
   - 12:30 PT new-entry cutoff
   - cash debit check (limit × 100 × qty) when cash is provided
-  - credit / ``sell_to_open`` banned by **exact** side and strategy
-    (not a free-text substring scan — that false-positives on STC)
+  - credit / ``sell_to_open`` on **dated hold through Tue 2026-09-15 RTH**
+    (not a forever ban); refused by **exact** side and strategy
+    (not a free-text substring scan — that false-positives on STC).
+    Naked STO stays refused after any later defined-risk I4 allowlist.
+    See ``docs/STO_UNLOCK_PLAN.md``.
   - tag alphanumeric (Tradier)
 
 Exit (``take_gain_exit`` and other exit strategies):
@@ -55,6 +58,15 @@ EXIT_SIDES: frozenset[str] = frozenset({"sell_to_close", "buy_to_close"})
 ALLOWED_SIDES: frozenset[str] = ENTRY_SIDES | EXIT_SIDES
 
 # Exact names only. Do not substring-match thesis text ("do not sell credit").
+# Dated hold through Tue 2026-09-15 RTH — not a forever ban.
+# Naked STO stays refused after any later defined-risk I4 allowlist.
+# See docs/STO_UNLOCK_PLAN.md. This set is still enforced (no unlock in this PR).
+CREDIT_STO_HOLD_THROUGH = "Tue 2026-09-15 RTH"
+CREDIT_STO_HOLD_NOTE = (
+    f"dated hold through {CREDIT_STO_HOLD_THROUGH}; "
+    "naked STO stays refused; defined-risk I4 unlock is the "
+    "Wed 2026-09-16 open-card review (docs/STO_UNLOCK_PLAN.md)"
+)
 BANNED_ENTRY_SIDES: frozenset[str] = frozenset(
     {"sell_to_open", "sell", "credit", "credit_spread", "sto"}
 )
@@ -327,11 +339,11 @@ def write_thesis(
     evidence_path: Path | str | None = None,
     thinking_path: Path | str | None = None,
 ) -> Thesis:
-    """Write a thesis. Exit sides are allowed; credit ban is structural, not text.
+    """Write a thesis. Exit sides are allowed; credit/STO hold is structural, not text.
 
     ``how_it_dies`` / ``falsifier`` is required. Overnight carry notes are soft
     unless ``overnight_carry`` or ``require_overnight_carry`` is true. Does not
-    auto-flatten, change the cash floor, or lift the credit/STO ban.
+    auto-flatten, change the cash floor, or lift the credit/STO dated hold.
     """
     falsifier_text, falsifier_err = resolve_falsifier(falsifier, how_it_dies)
     if falsifier_err:
@@ -447,11 +459,14 @@ def _assert_credit_ban(thesis: Thesis) -> None:
     if thesis.intent == "exit":
         return
     if thesis.side in BANNED_ENTRY_SIDES or thesis.side not in ENTRY_SIDES:
-        raise PolicyError("credit_or_sto_banned", f"entry side {thesis.side!r} is banned")
+        raise PolicyError(
+            "credit_or_sto_banned",
+            f"entry side {thesis.side!r} is on {CREDIT_STO_HOLD_NOTE}",
+        )
     if thesis.strategy in BANNED_ENTRY_STRATEGIES:
         raise PolicyError(
             "credit_or_sto_banned",
-            f"entry strategy {thesis.strategy!r} is banned",
+            f"entry strategy {thesis.strategy!r} is on {CREDIT_STO_HOLD_NOTE}",
         )
 
 

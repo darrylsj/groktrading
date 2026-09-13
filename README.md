@@ -13,6 +13,7 @@ As of **PR #35 on `main`** (2026-09-11/12). Encoded cutoff and session labels us
 - **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**
 - **One-lot preference (~$200)** — no hard concurrent-position caps, no daily-loser circuit breaker
 - **Entry is BTO-only**; named exits may **sell_to_close** via `tools/live_order_gate` (dry-run / audit). **No raw POST** from this package
+- **Live STO / credit: dated hold through Tue 2026-09-15 RTH** — not a forever ban. **Wed 2026-09-16 open card** = unlock review (default bias: allowlist **defined-risk I4** through `live_order_gate`). **Naked STO stays refused.** Plan + audit: [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
 - **Live orders must NEVER be triggered by WebSocket alone**; final gates recheck fresh Tradier **production** quotes
 - **Grok/LLM is outside the broker execution boundary**: approve/skip on frozen facts only; never set OCC, qty, limit, account, or order action
 - **Take-gain is TRIAL** — arm +40% / keep 50% of peak; **n=1** Fri `QQQ260911P00717000`. Do **not** lock
@@ -50,10 +51,25 @@ In-repo source of truth: `tools/live_order_gate`. **This package never POSTs** (
 
 | Path | Side | Notes |
 | --- | --- | --- |
-| Entry | `buy_to_open` only | Thesis required; 12:30 PT cutoff; cash debit; exact-side credit/STO ban; alphanumeric tag; same-PT-session + 8h thesis TTL |
+| Entry | `buy_to_open` only | Thesis required; 12:30 PT cutoff; cash debit; exact-side credit/STO **dated hold** (through Tue 2026-09-15 RTH); alphanumeric tag; same-PT-session + 8h thesis TTL |
 | Exit | `sell_to_close` / `buy_to_close` | Only named strategies: `take_gain_exit`, `dead_thesis_exit`, `falsifier_exit`, `stop_exit`, `manual_exit`, `time_stop_exit`. Skip cutoff + cash debit. `parent_signal_id` required. Thesis required |
 
 Closes go through `live_order_gate`, not `Executor.maybe_submit`. Details: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
+
+### I4 / STO dated hold (not a forever ban)
+
+Operator intent **2026-09-12** ([docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)):
+
+- **Live** STO/credit stays refused **through Tue 2026-09-15 RTH**
+- **Paper I4** Mon–Tue only: SPY/QQQ **$1-wide** defined-risk vertical, qty=1, paper only
+- **Wed 2026-09-16 open card** = unlock review. Default bias = drop the **blanket** ban and **allowlist defined-risk I4** through `live_order_gate` (flag + shape checks). **Not** a raw POST
+- **Naked STO stays refused** after unlock
+- Checklist FAIL → name the gap + next review **≤3 RTH days** (no open-ended ban)
+- After unlock kills: ungated live credit → re-ban+audit; **−1× max_loss twice in 5 sessions** → pause live I4
+
+I4 is **not** I1 print freshness, **not** I1 `must_trade_small`, **not** I2 sit-2, and **not** a Wheel Desk (CSP/CC). Continual15 remains BTO debit hunt. This PR does **not** flip the gate.
+
+Paper toolkit path: [`tools/i4_credit_paper`](tools/i4_credit_paper) (stub README; pack-first). Do not treat the stub as an executor.
 
 Optional green-week (2026-09-12) add-ons — **not live gates**: overnight
 carry notes on `write-thesis` (`--overnight-carry` requires DTE / event risk /
@@ -119,6 +135,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **Safety:** [docs/SAFETY.md](docs/SAFETY.md)
 - **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md)
 - **live_order_gate:** [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md)
+- **STO / I4 dated unlock:** [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
 - **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
@@ -403,7 +420,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
 | `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
-| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) |
+| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). Credit/STO is a **dated hold** through Tue 2026-09-15 RTH (naked STO stays refused). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) · [STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md) |
+| `tools/i4_credit_paper/` | Stub README for paper I4 (SPY/QQQ $1 defined-risk vertical). Pack-first; not an executor. |
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
 | `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |

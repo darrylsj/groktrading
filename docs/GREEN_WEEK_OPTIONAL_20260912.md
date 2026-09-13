@@ -2,7 +2,8 @@
 
 Weekend Codex review add-ons. **Optional / shadow.** They do **not** change
 live strategy gates (cash floor, 12:30 PT new-entry cutoff, no auto-flatten,
-credit/STO ban). Helsinki **shortlist deploy is operator-side** — merge ≠
+credit/STO **dated hold** through Tue 2026-09-15 RTH — see
+[STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)). Helsinki **shortlist deploy is operator-side** — merge ≠
 Helsinki restart; copy/wire the ranker only after an authorized host step.
 
 ## 1. Overnight carry fields on `live_order_gate` thesis
@@ -23,7 +24,8 @@ Soft notes on a written thesis (same-day entries may omit them):
 `--overnight-carry` requires the three carry notes. Stamped onto the thesis
 receipt JSON, evidence markdown, and a `thinking.jsonl` row under
 `gates/carry`. Does not flatten overnight, does not change the cash floor,
-does not allow credits/STO.
+does not allow credits/STO (dated hold; see
+[STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)).
 
 ## 2. GEX 60-minute paired scorer (shadow)
 

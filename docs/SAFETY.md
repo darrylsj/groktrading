@@ -12,6 +12,7 @@ Rewrite any older ≥50% / flatten-at-12:30 / no-overnight text to this card.
 - **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions.
 - **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**. One-lot preference (~$200). No hard concurrent-position caps. No daily-loser circuit breaker.
 - **Live orders must never be triggered by WebSocket alone.** Final gates recheck a **fresh Tradier production** option quote.
+- **Live STO / credit:** dated hold through **Tue 2026-09-15 RTH** (not a forever ban). Unlock review **Wed 2026-09-16 open card**; naked STO stays refused. [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md). Do **not** weaken this floor, the WS→orders ban, or `live_order_gate` to “make room” for a credit.
 - **Grok/LLM is outside the broker execution boundary.** Approve/skip on frozen facts only. The model must never set OCC, qty, limit, account, or order action.
 
 ## Defaults

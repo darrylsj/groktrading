@@ -52,8 +52,13 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 - Side `buy_to_open` only.
 - 12:30 PT new-entry cutoff (`past_entry_cutoff`).
 - Cash debit: `limit × 100 × qty`; `cash_required` / `insufficient_cash`.
-- Credit / STO banned by **exact** side and strategy (`sell_to_open`,
-  `credit_spread`, …). Thesis **prose is not scanned** for `credit` / `sell`.
+- Credit / STO is a **dated hold through Tue 2026-09-15 RTH** (not a
+  forever ban), still refused by **exact** side and strategy
+  (`sell_to_open`, `credit_spread`, …). Thesis **prose is not scanned**
+  for `credit` / `sell`. **Naked STO stays refused** after any later
+  allowlist. Defined-risk I4 unlock is the **Wed 2026-09-16 open card**,
+  through this gate only — **no raw POST**. Plan:
+  [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md).
 - Tag `A-Za-z0-9` only (Tradier).
 - Same PT session + 8h entry thesis TTL.
 - Exit thesis cannot be submitted as a BTO (`exit_thesis_not_for_submit`).
@@ -75,5 +80,6 @@ do not lock**. `evaluate_gate` / `OrderPayload.side` remain BTO-only so the
 package FSM does not silently grow a credit type. This tool is the Bot
 submit/close SoT, not a rewrite of `gate.py`. Overnight carry notes do
 **not** auto-flatten, do **not** change the cash floor, and do **not**
-allow credits/STO. Optional green-week note:
+allow credits/STO. Credit/STO remain on the dated hold (see
+[STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)). Optional green-week note:
 [GREEN_WEEK_OPTIONAL_20260912.md](GREEN_WEEK_OPTIONAL_20260912.md).

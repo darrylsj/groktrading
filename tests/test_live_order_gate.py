@@ -11,6 +11,7 @@ from groktrading.timeutil import PT
 from helpers import morning_pt
 from tools.live_order_gate.cli import main as gate_main
 from tools.live_order_gate.gate import (
+    CREDIT_STO_HOLD_THROUGH,
     PolicyError,
     assert_submit_policy,
     build_tradier_form_from_thesis,
@@ -145,6 +146,9 @@ def test_credit_and_sto_still_banned_on_entry() -> None:
     assert decision.allowed is False
     banned = {"credit_or_sto_banned", "entry_side_must_be_bto"}
     assert banned.intersection(decision.reasons)
+    assert "2026-09-15" in CREDIT_STO_HOLD_THROUGH
+    assert "forever" not in str(exc.value).lower()
+    assert "dated hold" in str(exc.value).lower()
 
 
 def test_write_thesis_exit_side_not_credit_ban_false_positive() -> None:
@@ -322,6 +326,8 @@ def test_overnight_carry_true_stamps_receipt_evidence_thinking(tmp_path: Path) -
     assert ticket.carry_gate()["auto_flatten"] is False
     assert ticket.carry_gate()["changes_cash_floor"] is False
     assert ticket.carry_gate()["live_gate"] is False
+    assert ticket.carry_gate()["credit_sto_banned"] is True
+    assert ticket.carry_gate()["credit_sto_hold_through"] == "2026-09-15 RTH"
     doc = json.loads(receipt.read_text(encoding="utf-8"))
     assert doc["kind"] == "live_order_gate_thesis_receipt"
     assert doc["gates"]["carry"]["overnight_carry"] is True
