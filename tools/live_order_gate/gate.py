@@ -35,6 +35,17 @@ from typing import Any, Literal
 
 from groktrading.quote_gate import normalize_occ
 from groktrading.timeutil import UTC, as_utc, past_entry_cutoff, session_date_pt
+from tools.live_order_gate.carry import (
+    carry_fields_from_mapping,
+    carry_gate_document,
+    overnight_carry_notes_required,
+    parse_carry_dte,
+    parse_carry_text,
+    parse_overnight_carry,
+    resolve_falsifier,
+    stamp_thesis_artifacts,
+    validate_carry_fields,
+)
 
 Side = Literal["buy_to_open", "sell_to_close", "buy_to_close"]
 Intent = Literal["entry", "exit"]
@@ -116,6 +127,10 @@ class Thesis:
     duration: str = "day"
     order_type: str = "limit"
     option_class: str = "option"
+    overnight_carry: bool | None = None
+    carry_dte: str | int | None = None
+    carry_event_risk: str | None = None
+    carry_rationale: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -132,10 +147,23 @@ class Thesis:
             "underlying": self.underlying,
             "parent_signal_id": self.parent_signal_id,
             "falsifier": self.falsifier,
+            "how_it_dies": self.falsifier,
             "duration": self.duration,
             "order_type": self.order_type,
             "option_class": self.option_class,
+            "overnight_carry": self.overnight_carry,
+            "carry_dte": self.carry_dte,
+            "carry_event_risk": self.carry_event_risk,
+            "carry_rationale": self.carry_rationale,
         }
+
+    def carry_gate(self) -> dict[str, Any]:
+        return carry_gate_document(
+            overnight_carry=self.overnight_carry,
+            carry_dte=self.carry_dte,
+            carry_event_risk=self.carry_event_risk,
+            carry_rationale=self.carry_rationale,
+        )
 
 
 @dataclass(frozen=True)
@@ -236,6 +264,12 @@ def thesis_from_mapping(raw: Mapping[str, Any]) -> Thesis:
     parent = raw.get("parent_signal_id")
     parent_id = str(parent).strip() if parent not in (None, "") else None
     thesis_text = str(raw.get("thesis") or raw.get("note") or "")
+    falsifier_raw = raw.get("falsifier") if raw.get("falsifier") not in (None, "") else raw.get(
+        "how_it_dies"
+    )
+    carry = carry_fields_from_mapping(raw)
+    if carry.get("error"):
+        raise PolicyError(str(carry["error"]))
     return Thesis(
         signal_id=signal_id,
         option_symbol=option_symbol,
@@ -249,10 +283,14 @@ def thesis_from_mapping(raw: Mapping[str, Any]) -> Thesis:
         tag=tag,
         underlying=str(raw.get("underlying") or "").strip().upper(),
         parent_signal_id=parent_id,
-        falsifier=str(raw.get("falsifier")).strip() if raw.get("falsifier") else None,
+        falsifier=str(falsifier_raw).strip() if falsifier_raw else None,
         duration=str(raw.get("duration") or "day").strip().lower(),
         order_type=str(raw.get("order_type") or raw.get("type") or "limit").strip().lower(),
         option_class=str(raw.get("option_class") or raw.get("class") or "option").strip().lower(),
+        overnight_carry=carry.get("overnight_carry"),  # type: ignore[arg-type]
+        carry_dte=carry.get("carry_dte"),  # type: ignore[arg-type]
+        carry_event_risk=carry.get("carry_event_risk"),  # type: ignore[arg-type]
+        carry_rationale=carry.get("carry_rationale"),  # type: ignore[arg-type]
     )
 
 
@@ -278,9 +316,52 @@ def write_thesis(
     underlying: str = "",
     parent_signal_id: str | None = None,
     falsifier: str | None = None,
+    how_it_dies: str | None = None,
+    overnight_carry: bool | None = None,
+    carry_dte: str | int | None = None,
+    carry_event_risk: str | None = None,
+    carry_rationale: str | None = None,
+    require_overnight_carry: bool = False,
     path: Path | str | None = None,
+    receipt_path: Path | str | None = None,
+    evidence_path: Path | str | None = None,
+    thinking_path: Path | str | None = None,
 ) -> Thesis:
-    """Write a thesis. Exit sides are allowed; credit ban is structural, not text."""
+    """Write a thesis. Exit sides are allowed; credit ban is structural, not text.
+
+    ``how_it_dies`` / ``falsifier`` is required. Overnight carry notes are soft
+    unless ``overnight_carry`` or ``require_overnight_carry`` is true. Does not
+    auto-flatten, change the cash floor, or lift the credit/STO ban.
+    """
+    falsifier_text, falsifier_err = resolve_falsifier(falsifier, how_it_dies)
+    if falsifier_err:
+        raise PolicyError(
+            falsifier_err,
+            "how_it_dies / falsifier required on every thesis"
+            if falsifier_err == "falsifier_required"
+            else falsifier_err,
+        )
+    carry_flag, carry_flag_err = parse_overnight_carry(overnight_carry)
+    if carry_flag_err:
+        raise PolicyError(carry_flag_err)
+    if overnight_carry_notes_required(
+        carry_flag, require_overnight_carry=require_overnight_carry
+    ):
+        carry_flag = True
+    dte, dte_err = parse_carry_dte(carry_dte)
+    if dte_err:
+        raise PolicyError(dte_err)
+    event_risk = parse_carry_text(carry_event_risk)
+    rationale = parse_carry_text(carry_rationale)
+    carry_err = validate_carry_fields(
+        overnight_carry=carry_flag,
+        carry_dte=dte,
+        carry_event_risk=event_risk,
+        carry_rationale=rationale,
+        require_overnight_carry=require_overnight_carry,
+    )
+    if carry_err:
+        raise PolicyError(carry_err)
     raw: dict[str, Any] = {
         "signal_id": signal_id,
         "option_symbol": option_symbol,
@@ -293,7 +374,12 @@ def write_thesis(
         "tag": tag or signal_id,
         "underlying": underlying,
         "parent_signal_id": parent_signal_id,
-        "falsifier": falsifier,
+        "falsifier": falsifier_text,
+        "how_it_dies": falsifier_text,
+        "overnight_carry": carry_flag,
+        "carry_dte": dte,
+        "carry_event_risk": event_risk,
+        "carry_rationale": rationale,
     }
     if intent is not None:
         raw["intent"] = intent
@@ -306,6 +392,15 @@ def write_thesis(
         Path(path).write_text(
             json.dumps(built.to_dict(), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
+        )
+    if receipt_path or evidence_path or thinking_path:
+        stamp_thesis_artifacts(
+            built.to_dict(),
+            carry=built.carry_gate(),
+            receipt_path=receipt_path,
+            evidence_path=evidence_path,
+            thinking_path=thinking_path,
+            now=written_at,
         )
     return built
 

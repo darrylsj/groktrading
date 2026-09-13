@@ -1,0 +1,6 @@
+# Fixture marks only. invented=false. fixture=true. Not live NBBO. Not a fill. live_gate=false.
+{"occ":"SPY260918C00450000","decision_ask":"1.20","gex":"agree","mark_bid":"1.35","invented":false,"fixture":true,"decision_ts":"2026-09-12T14:00:00Z","mark_ts":"2026-09-12T15:00:00Z"}
+{"occ":"QQQ260918P00440000","decision_ask":"0.90","gex":"agree","mark_bid":"0.70","invented":false,"fixture":true,"decision_ts":"2026-09-12T14:00:00Z","mark_ts":"2026-09-12T15:00:00Z"}
+{"occ":"IWM260918C00240000","decision_ask":"1.50","gex":"fight","mark_bid":"1.55","invented":false,"fixture":true,"decision_ts":"2026-09-12T14:00:00Z","mark_ts":"2026-09-12T15:00:00Z"}
+{"occ":"DIA260918C00400000","decision_ask":"1.10","gex":"na","invented":false,"fixture":true,"decision_ts":"2026-09-12T14:00:00Z"}
+{"occ":"SPY260918C00450000","decision_ask":"9.99","gex":"agree","mark_bid":"9.99","invented":false,"fixture":true}

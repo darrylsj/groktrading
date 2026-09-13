@@ -88,6 +88,39 @@ def build_parser() -> argparse.ArgumentParser:
     write.add_argument("--underlying", default="")
     write.add_argument("--parent-signal-id", default=None)
     write.add_argument("--falsifier", default=None)
+    write.add_argument(
+        "--how-it-dies",
+        dest="how_it_dies",
+        default=None,
+        help="Alias for --falsifier. Required on every written thesis.",
+    )
+    write.add_argument(
+        "--overnight-carry",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "When true, require carry_dte + carry_event_risk + carry_rationale. "
+            "Soft field — not a flatten or cash-floor change."
+        ),
+    )
+    write.add_argument("--carry-dte", default=None, help="Remaining DTE note (string or int).")
+    write.add_argument(
+        "--carry-event-risk",
+        default=None,
+        help="Next catalyst / gap risk (required when --overnight-carry).",
+    )
+    write.add_argument(
+        "--carry-rationale",
+        default=None,
+        help="Why the mechanism survives overnight. Not 'cash floor OK'.",
+    )
+    write.add_argument("--receipt", default=None, help="Optional thesis receipt JSON path.")
+    write.add_argument("--evidence", default=None, help="Optional evidence markdown path.")
+    write.add_argument(
+        "--thinking",
+        default=None,
+        help="Optional thinking.jsonl append path (gates/carry row).",
+    )
     write.add_argument("--quantity", type=int, default=1)
     return parser
 
@@ -111,7 +144,16 @@ def main(argv: list[str] | None = None) -> int:
                 underlying=args.underlying,
                 parent_signal_id=args.parent_signal_id,
                 falsifier=args.falsifier,
+                how_it_dies=args.how_it_dies,
+                overnight_carry=args.overnight_carry,
+                carry_dte=args.carry_dte,
+                carry_event_risk=args.carry_event_risk,
+                carry_rationale=args.carry_rationale,
+                require_overnight_carry=args.overnight_carry is True,
                 path=args.out,
+                receipt_path=args.receipt,
+                evidence_path=args.evidence,
+                thinking_path=args.thinking,
             )
             _print(ticket.to_dict())
             return 0
