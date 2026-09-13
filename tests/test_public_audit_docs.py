@@ -10,6 +10,7 @@ README = ROOT / "README.md"
 WEBSOCKETS = ROOT / "docs" / "WEBSOCKETS.md"
 PLANES = ROOT / "docs" / "REALTIME_PLANES.md"
 PLANES_AUDIT = ROOT / "docs" / "astra_realtime_planes_audit_20260912.md"
+STO_UNLOCK = ROOT / "docs" / "STO_UNLOCK_PLAN.md"
 AUDIT = ROOT / "docs" / "OPENAI_AUDIT_BRIEF.md"
 CLAUDE_AUDIT = ROOT / "docs" / "CLAUDE_AUDIT.md"
 LICENSE = ROOT / "LICENSE"
@@ -45,6 +46,7 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "docs/WEBSOCKETS.md",
         "docs/ARCHITECTURE.md",
         "docs/astra_friday_desk_audit_20260911.md",
+        "docs/STO_UNLOCK_PLAN.md",
         "docs/REALTIME_PLANES.md",
         "docs/astra_realtime_planes_audit_20260912.md",
         "CRON_TZ=America/New_York",
@@ -126,6 +128,60 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "three planes",
     ):
         assert needle in text, needle
+
+
+def test_sto_unlock_plan_is_readme_contract() -> None:
+    """Dated hold + Wed unlock + audit verdict. Not a live flip."""
+    readme = README.read_text(encoding="utf-8")
+    for needle in (
+        "docs/STO_UNLOCK_PLAN.md",
+        "dated hold through Tue 2026-09-15 RTH",
+        "Wed 2026-09-16 open card",
+        "Naked STO stays refused",
+        "tools/i4_credit_paper",
+        "PASS-WITH-FIXES",
+        "gate still single-leg submit",
+        "full audited spread path",
+        "protective direction",
+        "spread max-loss vs ≥20% floor",
+        "confirmed fills (not ack=closed)",
+        "SPY/QQQ American/physical",
+        "refuse-only Mon–Tue ≠ lifecycle proof",
+        "one unlock authority (Trading Bot on Wed open checklist PASS)",
+        "naked STO stays refused — do not keep a forever ban",
+    ):
+        assert needle in readme, needle
+    text = STO_UNLOCK.read_text(encoding="utf-8")
+    for needle in (
+        "2026-09-12",
+        "Tue 2026-09-15 RTH",
+        "Wed 2026-09-16",
+        "defined-risk I4",
+        "Naked STO",
+        "allowlist",
+        "live_order_gate",
+        "no raw POST",
+        "≤3 RTH days",
+        "reconcile-book",
+        "Wheel",
+        "PASS-WITH-FIXES",
+        "cash floor",
+        "WebSocket",
+        "tools/i4_credit_paper",
+        "gpt-6-astra",
+        "gate still single-leg submit",
+        "confirmed fills (not ack=closed)",
+        "American / physical",
+        "deterministic lifecycle test",
+        "Trading Bot on Wed open checklist PASS",
+        "pause blocks new entries, preserves exits",
+        "do not keep a forever ban",
+    ):
+        assert needle in text, needle
+    assert "forever ban" in text.lower()
+    stub = (ROOT / "tools" / "i4_credit_paper" / "README.md").read_text(encoding="utf-8")
+    assert "STO_UNLOCK_PLAN.md" in stub
+    assert "Not an executor" in stub
 
 
 def test_realtime_planes_doc_states_design() -> None:

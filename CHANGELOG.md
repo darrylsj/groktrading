@@ -9,6 +9,25 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- STO / I4 **dated hold** contract (operator intent 2026-09-12):
+  [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md). Live credit/STO
+  held through **Tue 2026-09-15 RTH**; paper I4 Mon–Tue (SPY/QQQ $1
+  defined-risk vertical); **Wed 2026-09-16 open card** unlock review
+  (default bias = allowlist defined-risk I4 through `live_order_gate`;
+  **naked STO stays refused**). Local Codex gpt-6-astra:
+  **PASS-WITH-FIXES** (not forever-ban). README + audit page carry
+  Codex’s pre-Wed bullets (audited spread path, OCC/width/direction,
+  cash budget vs ≥20% floor, fill-not-ack exits, SPY/QQQ
+  American/physical settlement, lifecycle test if no paper trade, one
+  Trading Bot unlock authority + controlled flag; pause blocks new
+  entries / preserves exits). Stub
+  [`tools/i4_credit_paper`](tools/i4_credit_paper). Gate refuse strings
+  say dated hold, not forever. Does **not** flip the allowlist, change
+  the cash floor, or allow WS→orders / raw POST. Do **not** keep a
+  forever ban.
+
+### Added
+
 - Optional overnight-carry fields on `tools/live_order_gate` `write-thesis`
   (`overnight_carry`, `carry_dte`, `carry_event_risk`, `carry_rationale`).
   Soft notes only: same-day entries may omit them; `--overnight-carry`

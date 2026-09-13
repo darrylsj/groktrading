@@ -7,7 +7,8 @@ Carry notes are optional for same-day entries. ``--overnight-carry`` /
 overnight — not "cash floor OK".
 
 Does not change cash floor, does not auto-flatten, does not lift the credit/STO
-ban. ``live_gate`` is not flipped by these fields.
+dated hold (through Tue 2026-09-15 RTH; see ``docs/STO_UNLOCK_PLAN.md``).
+``live_gate`` is not flipped by these fields.
 """
 
 from __future__ import annotations
@@ -140,6 +141,7 @@ def carry_gate_document(
         "auto_flatten": False,
         "changes_cash_floor": False,
         "credit_sto_banned": True,
+        "credit_sto_hold_through": "2026-09-15 RTH",
         "live_gate": False,
     }
 
@@ -206,7 +208,8 @@ def thesis_evidence_markdown(
         f"- carry_event_risk: {carry.get('carry_event_risk')}",
         f"- carry_rationale: {carry.get('carry_rationale')}",
         f"- required: {carry.get('required')}",
-        "- soft: true (not a live flatten; cash floor unchanged; credits/STO still banned)",
+        "- soft: true (not a live flatten; cash floor unchanged; "
+        "credits/STO dated hold through Tue 2026-09-15 RTH; see docs/STO_UNLOCK_PLAN.md)",
         "- live_gate: false",
         "",
     ]
