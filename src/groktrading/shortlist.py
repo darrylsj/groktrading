@@ -39,7 +39,6 @@ from typing import Any, Literal
 
 from groktrading.cadence import CadenceError, clamp_seconds, env_seconds
 from groktrading.io_atomic import write_json_atomic
-from groktrading.policy import MUST_TRADE_SMALL_ASK_CAP
 from groktrading.quote_gate import normalize_occ
 from groktrading.sit_match import (
     DEFAULT_SIT_MATCH_MAX_AGE_SEC,
@@ -63,9 +62,9 @@ CADENCE_LO_SEC = 5.0
 CADENCE_HI_SEC = 15.0
 DEFAULT_STALE_SEC = 30.0
 MAX_CANDIDATES = 3
-# Documented I1 cheap band (policy / profitability audit). Not invented fills.
-PREMIUM_BAND_LO = Decimal("0.80")
-PREMIUM_BAND_HI = MUST_TRADE_SMALL_ASK_CAP
+# Shortlist hunt band is independent of MUST_TRADE_SMALL_ASK_CAP (stays 1.50).
+PREMIUM_BAND_LO = Decimal("0.50")
+PREMIUM_BAND_HI = Decimal("2.00")
 HARD_SKIP_UNDERLYINGS: frozenset[str] = frozenset({"META", "NET", "MU", "AMD"})
 NO_REOPEN_UNDERLYINGS: frozenset[str] = frozenset({"SPCX"})
 INTC_PUT_UNDERLYING = "INTC"

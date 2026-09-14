@@ -56,8 +56,10 @@ Design SoT: [REALTIME_PLANES.md](REALTIME_PLANES.md).
 - “`live_tape.json` has a documented schema in git” — it does not. Host
   tape is not in this tree. Ranker treats unknown shapes as empty.
 - “UW `premium` is the cheap-band price” — that field is dollar notional
-  (companion `min_premium=10000`). Band is per-share ask/print
-  $0.80–$1.50 (already documented I1 cheap band).
+  (companion `min_premium=10000`). Band is per-share ask/print.
+  Audit-date hunt band was $0.80–$1.50 (then tied to the I1 cheap band).
+  Shortlist hunt band later widened independently to $0.50–$2.00;
+  `MUST_TRADE_SMALL_ASK_CAP` stays $1.50.
 - “Merge restarts Helsinki / unmutes / enables the timer” — it does not.
 - “300s is the realtime design” — it is a Cursor wake bandage.
 

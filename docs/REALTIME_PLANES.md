@@ -118,7 +118,7 @@ already pass:
 | Filter | Rule | Clock / source |
 | --- | --- | --- |
 | Print freshness | `executed_at` age ≤ I1 60s (optional tighten 15–30s) | Same I1 helper as `sit_match` |
-| Premium band | Per-share **ask/print** ∈ **$0.80–$1.50** | Documented I1 cheap band (`policy.MUST_TRADE_SMALL_ASK_CAP`). **Not** UW dollar `premium` (notional, often ≥10k) |
+| Premium band | Per-share **ask/print** ∈ **$0.50–$2.00** | Shortlist hunt band (`PREMIUM_BAND_LO`/`HI`). Independent of `policy.MUST_TRADE_SMALL_ASK_CAP` ($1.50). **Not** UW dollar `premium` (notional, often ≥10k) |
 | Hard skips | `META` / `NET` / `MU` / `AMD` | Underlying |
 | No SPCX reopen | Skip all `SPCX` | Underlying |
 | No INTC puts | Skip `INTC` puts only (calls may pass other filters) | Underlying + right |

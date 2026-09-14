@@ -7,6 +7,13 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Changed
+
+- Shortlist hunt premium band widened to **$0.50–$2.00**
+  (`PREMIUM_BAND_LO` / `PREMIUM_BAND_HI`). Independent of
+  `MUST_TRADE_SMALL_ASK_CAP` (stays $1.50). Filter constants only;
+  no orders, no live STO ban / sit_match / must-trade cap changes.
+
 ### Fixed
 
 - UW option-trades companion `_query()` now urlencodes both
