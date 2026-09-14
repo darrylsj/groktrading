@@ -96,7 +96,11 @@ Continuous Unusual Whales + Finnhub + Tradier → ledger / tape.
 - Units (observed host names): `trading-desk-tape.service` (`ws_tape.py`),
   `trading-desk-finnhub.service`. **Host-owned.** Not this git tree.
 - Writes: `live_tape.json`, `finnhub_tape.json`, append-only
-  `uw_flow.sqlite` when the flow-ledger companion is wired.
+  `uw_flow.sqlite` when the flow-ledger companion is wired. Companion
+  `GET /api/option-trades` must pass **`issue_types[]=Common Stock` and
+  `issue_types[]=ETF`** (urlencode list of tuples). Common Stock alone
+  excludes SPY/QQQ desk coverage. Does **not** re-enable `sit_match`
+  webhooks.
 - **No per-print Grok wake.** No LLM on Helsinki. No preview→submit.
 - Companions keep `emit_sit_match=False`. Flow-alerts stay local JSONL.
 - `live_tape.json` shape is **host-owned and not specified in this repo**.

@@ -70,6 +70,7 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "wire companion units",
         "host-companions",
         "emit_sit_match=False",
+        "issue_types[]",
         "Three-plane",
         "shortlist.json",
         "not the trading latency",
@@ -126,6 +127,7 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "deprecated as hunt bus",
         "shortlist.json",
         "three planes",
+        "issue_types[]=ETF",
     ):
         assert needle in text, needle
 
@@ -208,6 +210,7 @@ def test_realtime_planes_doc_states_design() -> None:
         "in_position",
         "login_dead",
         "not auto-enabled",
+        "issue_types[]=ETF",
     ):
         assert needle in text, needle
     audit = PLANES_AUDIT.read_text(encoding="utf-8")

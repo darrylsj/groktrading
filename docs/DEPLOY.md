@@ -99,6 +99,8 @@ enable, or start those units.**
 **Merge ≠ Helsinki restart.** Account-events stays **files-only / disabled**.
 Companions keep **`emit_sit_match=False`**. Flow-alerts material is local
 JSONL only (no Grok webhook). Authorization Bearer is runtime env only.
+Option-trades companion `_query()` must include **`issue_types[]=ETF`**
+alongside Common Stock so SPY/QQQ can appear in the flow ledger.
 **Grok Update Computer does not rebuild Helsinki**; after merge, SSH and
 restart live units yourself.
 
