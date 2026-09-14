@@ -7,6 +7,16 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- UW option-trades companion `_query()` now urlencodes both
+  `issue_types[]=Common Stock` and `issue_types[]=ETF`. Common-Stock-only
+  polls excluded SPY/QQQ from the flow ledger (0 SPY/QQQ rows 2026-09-10
+  through most of 2026-09-14; last SPY 2026-09-09). Helsinki live hosts
+  were patched mid-session 2026-09-14; this ports the companion. Host
+  `ws_tape.py` remains host-owned. Does **not** re-enable `sit_match`
+  webhooks.
+
 ### Added
 
 - Observational **strategy-factory** hypothesis ledger

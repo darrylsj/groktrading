@@ -158,8 +158,9 @@ operator-stated facts labeled as such.
   `emit_sit_match=False`; flow-alerts material is local JSONL, no Grok webhook
   (`scripts/flow_alerts_companion.py:4-6`, `README.md` Helsinki sensor-farm
   bullets). Flow-ledger companion stores UW option-trades (OTM, `min_premium=10000`,
-  `max_dte=7`, …) and **does not emit** (`scripts/flow_ledger_companion.py:3-4`,
-  `49-61`). Opening15 / selector_v3 / expanded collectors are paper-only
+  `max_dte=7`, `issue_types[]` Common Stock **and ETF** so SPY/QQQ can
+  appear) and **does not emit** (`scripts/flow_ledger_companion.py:3-4`,
+  `53-66`). Opening15 / selector_v3 / expanded collectors are paper-only
   (`src/groktrading/research/hygiene.py:7-8`). Account-events unit is files-only
   / disabled (`deploy/examples/systemd/groktrading-account-events.service:1-9`).
 - **Outcome:** none of this produces a gated RTH one-lot. Enabling account-events,

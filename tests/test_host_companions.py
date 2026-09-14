@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
 from typing import Any
+from urllib.parse import parse_qsl
 
 from groktrading.flow_ledger import FlowLedger
 from groktrading.timeutil import UTC
@@ -66,6 +67,19 @@ def test_helsinki_http_is_urllib_not_httpx() -> None:
     assert not hasattr(helsinki_http, "HelsinkiHttp")
     client = helsinki_http.UrllibHttp(timeout=2.0)
     assert client.timeout == 2.0
+
+
+def test_flow_ledger_option_trades_includes_etf_issue_type() -> None:
+    """SPY/QQQ are UW ETFs; Common Stock alone dropped them from the ledger."""
+    pairs = parse_qsl(flow_ledger_companion._query(), keep_blank_values=True)
+    issue_types = [value for key, value in pairs if key == "issue_types[]"]
+    assert issue_types == ["Common Stock", "ETF"]
+    encoded = flow_ledger_companion._query()
+    assert "issue_types%5B%5D=Common+Stock" in encoded
+    assert "issue_types%5B%5D=ETF" in encoded
+    text = (ROOT / "scripts" / "flow_ledger_companion.py").read_text(encoding="utf-8")
+    assert "no_sit_match_emit" in text
+    assert "Does NOT place orders, emit webhooks" in text
 
 
 def test_flow_ledger_bearer_is_runtime_env_only(monkeypatch: Any) -> None:

@@ -1,5 +1,6 @@
 # Companion UW option-trades -> hot flow ledger.
 # Does NOT place orders or emit webhooks. Does NOT modify trading-desk-tape sit_match.
+# Query includes issue_types[]=Common Stock and issue_types[]=ETF (SPY/QQQ).
 # FLOW_LEDGER_PATH is non-secret. Never embed tokens in this unit.
 # Example only — not copied/enabled by install_helsinki.sh. Merge ≠ Helsinki restart.
 #

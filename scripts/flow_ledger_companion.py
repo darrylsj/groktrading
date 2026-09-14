@@ -3,6 +3,10 @@
 
 Does NOT place orders, emit webhooks, or change live sit_match behavior.
 Reads UW_API_KEY from the environment (EnvironmentFile). Never prints secrets.
+
+``_query()`` must urlencode both ``issue_types[]=Common Stock`` and
+``issue_types[]=ETF``. Common Stock alone excludes SPY/QQQ from the flow
+ledger (0 SPY/QQQ rows 2026-09-10 through most of 2026-09-14).
 """
 
 from __future__ import annotations
@@ -57,6 +61,7 @@ def _query() -> str:
             ("limit", "40"),
             ("excluded_tags[]", "bid_side"),
             ("issue_types[]", "Common Stock"),
+            ("issue_types[]", "ETF"),
         ]
     )
 

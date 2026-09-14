@@ -273,7 +273,11 @@ Hot research window is SQLite / day packs on limited disk (**7–14 days**). Col
   is not re-sent). **`install_helsinki.sh` does not copy, enable, or start
   them.** **emit_sit_match=False.** Flow-alerts material is local JSONL
   only (no Grok webhook). Authorization Bearer is runtime env only. Not a
-  claim these processes are live on Helsinki.
+  claim these processes are live on Helsinki. **ETF `issue_types[]` is
+  required** on the option-trades companion query (alongside Common
+  Stock) so SPY/QQQ can appear in the flow ledger; Common Stock alone
+  dropped those ETF prints (0 SPY/QQQ 2026-09-10 through most of
+  2026-09-14).
 - **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
   fills/cancels keep `in_position` honest after flatten. Never a submit path.
   Package helper: `groktrading.feeds.account_events`. Example unit
