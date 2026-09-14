@@ -8,7 +8,6 @@ from decimal import Decimal
 from pathlib import Path
 
 from groktrading.flow_ledger import FlowLedger
-from groktrading.policy import MUST_TRADE_SMALL_ASK_CAP
 from groktrading.shortlist import (
     HARD_SKIP_UNDERLYINGS,
     HOST_SHORTLIST_PATH,
@@ -81,8 +80,8 @@ def test_schema_constants_are_stable() -> None:
     assert SCHEMA["properties"]["cadence_sec"]["maximum"] == 15
     assert SCHEMA["properties"]["candidates"]["maxItems"] == MAX_CANDIDATES
     assert HOST_SHORTLIST_PATH == "/opt/trading-desk/state/shortlist.json"
-    assert PREMIUM_BAND_LO == Decimal("0.80")
-    assert PREMIUM_BAND_HI == MUST_TRADE_SMALL_ASK_CAP == Decimal("1.50")
+    assert PREMIUM_BAND_LO == Decimal("0.50")
+    assert PREMIUM_BAND_HI == Decimal("2.00")
     assert HARD_SKIP_UNDERLYINGS == frozenset({"META", "NET", "MU", "AMD"})
 
 
@@ -170,8 +169,8 @@ def test_hard_skips_and_spcx_and_intc_puts() -> None:
 
 def test_premium_band_is_per_share_not_uw_notional() -> None:
     assert extract_premium({"premium": "10000", "nbbo_ask": "1.10"}) == Decimal("1.10")
-    cheap = classify_print(_print(ask="0.79"), NOW, max_age_sec=60)
-    rich = classify_print(_print(ask="1.51"), NOW, max_age_sec=60)
+    cheap = classify_print(_print(ask="0.49"), NOW, max_age_sec=60)
+    rich = classify_print(_print(ask="2.01"), NOW, max_age_sec=60)
     mid = classify_print(_print(ask="1.06"), NOW, max_age_sec=60)
     assert cheap[1] == SKIP_PREMIUM
     assert rich[1] == SKIP_PREMIUM

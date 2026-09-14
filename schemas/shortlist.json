@@ -44,11 +44,11 @@
     },
     "premium_lo": {
       "type": "string",
-      "description": "Per-share ask/print floor as decimal string (documented I1 cheap band 0.80)."
+      "description": "Per-share ask/print floor as decimal string (shortlist hunt band 0.50; independent of MUST_TRADE_SMALL_ASK_CAP)."
     },
     "premium_hi": {
       "type": "string",
-      "description": "Per-share ask/print cap as decimal string (MUST_TRADE_SMALL_ASK_CAP 1.50)."
+      "description": "Per-share ask/print cap as decimal string (shortlist hunt band 2.00; independent of MUST_TRADE_SMALL_ASK_CAP)."
     },
     "emit_sit_match": { "const": false },
     "candidates": {
