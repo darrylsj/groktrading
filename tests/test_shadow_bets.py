@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -199,7 +198,10 @@ def test_cli_subcommands_and_missing_file(pack: Path) -> None:
         )
         == 0
     )
-    assert shadow_main(["open-from-refuses", "--session", SESSION, "--refuses", "/no/such.jsonl"]) == 2
+    missing = shadow_main(
+        ["open-from-refuses", "--session", SESSION, "--refuses", "/no/such.jsonl"]
+    )
+    assert missing == 2
 
 
 def test_opportunity_webhook_contract_stays_off() -> None:
@@ -291,7 +293,7 @@ def test_tool_stays_observational_and_docs() -> None:
     assert "600s" in planes
     assert "300s" in planes
     assert "<30s" in planes or "<30 s" in planes
-    assert "Continual15 + shortlist.json" in planes
+    assert "Continual15 + `shortlist.json`" in planes
     assert HOST_OPP_WEBHOOK in planes
     assert "MUST_TRADE_SMALL_ASK_CAP" in changelog
     assert "shadow" in changelog.lower()
