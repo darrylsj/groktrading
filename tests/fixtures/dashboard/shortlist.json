@@ -1,0 +1,25 @@
+{
+  "schema": "groktrading.shortlist.v1",
+  "kind": "shortlist",
+  "ranked_at": "2026-09-14T16:29:50Z",
+  "max_print_age_sec": 60,
+  "cadence_sec": 10,
+  "max_candidates": 3,
+  "premium_lo": "0.50",
+  "premium_hi": "2.00",
+  "emit_sit_match": false,
+  "candidates": [
+    {
+      "occ": "QQQ260914P00580000",
+      "underlying": "QQQ",
+      "option_type": "put",
+      "executed_at": "2026-09-14T16:29:40Z",
+      "print_age_sec": 10,
+      "premium": "1.25",
+      "source": "fixture"
+    }
+  ],
+  "skipped_count": 0,
+  "skip_tally": {},
+  "empty_reason": null
+}

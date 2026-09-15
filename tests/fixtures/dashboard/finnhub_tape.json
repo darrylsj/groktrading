@@ -1,0 +1,14 @@
+{
+  "source": "finnhub_ws_trades",
+  "note": "Stock last prints only. Not option NBBO. Never triggers live orders.",
+  "as_of": "2026-09-14T16:29:00Z",
+  "watchlist": ["SPY", "QQQ"],
+  "connected": true,
+  "stale": false,
+  "last_event_ts": "2026-09-14T16:28:55Z",
+  "freshness_ttl_seconds": 30,
+  "detail": "ok",
+  "mode": "signals_only",
+  "trades": [],
+  "fixture": true
+}

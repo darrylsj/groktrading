@@ -266,3 +266,12 @@ new cron must state `CRON_TZ` and city.
 | sit_match helper unchanged for rare alerts | Keep `ws_tape.py` host-owned; prefer webhook off for hunt |
 
 **No claim this commit is live on Helsinki.**
+
+## Desk board (observational — not a plane)
+
+[`dashboard/`](../dashboard/) renders the opportunity-process funnel
+from refuse evidence and may attach READ-ONLY tape health. It is **not**
+plane 1/2/3. It does **not** unmute `sit_match`, does **not** resume
+the `shortlist_opportunity` timer, and does **not** write
+`shortlist.json`. Hunt default while that timer is paused remains
+**Continual15 + `shortlist.json`**. [DASHBOARD.md](DASHBOARD.md).

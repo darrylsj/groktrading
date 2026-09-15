@@ -1,0 +1,6 @@
+{
+  "kind": "host_owned_unknown_shape",
+  "note": "live_tape.json shape is host-owned. This fixture has no health keys.",
+  "prints": [],
+  "fixture": true
+}
