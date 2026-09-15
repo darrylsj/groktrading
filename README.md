@@ -37,7 +37,7 @@ Rate-limit **candidates**, not the tape. No per-print Grok wake. Host path (ops 
 
 `SIT_MATCH_MAX_AGE_SEC=60` is **print freshness (I1)**. Do **not** raise it to match any producer interval. `SIT_MATCH_MIN_INTERVAL_SEC` (package 60; Host Mon prep **300**) is a **Cursor wake bandage**, not the trading latency target and **not the realtime design**. Hunt must not depend on it. Prefer `SIT_MATCH_WEBHOOK` **off** for hunt; optional rare alert only. Webhooks stay for `in_position` / fills / `login_dead`.
 
-Until the ranker file is actually refreshing on the host, Monday hunt is **Continual15-only**. Weekend sit_match mute may stay; open-card unmute is optional.
+Until the ranker file is actually refreshing on the host, Monday hunt is **Continual15 + `shortlist.json`** (when that file is live). **`sit_match` stays OFF.** The optional `shortlist_opportunity` timer stays **paused** unless a wake completes the refuse-or-lift path in **<30s**. Host script `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is operator-side (in-repo contract: `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Emit, if ever enabled: **TOP1_ONLY**, wall-clock `executed_at` freshness, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce **600s**, global min interval **300s**. Live I1 consume stays **60s** — do not unlock I1>60. Weekend sit_match mute may stay; open-card unmute is **not** required.
 
 ## Decision loop: Continual15 (live hunt)
 
@@ -104,6 +104,22 @@ In-repo SoT: [`tools/strategy_factory`](tools/strategy_factory). Desk
 defaults: [`config/strategy_factory.json`](config/strategy_factory.json).
 Doc: [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md).
 
+## Shadow bets RSI (observational)
+
+Refuse ledger → Tradier-cited shadow outcomes. Ported from the Trading
+Desk pack (`/home/box/agent-data/projects/trading-desk/tools/shadow_bets/`)
+so Monday I1_stale wake-latency RSI stays portable.
+
+- Never invents NBBO; never places orders; `live_gate=false`
+- Labels such as `yes_latency_fix_wake` are **observational only**
+- Does **not** unlock I1 > 60s, re-enable `sit_match`, or change
+  `MUST_TRADE_SMALL_ASK_CAP`
+- CLI: `run-session --session YYYY-MM-DD`, `open-from-refuses`,
+  `mark-session`, `summarize`
+
+In-repo SoT: [`tools/shadow_bets`](tools/shadow_bets). Doc:
+[docs/SHADOW_BETS.md](docs/SHADOW_BETS.md).
+
 ## Helsinki sit_match (deprecated as hunt bus)
 
 Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
@@ -127,7 +143,7 @@ Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is *
 
 Package default may still differ until the host copies this tree. **Merge ≠ Helsinki restart.** Do not claim this commit is live on `/opt/trading-desk`.
 
-**Mon hunt posture:** 300s producer ∩ 60s consume is **near-empty**. That is why 300s is not the design. Hunt is **Continual15** (+ shortlist when the host file is live). Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. Do not “fix” emptiness by widening consume age.
+**Mon hunt posture:** 300s producer ∩ 60s consume is **near-empty**. That is why 300s is not the design. Hunt is **Continual15 + `shortlist.json`** while the opportunity timer is paused. **`sit_match` stays OFF.** Do not “fix” emptiness by widening consume age. Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. Re-enable `shortlist_opportunity` only if a wake completes refuse-or-lift in **<30s**.
 
 Host contract (rare alert): `deploy/examples/helsinki/ws_tape_sit_match.py`. Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`. Ledger may still **store** stale or clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive use fail-closes.
 
@@ -164,6 +180,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **STO / I4 dated unlock:** [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
 - **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
 - **Strategy factory (observational):** [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md)
+- **Shadow bets RSI (observational):** [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
 - **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
@@ -455,6 +472,7 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `tools/i4_credit_paper/` | Stub README for paper I4 (SPY/QQQ $1 defined-risk vertical). Pack-first; not an executor. |
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
 | `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
+| `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not unlock I1>60. [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
 | `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
 | `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |

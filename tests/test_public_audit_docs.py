@@ -76,6 +76,13 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "not the trading latency",
         "not the realtime design",
         "groktrading.shortlist",
+        "tools/shadow_bets",
+        "docs/SHADOW_BETS.md",
+        "yes_latency_fix_wake",
+        "`sit_match` stays OFF",
+        "SHORTLIST_OPP_MAX_AGE_SEC=45",
+        "TOP1_ONLY",
+        "Continual15 + `shortlist.json`",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -211,6 +218,12 @@ def test_realtime_planes_doc_states_design() -> None:
         "login_dead",
         "not auto-enabled",
         "issue_types[]=ETF",
+        "`sit_match` stays OFF",
+        "SHORTLIST_OPP_MAX_AGE_SEC",
+        "TOP1_ONLY",
+        "Continual15 + `shortlist.json`",
+        "/opt/trading-desk/bin/shortlist_opportunity_webhook.py",
+        "yes_latency_fix_wake",
     ):
         assert needle in text, needle
     audit = PLANES_AUDIT.read_text(encoding="utf-8")

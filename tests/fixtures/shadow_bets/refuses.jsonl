@@ -1,0 +1,3 @@
+{"kind": "refuse", "occ": "QQQ260914P00580000", "reason": "I1_stale", "executed_at": "2026-09-14T16:30:01Z", "emitted_at": "2026-09-14T16:30:12Z", "consumed_at": "2026-09-14T16:32:40Z", "ask": "1.25", "session": "2026-09-14", "invented": false, "fixture": true}
+{"kind": "refuse", "occ": "SPY260914C00660000", "reason": "already_run", "executed_at": "2026-09-14T16:31:00Z", "emitted_at": "2026-09-14T16:31:05Z", "consumed_at": "2026-09-14T16:31:20Z", "ask": "0.80", "session": "2026-09-14", "invented": false, "fixture": true}
+{"kind": "refuse", "occ": "IWM260914P00240000", "reason": "I1_stale", "executed_at": "2026-09-14T17:01:00Z", "ask": "1.10", "session": "2026-09-14", "invented": false, "fixture": true}

@@ -168,27 +168,62 @@ Opening15 is research-only. It is not this loop.
 | fills / working-order / `login_dead` | Session integrity. **Keep.** |
 | `cash_up` | 12:30 PT entry-cutoff notice (`entry_cutoff_only_no_flatten`) |
 | `day_win_target` | Informational (`auto_flatten: false`) |
-| `sit_match` | **Deprecated as hunt bus.** Optional rare alert if
-  `SIT_MATCH_WEBHOOK=1` and not muted. Still I1 60s. Still OCC-only
-  debounce. Prefer **off**. |
+| `sit_match` | **Deprecated as hunt bus.** **`sit_match` stays OFF.** Do
+  not unmute for hunt. Optional rare alert remains unused. Still I1 60s
+  if anyone ever turns it on. |
+| `shortlist_opportunity` | **Paused by default.** Host script
+  `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is
+  operator-side (in-repo contract:
+  `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Not the
+  hunt bus while the timer is paused. |
 
 `SIT_MATCH_MIN_INTERVAL_SEC=300` on the host is how Friday’s firehose was
 stopped. Leave it as a bandage on the optional alert path. **Default hunt
-must not depend on it.**
+must not depend on it.** **`sit_match` stays OFF.**
+
+### Opportunity wake-latency posture (2026-09-14)
+
+Monday `I1_stale` backlog was wake latency, not a reason to widen I1.
+Emit knobs if the host timer is ever enabled: TOP1_ONLY, wall-clock
+`executed_at`, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce 600s, global
+min interval 300s. Re-enable only if refuse-or-lift completes in <30s.
+
+| Knob | Value | Must not |
+| --- | --- | --- |
+| `sit_match` | **OFF** | Re-enable as hunt bus |
+| `shortlist_opportunity` emit | **TOP1_ONLY** | Spray the full shortlist |
+| Print freshness | wall-clock `executed_at` | Use inbound `print_age_sec` / `created_at` |
+| `SHORTLIST_OPP_MAX_AGE_SEC` | **45** | Raise toward 300s or past I1 60s |
+| OCC debounce | **600s** | Per OCC\|`executed_at` firehose |
+| Global min interval | **300s** | Treat as hunt cadence |
+| Live I1 consume | **60s** | Unlock I1>60 so stale wakes “pass” |
+| Re-enable opportunity timer | only if a wake completes the **refuse-or-lift** path in **<30s** | Re-enable on hope / backlog pressure |
+| Hunt while timer paused | **Continual15 + `shortlist.json`** | Wait on opportunity / sit_match POSTs |
+| `MUST_TRADE_SMALL_ASK_CAP` | **$1.50** (unchanged) | Widen the live must-trade cap |
+
+Host path is ops documentation, **not** a deploy claim. This repo does
+not copy or start `/opt/trading-desk/bin/shortlist_opportunity_webhook.py`.
+
+Observational RSI of the I1_stale backlog:
+[`tools/shadow_bets`](../tools/shadow_bets) (`yes_latency_fix_wake` is a
+label only).
 
 ## Monday ops
 
 Until `shortlist.json` is actually refreshing on the host:
 
-1. **Weekend mute stays.** Open-card unmute of `sit_match` is **optional**
-   and is not required for hunt.
-2. **Hunt = Continual15-only.** Do not sit waiting for a 300s∩60s webhook.
+1. **`sit_match` stays OFF.** Weekend mute stays. Open-card unmute is
+   **not** required and is not hunt.
+2. **Hunt bus default = Continual15 + `shortlist.json`** while the
+   opportunity timer is paused. Do not sit waiting for a 300s∩60s webhook.
 3. After an operator copies the ranker timer and confirms
    `/opt/trading-desk/state/shortlist.json` `ranked_at` is ≤30s old in RTH,
    Continual15 may pull the shortlist. That copy is **not** this merge.
-4. Finnhub was restarted (ops fact). Restarting Finnhub again is still an
+4. Re-enable the `shortlist_opportunity` timer **only** if a wake
+   completes refuse-or-lift in **<30s**. Otherwise leave it paused.
+5. Finnhub was restarted (ops fact). Restarting Finnhub again is still an
    operator action. This PR does not restart it.
-5. Take-gain remains **TRIAL n=1**. Do not lock.
+6. Take-gain remains **TRIAL n=1**. Do not lock. Live I1 stays **60s**.
 
 **Merge ≠ Helsinki restart.** Merging this repo does not enable the timer,
 does not unmute sit_match, and does not deploy `/opt/trading-desk`.
