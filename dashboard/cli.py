@@ -63,6 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional READ-ONLY live_tape health JSON (flow_n/flow_http/errors/candidates).",
     )
+    build.add_argument(
+        "--book",
+        default=None,
+        help="Optional READ-ONLY book/positions JSON. Missing → book empty_reason.",
+    )
+    build.add_argument(
+        "--open-orders",
+        default=None,
+        help="Optional READ-ONLY open-orders JSON. Missing → open_orders empty_reason.",
+    )
     build.add_argument("--session", default=None, help="PT session YYYY-MM-DD.")
     build.add_argument("--now", default=None, help="Timezone-aware ISO-8601 clock (tests).")
     build.add_argument(
@@ -111,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
             shadow_summary=_path(args.shadow_summary),
             finnhub_tape=_path(args.finnhub_tape),
             live_tape=_path(args.live_tape),
+            book=_path(args.book),
+            open_orders=_path(args.open_orders),
             session=args.session,
             now=args.now,
             include_ws_stats=not args.omit_ws_stats,

@@ -1,0 +1,27 @@
+{
+  "kind": "live_tape_with_book_fixture",
+  "note": "Health keys plus a cited positions list. No invented marks.",
+  "flow_n": 4,
+  "flow_http": {"ok": 4},
+  "errors": [],
+  "candidates": 1,
+  "positions": [
+    {
+      "occ": "IWM260914P00240000",
+      "qty": 1,
+      "side": "long",
+      "status": "open",
+      "cost_basis": "0.55"
+    }
+  ],
+  "open_orders": [
+    {
+      "occ": "IWM260914P00240000",
+      "qty": 1,
+      "side": "sell_to_close",
+      "status": "working",
+      "limit_price": "0.70"
+    }
+  ],
+  "fixture": true
+}

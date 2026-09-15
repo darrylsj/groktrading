@@ -135,6 +135,11 @@ snapshots. Ported so `dashboard/` exists on GitHub (it was pack-only).
   [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board)
 - Never invents prices / P&L / OCCs. CI uses fixtures — does **not**
   claim Helsinki files exist. `live_gate=false`
+- **Helsinki owns weekday RTH refresh** (zero LLM, no Cursor wake):
+  `scripts/live_board_refresh.py` + `trading-desk-live-board-refresh.timer`
+  (09:00–15:55 ET Mon–Fri / 5m). Continual15 still writes pack evidence
+  cards separately. Board may lag refuse ledger until that file is on
+  the host. [docs/LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md)
 
 In-repo SoT: [`dashboard/`](dashboard/). Doc:
 [docs/DASHBOARD.md](docs/DASHBOARD.md).
@@ -201,6 +206,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **Strategy factory (observational):** [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md)
 - **Shadow bets RSI (observational):** [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md)
 - **Desk live board (observational):** [docs/DASHBOARD.md](docs/DASHBOARD.md)
+- **Helsinki RTH live-board refresh (zero LLM):** [docs/LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
 - **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
@@ -493,7 +499,8 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
 | `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
 | `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not unlock I1>60. [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
-| `dashboard/` | Observational desk board builder (funnel + optional READ-ONLY `ws_stats`). Static HTML/JSON for `darrylsj/trading-desk-live-board`. No new WS subscriptions; sit_match stays OFF; no opportunity webhook resume. [DASHBOARD.md](docs/DASHBOARD.md) |
+| `dashboard/` | Observational desk board builder (book / open orders / funnel + optional READ-ONLY `ws_stats`). Static HTML/JSON for `darrylsj/trading-desk-live-board`. No new WS subscriptions; sit_match stays OFF; no opportunity webhook resume. [DASHBOARD.md](docs/DASHBOARD.md) |
+| `scripts/live_board_refresh.py` | Helsinki zero-LLM weekday RTH refresh → `live.json` + Vercel deploy when `vercel.env` has a token. Operator-wired timer only. [LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md) |
 | `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
 | `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |

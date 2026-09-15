@@ -9,6 +9,23 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Helsinki **zero-LLM weekday RTH live-board refresh** (2026-09-15)
+  [`scripts/live_board_refresh.py`](scripts/live_board_refresh.py) +
+  `trading-desk-live-board-refresh.service` / `.timer`. Reads host
+  `live_tape.json` / `finnhub_tape.json` / `shortlist.json` and an
+  optional local refuse JSONL. Writes
+  `/opt/trading-desk/state/live_board/{index.html,live.json}` (book,
+  open orders if known, shortlist, `ws_stats`, funnel). Deploys to
+  Vercel project `trading-desk-live-board` only when
+  `/etc/trading-desk/vercel.env` has `VERCEL_TOKEN` (missing token:
+  local write, exit 0). **No LLM. No Cursor / Grok wake.** `sit_match`
+  stays OFF. Opportunity webhook stays paused. Continual15 still writes
+  pack evidence cards separately; board may lag refuse ledger until that
+  file is on the host. Operator-wired only — installer does not enable
+  the timer. Doc: [docs/LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md).
+
+### Added
+
 - Observational **desk live board** builder (2026-09-15)
   [`dashboard/`](dashboard/) so GitHub has the pack board that was a
   404 here. Opportunity-process funnel from

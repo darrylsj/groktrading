@@ -1,5 +1,6 @@
 """Observational Trading Desk live board. Never a live gate."""
 
+from dashboard.book import build_book, build_open_orders
 from dashboard.builder import build_board, write_board
 from dashboard.config import (
     HARD_RULES,
@@ -26,7 +27,9 @@ __all__ = [
     "SIT_MATCH_STAYS_OFF",
     "DashboardError",
     "build_board",
+    "build_book",
     "build_funnel",
+    "build_open_orders",
     "build_ws_stats",
     "write_board",
 ]

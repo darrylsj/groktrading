@@ -11,10 +11,11 @@ Related: [REALTIME_PLANES.md](REALTIME_PLANES.md) (authoritative hunt), [ARCHITE
 **Desk board (`dashboard/`):** optional producer/consumer **READ-ONLY**
 snapshots from Helsinki health files (`finnhub_tape.json`
 connection/freshness/symbols; `live_tape` `flow_n` / `flow_http` /
-`errors` / `candidates`). The builder **does not** open sockets, **does
+`errors` / `candidates`; shortlist consumer status). The builder **does not** open sockets, **does
 not** add subscribe frames, **does not** unmute `sit_match`, and **does
 not** resume `shortlist_opportunity`. Missing host files are reported
-holes. [DASHBOARD.md](DASHBOARD.md).
+holes. Helsinki weekday RTH refresh is zero-LLM
+([LIVE_BOARD_REFRESH.md](LIVE_BOARD_REFRESH.md)). [DASHBOARD.md](DASHBOARD.md).
 
 ## Two runtimes (do not collapse them)
 

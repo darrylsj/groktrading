@@ -1,0 +1,20 @@
+# Weekday US cash RTH only. Aligns with Continual15 5-minute looks.
+# Copy only. Do NOT enable from this repo or a cloud agent.
+# Pair with trading-desk-live-board-refresh.service after vercel.env exists.
+# Merge ≠ Helsinki restart. This is not a Cursor / Grok wake path.
+#
+# CRON_TZ=America/New_York is documented for operators. OnCalendar uses
+# the America/New_York suffix so the timer actually fires in ET.
+# 09:00 through 15:55 ET inclusive, every 5 minutes, Monday–Friday.
+
+[Unit]
+Description=Trading Desk live-board RTH refresh (weekdays 09:00-15:55 ET / 5m)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..15:00/5:00 America/New_York
+AccuracySec=30s
+Persistent=false
+Unit=trading-desk-live-board-refresh.service
+
+[Install]
+WantedBy=timers.target

@@ -12,8 +12,11 @@ WebSockets: [docs/WEBSOCKETS.md](../docs/WEBSOCKETS.md).
 Hunt planes: [docs/REALTIME_PLANES.md](../docs/REALTIME_PLANES.md).
 
 Sibling static site (Vercel): [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board).
-This package writes `board.json` + `index.html`. It does **not** deploy that
-repo.
+This package writes `board.json` + `live.json` + `index.html`. The
+offline builder does **not** deploy that repo. Helsinki weekday RTH
+refresh ([`scripts/live_board_refresh.py`](../scripts/live_board_refresh.py))
+is the zero-LLM deploy path when `vercel.env` has a token.
+[docs/LIVE_BOARD_REFRESH.md](../docs/LIVE_BOARD_REFRESH.md).
 
 ## Hard rules
 
@@ -53,7 +56,8 @@ PYTHONPATH=src:. python -m dashboard build \
   --out-dir /tmp/desk-board
 ```
 
-Writes `/tmp/desk-board/board.json` and `/tmp/desk-board/index.html`.
+Writes `/tmp/desk-board/board.json`, `/tmp/desk-board/live.json`, and
+`/tmp/desk-board/index.html`.
 Stdout prints the same JSON.
 
 Omit tape flags in CI. The builder must not require `/opt/trading-desk`.

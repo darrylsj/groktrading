@@ -128,7 +128,9 @@ def test_ws_stats_from_health_fixtures() -> None:
     assert live["flow_http"] == {"ok": 10, "timeout": 1, "errors": 1}
     assert live["errors"] == ["timeout", "http_5xx"]
     assert live["candidates"] == 2
-    assert stats["missing"] == []
+    assert stats["missing"] == ["shortlist"]
+    assert stats["shortlist"]["present"] is False
+    assert stats["shortlist"]["empty_reason"] == "no_input"
 
 
 def test_ws_stats_missing_helsinki_files_are_holes_not_inventions() -> None:
@@ -141,7 +143,7 @@ def test_ws_stats_missing_helsinki_files_are_holes_not_inventions() -> None:
     assert stats["live_tape"]["empty_reason"] == "no_input"
     assert stats["live_tape"]["flow_n"] is None
     assert stats["live_tape"]["candidates"] is None
-    assert stats["missing"] == ["finnhub_tape", "live_tape"]
+    assert stats["missing"] == ["finnhub_tape", "live_tape", "shortlist"]
     absent = build_ws_stats(
         finnhub_tape=Path("/opt/trading-desk/finnhub_tape.json"),
         live_tape=Path("/opt/trading-desk/live_tape.json"),

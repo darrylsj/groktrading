@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from dashboard.config import (
+    HUNT_WHILE_PAUSED,
     NEW_WS_SUBSCRIPTIONS,
     OPPORTUNITY_WEBHOOK_RESUME,
     PLACES_ORDERS,
@@ -28,6 +29,8 @@ from dashboard.config import (
     WS_STATS_SCHEMA,
     DashboardError,
 )
+from groktrading.quote_gate import normalize_occ
+from groktrading.sit_match import parse_executed_at
 
 FINNHUB_NOT_NBBO = (
     "Finnhub is stock last prints only. Not option NBBO. "
@@ -232,19 +235,70 @@ def _live_tape_snapshot(path: Path | None) -> dict[str, Any]:
     return snap
 
 
+def _shortlist_consumer(path: Path | None) -> dict[str, Any]:
+    """Plane-2 file status. Continual15 is the consumer; this path only reads."""
+    snap: dict[str, Any] = {
+        "present": False,
+        "empty_reason": "no_input" if path is None else None,
+        "path_provided": path is not None,
+        "ranked_at": None,
+        "candidate_count": None,
+        "candidate_occs": [],
+        "emit_sit_match": False,
+        "consumer": "Continual15",
+        "note": (
+            "shortlist.json is plane-2 output. This refresh only snapshots it. "
+            "Continual15 still writes pack evidence cards separately. "
+            f"Hunt while opportunity webhook is paused: {HUNT_WHILE_PAUSED}."
+        ),
+    }
+    if path is None:
+        return snap
+    doc, empty = _load_json(path)
+    if doc is None:
+        snap["empty_reason"] = empty
+        return snap
+    snap["present"] = True
+    snap["empty_reason"] = None
+    ranked = parse_executed_at(doc.get("ranked_at") or doc.get("as_of"))
+    if ranked is not None:
+        snap["ranked_at"] = ranked.isoformat().replace("+00:00", "Z")
+    elif doc.get("ranked_at"):
+        snap["ranked_at"] = str(doc.get("ranked_at"))
+    raw = doc.get("candidates")
+    occs: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, Mapping):
+                continue
+            if item.get("invented") is True:
+                continue
+            token = item.get("occ") or item.get("option_symbol") or item.get("symbol")
+            occ = normalize_occ(str(token or "").strip())
+            if len(occ) >= 5 and occ.isalnum():
+                occs.append(occ)
+        snap["candidate_count"] = len(occs)
+        snap["candidate_occs"] = occs
+    return snap
+
+
 def build_ws_stats(
     *,
     finnhub_tape: Path | None = None,
     live_tape: Path | None = None,
+    shortlist: Path | None = None,
 ) -> dict[str, Any]:
     """READ-ONLY health snapshot. Never opens a WebSocket."""
     finnhub = _finnhub_snapshot(finnhub_tape)
     live = _live_tape_snapshot(live_tape)
+    short = _shortlist_consumer(shortlist)
     missing: list[str] = []
     if not finnhub["present"]:
         missing.append("finnhub_tape")
     if not live["present"]:
         missing.append("live_tape")
+    if not short["present"]:
+        missing.append("shortlist")
     return {
         "kind": WS_STATS_KIND,
         "schema": WS_STATS_SCHEMA,
@@ -257,5 +311,6 @@ def build_ws_stats(
         "note": READ_ONLY_NOTE,
         "finnhub_tape": finnhub,
         "live_tape": live,
+        "shortlist": short,
         "missing": missing,
     }

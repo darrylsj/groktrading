@@ -1,0 +1,16 @@
+{
+  "kind": "open_orders_fixture",
+  "note": "Cited working tickets only. Not live Helsinki.",
+  "orders": [
+    {
+      "id": "fixture-order-1",
+      "occ": "SPY260914C00660000",
+      "qty": 1,
+      "side": "buy_to_open",
+      "status": "open",
+      "limit": "0.80",
+      "invented": false
+    }
+  ],
+  "fixture": true
+}

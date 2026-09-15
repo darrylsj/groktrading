@@ -85,9 +85,12 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "Continual15 + `shortlist.json`",
         "dashboard/",
         "docs/DASHBOARD.md",
+        "docs/LIVE_BOARD_REFRESH.md",
         "uw_opportunity_refuses.jsonl",
         "trading-desk-live-board",
         "No new WebSocket subscriptions",
+        "Helsinki owns weekday RTH refresh",
+        "live_board_refresh.py",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -143,6 +146,7 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "dashboard/",
         "READ-ONLY",
         "DASHBOARD.md",
+        "LIVE_BOARD_REFRESH.md",
     ):
         assert needle in text, needle
 
@@ -234,6 +238,7 @@ def test_realtime_planes_doc_states_design() -> None:
         "yes_latency_fix_wake",
         "dashboard/",
         "DASHBOARD.md",
+        "LIVE_BOARD_REFRESH.md",
         "does **not** unmute `sit_match`",
     ):
         assert needle in text, needle
