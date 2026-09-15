@@ -31,9 +31,16 @@ assert I1_MAX_AGE_SEC == 60.0
 SCHEMA_ID = "groktrading.desk_board.v1"
 FUNNEL_SCHEMA = "groktrading.desk_board.funnel.v1"
 WS_STATS_SCHEMA = "groktrading.desk_board.ws_stats.v1"
+BOOK_SCHEMA = "groktrading.desk_board.book.v1"
+ORDERS_SCHEMA = "groktrading.desk_board.open_orders.v1"
 KIND = "desk_board"
 FUNNEL_KIND = "opportunity_funnel"
 WS_STATS_KIND = "ws_stats"
+BOOK_KIND = "book"
+ORDERS_KIND = "open_orders"
+VERCEL_PROJECT_NAME = "trading-desk-live-board"
+LIVE_JSON_NAME = "live.json"
+BOARD_JSON_NAME = "board.json"
 
 SIBLING_SITE_REPO = "darrylsj/trading-desk-live-board"
 SIBLING_SITE_HOST = "Vercel"
@@ -44,6 +51,17 @@ HOST_FINNHUB_TAPE = "/opt/trading-desk/finnhub_tape.json"
 HOST_LIVE_TAPE = "/opt/trading-desk/live_tape.json"
 HOST_REFUSES = "/opt/trading-desk/evidence/uw_opportunity_refuses.jsonl"
 HOST_SHORTLIST = "/opt/trading-desk/state/shortlist.json"
+HOST_BOOK = "/opt/trading-desk/state/book.json"
+HOST_OPEN_ORDERS = "/opt/trading-desk/state/open_orders.json"
+HOST_LIVE_BOARD_OUT = "/opt/trading-desk/state/live_board"
+HOST_VERCEL_ENV = "/etc/trading-desk/vercel.env"
+HOST_REFUSE_CANDIDATES = (
+    HOST_REFUSES,
+    "/opt/trading-desk/state/uw_opportunity_refuses.jsonl",
+    "/opt/trading-desk/uw_opportunity_refuses.jsonl",
+    "/var/lib/trading-desk/ledger/uw_opportunity_refuses.jsonl",
+    "/var/lib/trading-desk/state/uw_opportunity_refuses.jsonl",
+)
 
 LAST_OCCS_DEFAULT = 8
 HUNT_WHILE_PAUSED = "Continual15 + shortlist.json"
@@ -65,6 +83,19 @@ BOARD_NOTE = (
     "Does not open sockets. Does not unmute sit_match. "
     "Does not resume shortlist_opportunity. "
     "Static HTML/JSON for darrylsj/trading-desk-live-board (Vercel)."
+)
+
+REFRESH_NOTE = (
+    "Helsinki owns weekday RTH refresh (no LLM). "
+    "Continual15 still writes pack evidence cards separately. "
+    "Opportunity funnel is best-effort from any local refuse ledger. "
+    "Board may lag refuse ledger until that file is synced to the host."
+)
+
+FUNNEL_LAG_NOTE = (
+    "Refuse ledger not on this host. Funnel is empty with an honest hole — "
+    "not invented. Board may lag until uw_opportunity_refuses.jsonl "
+    "(or another local refuse JSONL) is synced to Helsinki."
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

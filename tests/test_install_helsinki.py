@@ -114,6 +114,11 @@ def test_script_encodes_hard_rules() -> None:
         "companion units",
         "host-companions",
         "emit_sit_match=False",
+        "live_board_refresh.py",
+        "trading-desk-live-board-refresh.timer",
+        "vercel.env",
+        "LIVE_BOARD_REFRESH.md",
+        "Zero LLM",
     ):
         assert needle in text, needle
 
@@ -201,12 +206,42 @@ def test_example_units_are_package_named_and_secret_free() -> None:
             "groktrading-quote-interest.service",
             "groktrading-replay-scorecard.service",
             "groktrading-replay-scorecard.timer",
+            "trading-desk-live-board-refresh.service",
+            "trading-desk-live-board-refresh.timer",
         )
     ]
     assert "emit_sit_match=False" in companion_texts[1]
     assert "no Grok webhook" in companion_texts[1]
     assert "scripts/flow_ledger_companion.py" in companion_texts[0]
-    for text in companion_texts:
+    live_board_svc = companion_texts[7]
+    assert "scripts/live_board_refresh.py" in live_board_svc
+    assert "VERCEL_TOKEN" in live_board_svc
+    assert "User=tradingdesk" in live_board_svc
+    assert "Restart=no" in live_board_svc
+    assert not any(
+        line.startswith("EnvironmentFile=") and "grok-webhook" in line
+        for line in live_board_svc.splitlines()
+    )
+    live_board_timer = companion_texts[8]
+    assert "CRON_TZ=America/New_York" in live_board_timer or "America/New_York" in live_board_timer
+    assert "09..15:00/5:00" in live_board_timer
+    assert "Mon..Fri" in live_board_timer
+    assert "Persistent=false" in live_board_timer
+    for name, text in zip(
+        (
+            "groktrading-flow-ledger.service",
+            "groktrading-flow-alerts.service",
+            "groktrading-tide.service",
+            "groktrading-screener.service",
+            "groktrading-quote-interest.service",
+            "groktrading-replay-scorecard.service",
+            "groktrading-replay-scorecard.timer",
+            "trading-desk-live-board-refresh.service",
+            "trading-desk-live-board-refresh.timer",
+        ),
+        companion_texts,
+        strict=True,
+    ):
         if "[Service]" not in text:
             continue
         assert "User=tradingdesk" in text
@@ -215,7 +250,10 @@ def test_example_units_are_package_named_and_secret_free() -> None:
             line.startswith("EnvironmentFile=") and "grok-webhook" in line
             for line in text.splitlines()
         )
-        assert "/var/lib/trading-desk/" in text
+        if "live-board-refresh" in name:
+            assert "/opt/trading-desk/state/live_board" in text
+        else:
+            assert "/var/lib/trading-desk/" in text
     retain = ROOT / "deploy" / "examples" / "systemd" / "hot-retention"
     retain_svc = (retain / "groktrading-hot-retain.service").read_text(encoding="utf-8")
     assert "User=tradingdesk" in retain_svc

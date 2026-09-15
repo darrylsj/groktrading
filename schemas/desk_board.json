@@ -39,6 +39,9 @@
     },
     "note": { "type": "string" },
     "funnel": { "$ref": "#/$defs/funnel" },
+    "book": { "type": "object" },
+    "open_orders": { "type": "object" },
+    "refresh": { "type": "object" },
     "ws_stats": { "anyOf": [{ "$ref": "#/$defs/ws_stats" }, { "type": "null" }] },
     "sibling_site": {
       "type": "object",
@@ -133,6 +136,7 @@
         "note": { "type": "string" },
         "finnhub_tape": { "$ref": "#/$defs/finnhub_health" },
         "live_tape": { "$ref": "#/$defs/live_tape_health" },
+        "shortlist": { "type": "object" },
         "missing": { "type": "array", "items": { "type": "string" } }
       }
     },

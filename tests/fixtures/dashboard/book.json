@@ -1,0 +1,17 @@
+{
+  "kind": "book_fixture",
+  "note": "Cited positions only. Not live Helsinki. No invented marks.",
+  "cash": "421.74",
+  "positions": [
+    {
+      "occ": "QQQ260914P00580000",
+      "underlying": "QQQ",
+      "qty": 1,
+      "side": "long",
+      "status": "open",
+      "avg_fill": "1.25",
+      "invented": false
+    }
+  ],
+  "fixture": true
+}

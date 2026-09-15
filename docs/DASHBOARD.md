@@ -8,6 +8,13 @@ This package ports the desk board **builder** so GitHub
 **not** a claim that Helsinki files exist in CI, that the board is
 deployed, or that the sibling Vercel site is updated by this merge.
 
+**Helsinki owns weekday RTH refresh** (zero LLM):
+[`scripts/live_board_refresh.py`](../scripts/live_board_refresh.py) +
+`trading-desk-live-board-refresh.timer`. Continual15 still writes pack
+evidence cards separately. The board may lag the refuse ledger until
+that file is on the host. Operator notes:
+[LIVE_BOARD_REFRESH.md](LIVE_BOARD_REFRESH.md).
+
 Sibling static site: [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board)
 (Vercel). Consume `board.json` and/or `index.html`. Rebuild from evidence.
 Do **not** fetch `/opt/trading-desk` from Vercel.
@@ -67,6 +74,7 @@ Schema: `groktrading.desk_board.v1` ([`schemas/desk_board.json`](../schemas/desk
 | `/opt/trading-desk/state/shortlist.json` | Plane 2 shortlist (when the ranker is wired) |
 | `/opt/trading-desk/finnhub_tape.json` | Finnhub health / last-print tape |
 | `/opt/trading-desk/live_tape.json` | UW+Tradier tape (host-owned). Health keys only |
+| `/opt/trading-desk/state/live_board/` | Helsinki RTH refresh output (`live.json`, `index.html`) |
 
 ## Sibling site contract
 
@@ -75,7 +83,8 @@ source:
 
 | File | Role |
 | --- | --- |
-| `board.json` | Whole document (`funnel` + optional `ws_stats` + `hard_rules`) |
+| `live.json` | Host refresh artifact (same document as `board.json`) |
+| `board.json` | Whole document (`book` + `open_orders` + `funnel` + optional `ws_stats` + `hard_rules`) |
 | `index.html` | Self-contained render + `<script type="application/json" id="board-data">` |
 
 Copy those two files. Do not add API keys to the Vercel project for this

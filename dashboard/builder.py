@@ -6,13 +6,16 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from dashboard.book import build_book, build_open_orders
 from dashboard.config import (
+    BOARD_JSON_NAME,
     BOARD_NOTE,
     HARD_RULES,
     I1_MAX_AGE_SEC,
     INVENTED,
     KIND,
     LIVE_GATE,
+    LIVE_JSON_NAME,
     NEW_WS_SUBSCRIPTIONS,
     OPPORTUNITY_WEBHOOK_RESUME,
     PLACES_ORDERS,
@@ -67,6 +70,8 @@ def build_board(
     shadow_summary: Path | None = None,
     finnhub_tape: Path | None = None,
     live_tape: Path | None = None,
+    book: Path | None = None,
+    open_orders: Path | None = None,
     session: str | date | None = None,
     now: str | datetime | None = None,
     include_ws_stats: bool = True,
@@ -79,7 +84,11 @@ def build_board(
         shadow_summary=shadow_summary,
     )
     ws_stats = (
-        build_ws_stats(finnhub_tape=finnhub_tape, live_tape=live_tape)
+        build_ws_stats(
+            finnhub_tape=finnhub_tape,
+            live_tape=live_tape,
+            shortlist=shortlist,
+        )
         if include_ws_stats
         else None
     )
@@ -99,16 +108,19 @@ def build_board(
         "opportunity_webhook_resume": OPPORTUNITY_WEBHOOK_RESUME,
         "hard_rules": list(HARD_RULES),
         "note": BOARD_NOTE,
+        "book": build_book(book, live_tape=live_tape),
+        "open_orders": build_open_orders(open_orders, live_tape=live_tape),
         "funnel": funnel,
         "ws_stats": ws_stats,
         "sibling_site": {
             "repo": SIBLING_SITE_REPO,
             "host": SIBLING_SITE_HOST,
-            "pattern": "static HTML + board.json",
-            "consumes": ["board.json", "index.html"],
+            "pattern": "static HTML + live.json",
+            "consumes": ["live.json", "board.json", "index.html"],
         },
         "docs": [
             "docs/DASHBOARD.md",
+            "docs/LIVE_BOARD_REFRESH.md",
             "docs/WEBSOCKETS.md",
             "docs/REALTIME_PLANES.md",
         ],
@@ -129,8 +141,11 @@ def write_board(
     if out_dir is not None:
         dest = Path(out_dir)
         dest.mkdir(parents=True, exist_ok=True)
-        json_path = json_path or dest / "board.json"
+        json_path = json_path or dest / BOARD_JSON_NAME
         html_path = html_path or dest / "index.html"
+        live_path = dest / LIVE_JSON_NAME
+        write_json_atomic(live_path, board, redact=True)
+        written["live_json"] = str(live_path.resolve())
     if json_path is None and html_path is None:
         raise DashboardError("no_output", "pass --out, --html, or --out-dir")
     if json_path is not None:

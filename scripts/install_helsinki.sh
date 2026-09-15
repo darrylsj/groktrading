@@ -31,6 +31,10 @@
 #     are operator-wired only. Not copied, enabled, or started. Hunt is
 #     three planes (docs/REALTIME_PLANES.md); sit_match POSTs are not the
 #     hunt bus. SIT_MATCH_MIN_INTERVAL_SEC is a Cursor bandage, not latency.
+#   - Live-board RTH refresh (scripts/live_board_refresh.py +
+#     trading-desk-live-board-refresh.timer) is operator-wired only.
+#     Zero LLM. No Cursor / Grok wake. sit_match stays OFF. Missing
+#     /etc/trading-desk/vercel.env VERCEL_TOKEN → local artifacts, exit 0.
 #   - Reinstall must not clobber dest-only ws_tape.py or live env files.
 #     Merging this repo does not rebuild Helsinki. Grok Update Computer
 #     does not rebuild Helsinki. Operator SSH + systemd restart is required.
@@ -161,6 +165,11 @@ Helsinki sensor farm (package helpers; host-owned live tape unchanged):
     Shortlist ranker examples (deploy/examples/systemd/shortlist-ranker/)
     are not installed or enabled. Hunt is three planes; 300s sit_match
     interval is not the trading latency target.
+    Live-board RTH refresh (scripts/live_board_refresh.py,
+    trading-desk-live-board-refresh.timer) is operator-wired only.
+    Zero LLM. No Cursor wake. sit_match stays OFF. Enable the timer
+    only after /etc/trading-desk/vercel.env exists; missing
+    VERCEL_TOKEN still writes local live.json and exits 0.
   - Box cold-rotate: scripts/box_cold_rotate.py — deny-list .env/tokens;
     delete only after verified upload or --confirm-delete.
   - Grok Update Computer does not rebuild Helsinki. SSH/systemd on the
@@ -548,6 +557,7 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
        test -f ${ETC_DIR}/tradier-sandbox.env || install -o root -g root -m 0600 ${examples}/tradier-sandbox.env.example ${ETC_DIR}/tradier-sandbox.env
        test -f ${ETC_DIR}/tradier-live.env || install -o root -g root -m 0600 ${examples}/tradier-live.env.example ${ETC_DIR}/tradier-live.env
        test -f ${ETC_DIR}/groktrading.env || install -o root -g root -m 0600 ${examples}/groktrading.env.example ${ETC_DIR}/groktrading.env
+       test -f ${ETC_DIR}/vercel.env || install -o root -g root -m 0600 ${examples}/vercel.env.example ${ETC_DIR}/vercel.env
 
   2. Edit those files in place. Replace YOUR_* placeholders. chmod 0600. Do not
      chmod 0644. Do not commit the filled files.
@@ -566,7 +576,14 @@ Next steps (operator — placeholders only; never paste real tokens into git or 
      emit_sit_match=False. No webhook firehose from flow-alerts by default.
      Shortlist ranker timer (deploy/examples/systemd/shortlist-ranker/) is
      not installed. Hunt is three planes; 300s sit_match is not latency.
-     Merge ≠ Helsinki restart. Live ws_tape.py stays host-owned.
+     Live-board RTH refresh (deploy/examples/systemd/host-companions/
+     trading-desk-live-board-refresh.timer) is not installed. Zero LLM.
+     No Cursor / Grok wake. sit_match stays OFF. After placing
+     /etc/trading-desk/vercel.env (0600) and a writable
+     /opt/trading-desk/state/live_board, copy the oneshot + timer
+     yourself (docs/LIVE_BOARD_REFRESH.md). Missing VERCEL_TOKEN:
+     local artifacts + exit 0. Merge ≠ Helsinki restart. Live
+     ws_tape.py stays host-owned.
 
   3b. Hot ledger / Box cold-rotate (no secrets):
        FLOW_LEDGER_PATH=${STATE_DIR}/ledger/uw_flow.sqlite

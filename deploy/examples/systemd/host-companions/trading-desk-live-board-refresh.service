@@ -1,0 +1,40 @@
+# Zero-LLM weekday RTH live-board refresh. Example only — not copied,
+# enabled, or started by install_helsinki.sh. Merge ≠ Helsinki restart.
+# Operator step: copy this unit + the matching timer after vercel.env exists.
+#
+# sit_match stays OFF. Does not resume shortlist_opportunity.
+# Never places orders. No LLM. No grok-webhook.env. No Cursor wakes.
+#
+# Reads host files (live_tape / finnhub_tape / shortlist + optional refuse
+# JSONL). Writes /opt/trading-desk/state/live_board/{index.html,live.json}.
+# Deploys to Vercel project trading-desk-live-board only when
+# /etc/trading-desk/vercel.env provides VERCEL_TOKEN. Missing token:
+# local artifacts + exit 0 (no crash loop).
+#
+# Least privilege: User=tradingdesk (not root).
+# systemd reads /etc/trading-desk/vercel.env (root 0600) before drop.
+
+[Unit]
+Description=Trading Desk live-board RTH refresh (no LLM; never orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tradingdesk
+Group=tradingdesk
+WorkingDirectory=/opt/groktrading
+EnvironmentFile=-/etc/trading-desk/vercel.env
+Environment=CRON_TZ=America/New_York
+Environment=LIVE_TAPE_PATH=/opt/trading-desk/live_tape.json
+Environment=FINNHUB_TAPE_PATH=/opt/trading-desk/finnhub_tape.json
+Environment=SHORTLIST_PATH=/opt/trading-desk/state/shortlist.json
+Environment=LIVE_BOARD_OUT=/opt/trading-desk/state/live_board
+Environment=VERCEL_ENV_FILE=/etc/trading-desk/vercel.env
+Environment=SIT_MATCH_WEBHOOK=0
+Environment=EMIT_SIT_MATCH=0
+ExecStart=/opt/groktrading/.venv/bin/python /opt/groktrading/scripts/live_board_refresh.py
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+Restart=no

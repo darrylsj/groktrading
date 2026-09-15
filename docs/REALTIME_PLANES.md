@@ -275,3 +275,6 @@ plane 1/2/3. It does **not** unmute `sit_match`, does **not** resume
 the `shortlist_opportunity` timer, and does **not** write
 `shortlist.json`. Hunt default while that timer is paused remains
 **Continual15 + `shortlist.json`**. [DASHBOARD.md](DASHBOARD.md).
+Helsinki weekday RTH refresh of the Vercel board is a separate zero-LLM
+companion ([LIVE_BOARD_REFRESH.md](LIVE_BOARD_REFRESH.md)); Continual15
+still writes pack evidence cards separately.
