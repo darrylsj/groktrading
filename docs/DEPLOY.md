@@ -116,9 +116,14 @@ Hot tape stays continuous. Thin ranker example units live under
 [`deploy/examples/systemd/shortlist-ranker/`](../deploy/examples/systemd/shortlist-ranker/)
 and are **not** copied, enabled, or started by this installer. Host path
 `/opt/trading-desk/state/shortlist.json` is documentation, not a deploy
-claim. `sit_match` POSTs are deprecated as the hunt bus; prefer
-`SIT_MATCH_WEBHOOK=0`. `SIT_MATCH_MIN_INTERVAL_SEC` is a Cursor bandage
-(not trading latency). Do not raise `SIT_MATCH_MAX_AGE_SEC` (default 60s).
+claim. `sit_match` POSTs are deprecated as the hunt bus; **`sit_match`
+stays OFF.** Prefer `SIT_MATCH_WEBHOOK=0`. Hunt default while the
+opportunity timer is paused: Continual15 + `shortlist.json`. Host
+`/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is operator-side
+(in-repo contract:
+`deploy/examples/helsinki/shortlist_opportunity_webhook.py`).
+`SIT_MATCH_MIN_INTERVAL_SEC` is a Cursor bandage (not trading latency).
+Do not raise `SIT_MATCH_MAX_AGE_SEC` (default 60s). Do not unlock I1>60.
 
 **`sit_match` freshness (rare alert only):** package helper `groktrading.sit_match`
 fail-closes when UW `executed_at` is missing/unparseable or older than

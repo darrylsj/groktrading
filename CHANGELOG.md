@@ -7,6 +7,34 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Observational **shadow bets** RSI ledger (2026-09-14)
+  [`tools/shadow_bets`](tools/shadow_bets) (ported from the Trading Desk
+  pack at `/home/box/agent-data/projects/trading-desk/tools/shadow_bets/`).
+  Refuse ledger → Tradier-cited shadow outcomes. CLI: `run-session
+  --session YYYY-MM-DD`, `open-from-refuses`, `mark-session`,
+  `summarize`. Pack paths under `SHADOW_BETS_PACK`:
+  `evidence/shadow_bets_events.jsonl`, `evidence/shadow_bets_ledger.jsonl`,
+  `state/shadow_bets_session.json`. Never invents NBBO, never places
+  orders, never calls Tradier/UW. Labels such as `yes_latency_fix_wake`
+  are observational only and do **not** unlock I1 > 60s. Does **not**
+  re-enable `sit_match` or change `MUST_TRADE_SMALL_ASK_CAP`. Doc:
+  [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md).
+
+### Changed
+
+- Opportunity **wake-latency** posture (2026-09-14): `sit_match` stays
+  **OFF**. `shortlist_opportunity` emit (host
+  `/opt/trading-desk/bin/shortlist_opportunity_webhook.py`; in-repo
+  contract `deploy/examples/helsinki/shortlist_opportunity_webhook.py`)
+  is TOP1_ONLY, wall-clock `executed_at` freshness,
+  `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce 600s, global min interval
+  300s. Re-enable the opportunity timer only if a wake completes the
+  refuse-or-lift path in <30s. Hunt bus default while paused:
+  Continual15 + `shortlist.json`. Does **not** widen live I1 beyond 60s
+  and does **not** change `MUST_TRADE_SMALL_ASK_CAP`.
+
 ### Changed
 
 - Shortlist hunt premium band widened to **$0.50–$2.00**
