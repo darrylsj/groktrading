@@ -1,0 +1,9 @@
+{
+  "kind": "live_tape_health_fixture",
+  "note": "Health counters only. Not a live Helsinki tape. No prints or NBBO.",
+  "flow_n": 12,
+  "flow_http": {"ok": 10, "timeout": 1, "errors": 1},
+  "errors": ["timeout", "http_5xx"],
+  "candidates": 2,
+  "fixture": true
+}

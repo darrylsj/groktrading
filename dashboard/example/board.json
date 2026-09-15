@@ -1,0 +1,191 @@
+{
+  "docs": [
+    "docs/DASHBOARD.md",
+    "docs/WEBSOCKETS.md",
+    "docs/REALTIME_PLANES.md"
+  ],
+  "funnel": {
+    "empty_reason": null,
+    "kind": "opportunity_funnel",
+    "last_occs": [
+      "QQQ260914P00580000",
+      "SPY260914C00660000",
+      "IWM260914P00240000"
+    ],
+    "posture": {
+      "hunt": "Continual15 + shortlist.json",
+      "i1_max_age_sec": 60.0,
+      "invented": false,
+      "live_gate": false,
+      "opportunity_event": "shortlist_opportunity",
+      "opportunity_webhook": "paused",
+      "opportunity_webhook_resume": false,
+      "places_orders": false,
+      "sit_match": false,
+      "sit_match_stays_off": true,
+      "unlock_i1": false
+    },
+    "present": true,
+    "refuse_reasons": {
+      "I1_stale": 2,
+      "already_run": 1
+    },
+    "refuses": [
+      {
+        "consumed_at": "2026-09-14T16:32:40Z",
+        "emitted_at": "2026-09-14T16:30:12Z",
+        "evidence_ask": "1.25",
+        "executed_at": "2026-09-14T16:30:01Z",
+        "invented": false,
+        "occ": "QQQ260914P00580000",
+        "reason": "I1_stale",
+        "session": "2026-09-14"
+      },
+      {
+        "consumed_at": "2026-09-14T16:31:20Z",
+        "emitted_at": "2026-09-14T16:31:05Z",
+        "evidence_ask": "0.80",
+        "executed_at": "2026-09-14T16:31:00Z",
+        "invented": false,
+        "occ": "SPY260914C00660000",
+        "reason": "already_run",
+        "session": "2026-09-14"
+      },
+      {
+        "executed_at": "2026-09-14T17:01:00Z",
+        "invented": false,
+        "occ": "IWM260914P00240000",
+        "reason": "I1_stale",
+        "session": "2026-09-14"
+      }
+    ],
+    "rows": 3,
+    "schema": "groktrading.desk_board.funnel.v1",
+    "shadow_summary": {
+      "empty_reason": null,
+      "hit_rate": 0.5,
+      "hits": 1,
+      "invented": false,
+      "kind": "shadow_bets_summary",
+      "labels": {
+        "no_latency_fix_wake": 1,
+        "yes_latency_fix_wake": 2
+      },
+      "live_gate": false,
+      "marked": 2,
+      "one_lot_usd": "5.00",
+      "opened": 3,
+      "pnl": null,
+      "present": true,
+      "scored": 2,
+      "unmarked": 1
+    },
+    "shortlist": {
+      "candidate_occs": [
+        "QQQ260914P00580000"
+      ],
+      "candidates": [
+        {
+          "executed_at": "2026-09-14T16:29:40Z",
+          "occ": "QQQ260914P00580000",
+          "option_type": "put",
+          "source": "fixture",
+          "underlying": "QQQ"
+        }
+      ],
+      "emit_sit_match": false,
+      "empty_reason": null,
+      "empty_reason_shortlist": null,
+      "present": true,
+      "ranked_at": "2026-09-14T16:29:50Z",
+      "schema": "groktrading.shortlist.v1"
+    },
+    "skipped_invented": 1,
+    "skipped_no_occ": 1,
+    "source": "uw_opportunity_refuses.jsonl"
+  },
+  "generated_at": "2026-09-14T16:45:00Z",
+  "hard_rules": [
+    "READ-ONLY snapshots. No new WebSocket subscriptions.",
+    "sit_match stays OFF. This builder does not unmute it.",
+    "shortlist_opportunity stays paused. This builder does not resume the webhook.",
+    "Never invent prices, P&L, or OCCs.",
+    "Helsinki tape files are optional. Missing files are reported, not invented.",
+    "Does not place orders. Does not change live_order_gate."
+  ],
+  "i1_max_age_sec": 60.0,
+  "invented": false,
+  "kind": "desk_board",
+  "live_gate": false,
+  "new_ws_subscriptions": false,
+  "note": "Observational desk board. live_gate=false. Reads uw_opportunity_refuses.jsonl plus optional shortlist / shadow-summary hooks and optional Helsinki health JSON. Does not open sockets. Does not unmute sit_match. Does not resume shortlist_opportunity. Static HTML/JSON for darrylsj/trading-desk-live-board (Vercel).",
+  "opportunity_webhook_resume": false,
+  "places_orders": false,
+  "schema": "groktrading.desk_board.v1",
+  "session": "2026-09-14",
+  "sibling_site": {
+    "consumes": [
+      "board.json",
+      "index.html"
+    ],
+    "host": "Vercel",
+    "pattern": "static HTML + board.json",
+    "repo": "darrylsj/trading-desk-live-board"
+  },
+  "sit_match": false,
+  "sit_match_stays_off": true,
+  "unlock_i1": false,
+  "ws_stats": {
+    "finnhub_tape": {
+      "connected": true,
+      "empty_reason": null,
+      "freshness": {
+        "connected": true,
+        "detail": "ok",
+        "last_event_ts": "2026-09-14T16:28:55Z",
+        "stale": false,
+        "ttl_seconds": 30.0
+      },
+      "note": "Finnhub is stock last prints only. Not option NBBO. Never gate option limits on Finnhub ticks.",
+      "path_provided": true,
+      "present": true,
+      "symbols": [
+        "SPY",
+        "QQQ"
+      ]
+    },
+    "kind": "ws_stats",
+    "live_tape": {
+      "candidates": 2,
+      "empty_reason": null,
+      "errors": [
+        "timeout",
+        "http_5xx"
+      ],
+      "flow_http": {
+        "errors": 1,
+        "ok": 10,
+        "timeout": 1
+      },
+      "flow_n": 12,
+      "keys_found": [
+        "flow_n",
+        "flow_http",
+        "errors",
+        "candidates"
+      ],
+      "note": "Host-owned live_tape.json. Health counters only. Prints / NBBO / P&L are not copied. Unknown shapes stay empty.",
+      "path_provided": true,
+      "present": true
+    },
+    "missing": [],
+    "new_subscriptions": false,
+    "note": "READ-ONLY snapshot. No new WebSocket subscriptions. sit_match stays OFF. shortlist_opportunity stays paused.",
+    "opportunity_webhook_resume": false,
+    "places_orders": false,
+    "read_only": true,
+    "schema": "groktrading.desk_board.ws_stats.v1",
+    "sit_match_stays_off": true,
+    "sit_match_unmute": false
+  }
+}

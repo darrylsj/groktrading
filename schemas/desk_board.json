@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groktrading.local/schemas/desk_board.json",
+  "title": "Trading Desk live board",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "kind",
+    "generated_at",
+    "session",
+    "live_gate",
+    "places_orders",
+    "invented",
+    "sit_match",
+    "new_ws_subscriptions",
+    "opportunity_webhook_resume",
+    "hard_rules",
+    "funnel"
+  ],
+  "properties": {
+    "schema": { "const": "groktrading.desk_board.v1" },
+    "kind": { "const": "desk_board" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "session": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "live_gate": { "const": false },
+    "places_orders": { "const": false },
+    "invented": { "const": false },
+    "unlock_i1": { "const": false },
+    "i1_max_age_sec": { "const": 60.0 },
+    "sit_match": { "const": false },
+    "sit_match_stays_off": { "const": true },
+    "new_ws_subscriptions": { "const": false },
+    "opportunity_webhook_resume": { "const": false },
+    "hard_rules": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 4
+    },
+    "note": { "type": "string" },
+    "funnel": { "$ref": "#/$defs/funnel" },
+    "ws_stats": { "anyOf": [{ "$ref": "#/$defs/ws_stats" }, { "type": "null" }] },
+    "sibling_site": {
+      "type": "object",
+      "required": ["repo", "host", "pattern"],
+      "properties": {
+        "repo": { "const": "darrylsj/trading-desk-live-board" },
+        "host": { "const": "Vercel" },
+        "pattern": { "type": "string" },
+        "consumes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "docs": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "funnel": {
+      "type": "object",
+      "required": [
+        "kind",
+        "schema",
+        "present",
+        "refuse_reasons",
+        "last_occs",
+        "shortlist",
+        "shadow_summary",
+        "posture"
+      ],
+      "properties": {
+        "kind": { "const": "opportunity_funnel" },
+        "schema": { "const": "groktrading.desk_board.funnel.v1" },
+        "source": { "type": "string" },
+        "present": { "type": "boolean" },
+        "empty_reason": {
+          "type": ["string", "null"],
+          "enum": ["no_input", "file_missing", "empty_file", null]
+        },
+        "rows": { "type": "integer", "minimum": 0 },
+        "skipped_invented": { "type": "integer", "minimum": 0 },
+        "skipped_no_occ": { "type": "integer", "minimum": 0 },
+        "refuse_reasons": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "last_occs": { "type": "array", "items": { "type": "string" } },
+        "refuses": { "type": "array", "items": { "type": "object" } },
+        "shortlist": { "type": "object" },
+        "shadow_summary": { "type": "object" },
+        "posture": {
+          "type": "object",
+          "required": [
+            "sit_match",
+            "opportunity_webhook_resume",
+            "unlock_i1",
+            "live_gate",
+            "places_orders"
+          ],
+          "properties": {
+            "sit_match": { "const": false },
+            "sit_match_stays_off": { "const": true },
+            "opportunity_webhook": { "const": "paused" },
+            "opportunity_webhook_resume": { "const": false },
+            "hunt": { "type": "string" },
+            "i1_max_age_sec": { "const": 60.0 },
+            "unlock_i1": { "const": false },
+            "live_gate": { "const": false },
+            "places_orders": { "const": false },
+            "invented": { "const": false }
+          }
+        }
+      }
+    },
+    "ws_stats": {
+      "type": "object",
+      "required": [
+        "kind",
+        "schema",
+        "read_only",
+        "new_subscriptions",
+        "sit_match_unmute",
+        "opportunity_webhook_resume",
+        "finnhub_tape",
+        "live_tape"
+      ],
+      "properties": {
+        "kind": { "const": "ws_stats" },
+        "schema": { "const": "groktrading.desk_board.ws_stats.v1" },
+        "read_only": { "const": true },
+        "new_subscriptions": { "const": false },
+        "sit_match_unmute": { "const": false },
+        "sit_match_stays_off": { "const": true },
+        "opportunity_webhook_resume": { "const": false },
+        "places_orders": { "const": false },
+        "note": { "type": "string" },
+        "finnhub_tape": { "$ref": "#/$defs/finnhub_health" },
+        "live_tape": { "$ref": "#/$defs/live_tape_health" },
+        "missing": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "finnhub_health": {
+      "type": "object",
+      "required": ["present", "connected", "symbols"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "empty_reason": {
+          "type": ["string", "null"],
+          "enum": ["no_input", "file_missing", "empty_file", "unknown_shape", null]
+        },
+        "connected": { "type": ["boolean", "null"] },
+        "freshness": { "type": ["object", "null"] },
+        "symbols": { "type": "array", "items": { "type": "string" } },
+        "note": { "type": "string" }
+      }
+    },
+    "live_tape_health": {
+      "type": "object",
+      "required": ["present", "flow_n", "flow_http", "errors", "candidates"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "empty_reason": {
+          "type": ["string", "null"],
+          "enum": [
+            "no_input",
+            "file_missing",
+            "empty_file",
+            "unknown_shape",
+            null
+          ]
+        },
+        "flow_n": { "type": ["integer", "null"] },
+        "flow_http": {
+          "anyOf": [
+            { "type": "integer" },
+            { "type": "object", "additionalProperties": { "type": "integer" } },
+            { "type": "null" }
+          ]
+        },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "candidates": { "type": ["integer", "null"] },
+        "keys_found": { "type": "array", "items": { "type": "string" } },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

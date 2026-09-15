@@ -1,0 +1,21 @@
+{
+  "kind": "shadow_bets_summary",
+  "session": "2026-09-14",
+  "opened": 3,
+  "marked": 2,
+  "unmarked": 1,
+  "scored": 2,
+  "hits": 1,
+  "hit_rate": 0.5,
+  "labels": {
+    "yes_latency_fix_wake": 2,
+    "no_latency_fix_wake": 1
+  },
+  "one_lot_usd": "5.00",
+  "pnl": null,
+  "live_gate": false,
+  "invented": false,
+  "unlock_i1": false,
+  "i1_max_age_sec": 60.0,
+  "fixture": true
+}

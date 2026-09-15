@@ -120,6 +120,25 @@ so Monday I1_stale wake-latency RSI stays portable.
 In-repo SoT: [`tools/shadow_bets`](tools/shadow_bets). Doc:
 [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md).
 
+## Desk live board (observational)
+
+Static opportunity funnel + optional READ-ONLY Helsinki health
+snapshots. Ported so `dashboard/` exists on GitHub (it was pack-only).
+
+- Reads `uw_opportunity_refuses.jsonl` (refuse reasons, last evidence
+  OCCs) plus optional shortlist / shadow-summary hooks
+- Optional `ws_stats` from `finnhub_tape.json` (connection / freshness /
+  symbols) and `live_tape` health (`flow_n` / `flow_http` / `errors` /
+  `candidates`). **No new WebSocket subscriptions.** **`sit_match` stays
+  OFF.** **No `shortlist_opportunity` resume.**
+- Writes `board.json` + `index.html` for the sibling Vercel site
+  [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board)
+- Never invents prices / P&L / OCCs. CI uses fixtures — does **not**
+  claim Helsinki files exist. `live_gate=false`
+
+In-repo SoT: [`dashboard/`](dashboard/). Doc:
+[docs/DASHBOARD.md](docs/DASHBOARD.md).
+
 ## Helsinki sit_match (deprecated as hunt bus)
 
 Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
@@ -181,6 +200,7 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 - **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
 - **Strategy factory (observational):** [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md)
 - **Shadow bets RSI (observational):** [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md)
+- **Desk live board (observational):** [docs/DASHBOARD.md](docs/DASHBOARD.md)
 - **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
 - **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
 - **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
@@ -473,6 +493,7 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
 | `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
 | `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not unlock I1>60. [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
+| `dashboard/` | Observational desk board builder (funnel + optional READ-ONLY `ws_stats`). Static HTML/JSON for `darrylsj/trading-desk-live-board`. No new WS subscriptions; sit_match stays OFF; no opportunity webhook resume. [DASHBOARD.md](docs/DASHBOARD.md) |
 | `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
 | `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
 | `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |

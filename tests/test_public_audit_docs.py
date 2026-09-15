@@ -83,6 +83,11 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "SHORTLIST_OPP_MAX_AGE_SEC=45",
         "TOP1_ONLY",
         "Continual15 + `shortlist.json`",
+        "dashboard/",
+        "docs/DASHBOARD.md",
+        "uw_opportunity_refuses.jsonl",
+        "trading-desk-live-board",
+        "No new WebSocket subscriptions",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -135,6 +140,9 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         "shortlist.json",
         "three planes",
         "issue_types[]=ETF",
+        "dashboard/",
+        "READ-ONLY",
+        "DASHBOARD.md",
     ):
         assert needle in text, needle
 
@@ -224,6 +232,9 @@ def test_realtime_planes_doc_states_design() -> None:
         "Continual15 + `shortlist.json`",
         "/opt/trading-desk/bin/shortlist_opportunity_webhook.py",
         "yes_latency_fix_wake",
+        "dashboard/",
+        "DASHBOARD.md",
+        "does **not** unmute `sit_match`",
     ):
         assert needle in text, needle
     audit = PLANES_AUDIT.read_text(encoding="utf-8")
@@ -313,6 +324,31 @@ def test_claude_audit_brief_states_scope_and_ask() -> None:
         "Not financial advice",
     ):
         assert needle in text, needle
+
+
+def test_dashboard_doc_states_hard_rules() -> None:
+    text = (ROOT / "docs" / "DASHBOARD.md").read_text(encoding="utf-8")
+    for needle in (
+        "uw_opportunity_refuses.jsonl",
+        "ws_stats",
+        "finnhub_tape.json",
+        "flow_n",
+        "READ-ONLY",
+        "No new WebSocket subscriptions",
+        "sit_match",
+        "shortlist_opportunity",
+        "darrylsj/trading-desk-live-board",
+        "Vercel",
+        "WEBSOCKETS.md",
+        "REALTIME_PLANES.md",
+        "Never invent",
+        "live_order_gate",
+        "tests/fixtures/dashboard",
+    ):
+        assert needle in text, needle
+    readme = (ROOT / "dashboard" / "README.md").read_text(encoding="utf-8")
+    assert "No new WebSocket subscriptions" in readme
+    assert "sit_match` stays OFF" in readme
 
 
 def test_license_is_mit_for_public_github() -> None:

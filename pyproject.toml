@@ -54,10 +54,14 @@ groktrading-shadow-marks = "groktrading.cli:shadow_marks_main"
 groktrading-uw-ws-probe = "groktrading.cli:uw_ws_probe_main"
 groktrading-replay-scorecard = "groktrading.cli:replay_scorecard_main"
 groktrading-shortlist = "groktrading.shortlist:main"
+groktrading-desk-board = "dashboard.cli:main"
 
 [project.urls]
 Documentation = "https://github.com/darrylsj/groktrading"
 Issues = "https://github.com/darrylsj/groktrading/issues"
+
+[tool.hatch.build.targets.wheel.force-include]
+"dashboard" = "dashboard"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -69,6 +73,7 @@ include = [
   "/schemas",
   "/tools",
   "/config",
+  "/dashboard",
   "/README.md",
 ]
 
@@ -80,7 +85,7 @@ pythonpath = ["src", "tests", "scripts", "."]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests", "scripts", "tools"]
+src = ["src", "tests", "scripts", "tools", "dashboard"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -95,7 +100,7 @@ select = ["E", "F", "I", "UP", "B"]
 "scripts/quote_interest_companion.py" = ["UP017"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["groktrading", "helpers", "helsinki_http", "tools"]
+known-first-party = ["groktrading", "helpers", "helsinki_http", "tools", "dashboard"]
 
 [tool.mypy]
 python_version = "3.11"

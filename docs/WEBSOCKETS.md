@@ -8,6 +8,14 @@ Related: [REALTIME_PLANES.md](REALTIME_PLANES.md) (authoritative hunt), [ARCHITE
 
 **Hard rule:** WebSocket events never place live orders. The final gate rechecks a **fresh Tradier production** option quote before any preview→submit path. Default package mode remains `signals_only`.
 
+**Desk board (`dashboard/`):** optional producer/consumer **READ-ONLY**
+snapshots from Helsinki health files (`finnhub_tape.json`
+connection/freshness/symbols; `live_tape` `flow_n` / `flow_http` /
+`errors` / `candidates`). The builder **does not** open sockets, **does
+not** add subscribe frames, **does not** unmute `sit_match`, and **does
+not** resume `shortlist_opportunity`. Missing host files are reported
+holes. [DASHBOARD.md](DASHBOARD.md).
+
 ## Two runtimes (do not collapse them)
 
 | Path | What it is | Order path |

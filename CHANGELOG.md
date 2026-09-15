@@ -9,6 +9,22 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- Observational **desk live board** builder (2026-09-15)
+  [`dashboard/`](dashboard/) so GitHub has the pack board that was a
+  404 here. Opportunity-process funnel from
+  `uw_opportunity_refuses.jsonl` (refuse reasons, last evidence OCCs,
+  optional shortlist + shadow-summary hooks). Optional READ-ONLY
+  `ws_stats` from Helsinki *health* files (`finnhub_tape.json`
+  connection/freshness/symbols; `live_tape` `flow_n`/`flow_http`/
+  `errors`/`candidates`). **No new WebSocket subscriptions. sit_match
+  stays OFF. No `shortlist_opportunity` resume.** Static `board.json` +
+  `index.html` for sibling [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board)
+  (Vercel). CI fixtures/tests prove funnel + `ws_stats` schema without
+  live Helsinki. Never invents prices/P&L/OCCs. Does **not** change
+  `live_order_gate`. Doc: [docs/DASHBOARD.md](docs/DASHBOARD.md).
+
+### Added
+
 - Observational **shadow bets** RSI ledger (2026-09-14)
   [`tools/shadow_bets`](tools/shadow_bets) (ported from the Trading Desk
   pack at `/home/box/agent-data/projects/trading-desk/tools/shadow_bets/`).
