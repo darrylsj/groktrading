@@ -52,11 +52,12 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 - Side `buy_to_open` only.
 - 12:30 PT new-entry cutoff (`past_entry_cutoff`).
 - Cash debit: `limit × 100 × qty`; `cash_required` / `insufficient_cash`.
-- Credit / STO is a **dated hold through Tue 2026-09-15 RTH** (not a
-  forever ban), still refused by **exact** side and strategy
+- Credit / STO is **still refused** pending **Fri 2026-09-19 I4 review**
+  (not a forever ban), still refused by **exact** side and strategy
   (`sell_to_open`, `credit_spread`, …). Thesis **prose is not scanned**
   for `credit` / `sell`. **Naked STO stays refused** after any later
-  allowlist. Defined-risk I4 unlock is the **Wed 2026-09-16 open card**,
+  allowlist. Wed 2026-09-16 was the planned unlock card and did **not**
+  unlock — do not invent one. Live credit, if ever allowed, still goes
   through this gate only — **no raw POST**. Plan:
   [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md).
 - Tag `A-Za-z0-9` only (Tradier).
@@ -75,11 +76,14 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 
 ## Not encoded here
 
-Take-gain math (arm +40% / ratchet 50%) stays Bot process — **TRIAL n=1,
-do not lock**. `evaluate_gate` / `OrderPayload.side` remain BTO-only so the
+Take-gain math stays Bot process — **TRIAL** (Darryl **2026-09-17**):
+arm bid ≥ entry × **1.25** / protect entry + 0.50 × (peak_bid − entry).
+Do **not** lock. Do **not** treat ×1.40 as current (operator-stated INTC
+miss vs the old arm). Fri `QQQ260911P00717000` remains historical n=1
+only. `evaluate_gate` / `OrderPayload.side` remain BTO-only so the
 package FSM does not silently grow a credit type. This tool is the Bot
 submit/close SoT, not a rewrite of `gate.py`. Overnight carry notes do
 **not** auto-flatten, do **not** change the cash floor, and do **not**
-allow credits/STO. Credit/STO remain on the dated hold (see
-[STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)). Optional green-week note:
+allow credits/STO. Credit/STO remain **refused** pending Fri 2026-09-19
+(see [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)). Optional green-week note:
 [GREEN_WEEK_OPTIONAL_20260912.md](GREEN_WEEK_OPTIONAL_20260912.md).

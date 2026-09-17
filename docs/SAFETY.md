@@ -6,13 +6,19 @@ This is Darryl’s **YOLO** desk. Goal is **capital expansion** on a **$25,000 p
 
 ## Live card (authoritative)
 
-Rewrite any older ≥50% / flatten-at-12:30 / no-overnight text to this card.
+As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on Helsinki. Rewrite any older ≥50% / flatten-at-12:30 / cash-flat-by-close / no-overnight / take-gain ×1.40 / STO-unlocked-after-Wed-9/16 text to this card. Full card: [README.md](../README.md). Host facts: [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md).
 
 - **Overnight long options: ALLOWED.**
 - **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions.
 - **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**. One-lot preference (~$200). No hard concurrent-position caps. No daily-loser circuit breaker.
-- **Live orders must never be triggered by WebSocket alone.** Final gates recheck a **fresh Tradier production** option quote.
-- **Live STO / credit:** dated hold through **Tue 2026-09-15 RTH** (not a forever ban). Unlock review **Wed 2026-09-16 open card**; naked STO stays refused. [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md). Do **not** weaken this floor, the WS→orders ban, or `live_order_gate` to “make room” for a credit.
+- **Live hunt is Continual15** on `*/5` RTH ET (5-minute floor). Opportunity / `sit_match` / `shortlist_opportunity` stay **KEEP_PAUSED**.
+- **Ask band HARD ±$0.02** at decision and submit (`ask_drift`); never chase.
+- **I1 freshness SOFT 180s** (hard stale only >180). Package default remains 60s until copied.
+- **Hard skips:** META / NET / MU / AMD; no SPCX; no INTC puts.
+- **Take-gain TRIAL:** arm bid ≥ entry × **1.25** / protect 50% of peak gain. Do **not** lock. Do **not** treat ×1.40 as current.
+- **Live orders must never be triggered by WebSocket alone.** Final gates recheck a **fresh Tradier production** option quote. **`live_order_gate` write-thesis first only** — no raw POST.
+- **Live STO / credit: still refused** pending **Fri 2026-09-19 I4 review**. Wed 2026-09-16 did **not** unlock. Naked STO stays refused. [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md). Do **not** weaken this floor, the WS→orders ban, or `live_order_gate` to “make room” for a credit.
+- **UW MCP: DEFERRED.** Never Helsinki. Never Continual15 submit.
 - **Grok/LLM is outside the broker execution boundary.** Approve/skip on frozen facts only. The model must never set OCC, qty, limit, account, or order action.
 
 ## Defaults
@@ -64,7 +70,7 @@ An external engineering note proposed flattening everything at 12:30 PT and forb
 
 ### P0.2 Broker-authoritative final gate
 
-`evaluate_gate` derives sit / already-run / duplicate / position from `SessionFacts` plus a fresh `AccountSnapshot` (cash, equity, working orders, open positions) and `ClockSnapshot`. Live without session facts fails closed. WebSocket cannot submit live. Live also requires `candidate.executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s); missing/unparseable/stale print fails closed (`missing_executed_at` / `stale_print`) — no `created_at` / `timestamp` substitute. `AccountSnapshot` cash/BP come from nested `cash.cash_available` or `margin`/`pdt.option_buying_power`, never `total_cash` (unsettled inflates BP / GFV).
+`evaluate_gate` derives sit / already-run / duplicate / position from `SessionFacts` plus a fresh `AccountSnapshot` (cash, equity, working orders, open positions) and `ClockSnapshot`. Live without session facts fails closed. WebSocket cannot submit live. Package helper still requires `candidate.executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default 60s); missing/unparseable/stale print fails closed (`missing_executed_at` / `stale_print`) — no `created_at` / `timestamp` substitute. Operator live I1 consume is **SOFT 180s** (hard stale only >180) — do not treat the encoded default as the live clock. `AccountSnapshot` cash/BP come from nested `cash.cash_available` or `margin`/`pdt.option_buying_power`, never `total_cash` (unsettled inflates BP / GFV).
 
 ### P0.3 Preview → submit state machine
 

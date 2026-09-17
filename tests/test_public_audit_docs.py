@@ -23,7 +23,7 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
     assert first_h2.startswith("## Current live card"), first_h2
     assert text.find("Continual15") < text.find("Opening15")
     assert "e297a0af" not in text
-    head = text[:4000]
+    head = text[:8000]
     for needle in (
         "Public reference package",
         "external audit",
@@ -91,6 +91,13 @@ def test_readme_leads_with_public_audit_and_current_desk() -> None:
         "No new WebSocket subscriptions",
         "Helsinki owns weekday RTH refresh",
         "live_board_refresh.py",
+        "KEEP_PAUSED",
+        "SOFT 180s",
+        "HARD ±$0.02",
+        "Fri 2026-09-19 I4 review",
+        "UW MCP",
+        "stale_event>30s",
+        "1.25",
     ):
         assert needle in text, needle
     # Primary frame is $25k; ~$600 must not be the lead sentence.
@@ -152,10 +159,11 @@ def test_websockets_doc_covers_auditor_topics() -> None:
 
 
 def test_sto_unlock_plan_is_readme_contract() -> None:
-    """Dated hold + Wed unlock + audit verdict. Not a live flip."""
+    """Current Fri I4 hold + historical Wed card. Not a live flip."""
     readme = README.read_text(encoding="utf-8")
     for needle in (
         "docs/STO_UNLOCK_PLAN.md",
+        "Fri 2026-09-19 I4 review",
         "dated hold through Tue 2026-09-15 RTH",
         "Wed 2026-09-16 open card",
         "Naked STO stays refused",
@@ -170,6 +178,11 @@ def test_sto_unlock_plan_is_readme_contract() -> None:
         "refuse-only Mon–Tue ≠ lifecycle proof",
         "one unlock authority (Trading Bot on Wed open checklist PASS)",
         "naked STO stays refused — do not keep a forever ban",
+        "still refused",
+        "KEEP_PAUSED",
+        "1.25",
+        "SOFT 180s",
+        "UW MCP",
     ):
         assert needle in readme, needle
     text = STO_UNLOCK.read_text(encoding="utf-8")
@@ -177,6 +190,8 @@ def test_sto_unlock_plan_is_readme_contract() -> None:
         "2026-09-12",
         "Tue 2026-09-15 RTH",
         "Wed 2026-09-16",
+        "Fri 2026-09-19 I4 review",
+        "Did not unlock",
         "defined-risk I4",
         "Naked STO",
         "allowlist",

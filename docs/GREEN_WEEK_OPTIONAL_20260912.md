@@ -2,7 +2,7 @@
 
 Weekend Codex review add-ons. **Optional / shadow.** They do **not** change
 live strategy gates (cash floor, 12:30 PT new-entry cutoff, no auto-flatten,
-credit/STO **dated hold** through Tue 2026-09-15 RTH — see
+credit/STO **still refused** pending Fri 2026-09-19 I4 review — see
 [STO_UNLOCK_PLAN.md](STO_UNLOCK_PLAN.md)). Helsinki **shortlist deploy is operator-side** — merge ≠
 Helsinki restart; copy/wire the ranker only after an authorized host step.
 

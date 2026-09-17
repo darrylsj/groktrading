@@ -6,7 +6,9 @@ This page is the GitHub README contract for the credit/STO hold. It is
 **not** a live unlock and it does **not** flip `live_order_gate`.
 
 **Mindset:** abundance — a **dated process hold**, not a forever ban.
-Naked STO stays refused. Defined-risk I4 can unlock after the Wed card.
+Naked STO stays refused. Defined-risk I4 stays on hold until a **named**
+review passes — currently **Fri 2026-09-19 I4 review**. The Wed 2026-09-16
+card is **historical** and did **not** unlock.
 
 This PR does **not** weaken the cash floor (≥20% / max deploy 80%), the
 **WebSocket → orders** ban, or the rule that live credit (when/if
@@ -18,15 +20,14 @@ stub as a live or paper executor.
 
 ---
 
-## Current posture (as of this page)
+## Current posture (as of 2026-09-17 PT)
 
 | Item | Status |
 | --- | --- |
-| Live STO / credit | **Dated hold through Tue 2026-09-15 RTH** |
-| Paper I4 | **Mon–Tue** (2026-09-14 and 2026-09-15) only |
-| Unlock review | **Wed 2026-09-16 open card** |
-| Default bias at that card | Remove the **blanket** ban; **allowlist defined-risk I4** through `live_order_gate` |
-| Naked STO after unlock | **Still refused** |
+| Live STO / credit | **Still refused** pending **Fri 2026-09-19 I4 review** |
+| Wed 2026-09-16 open card | **Past. Did not unlock.** Do not invent an unlock |
+| Paper I4 | Historical Mon–Tue (2026-09-14 and 2026-09-15) window only |
+| Naked STO | **Still refused** (before and after any later unlock) |
 | This package POST | **Never** (`live_order_gate` is dry-run / audit only) |
 
 Do not read “credit/STO banned” in older comments as a permanent religion.
@@ -47,7 +48,8 @@ new-entry cutoff stays **12:30 America/Los_Angeles**.
 | Sat–Sun 2026-09-12/13 | Weekend. Not RTH. Not a paper-I4 day. Not an unlock. |
 | Mon 2026-09-14 RTH | Paper I4 day 1 |
 | Tue 2026-09-15 RTH | Paper I4 day 2. **Live STO/credit stay on hold through this session.** |
-| Wed 2026-09-16 **open card** | Unlock review. Default bias = drop blanket ban + allowlist defined-risk I4. |
+| Wed 2026-09-16 **open card** | Planned unlock review. **Did not unlock.** Historical. |
+| Fri 2026-09-19 I4 review | **Current** named review. Live STO/credit stay refused until this card (or a later named FAIL follow-up ≤3 RTH days). |
 
 **Weekend calendar risk:** the first paper day is the Monday after the
 intent was written. If Mon or Tue paper does not happen, checklist item 4
@@ -88,7 +90,7 @@ This is **I4** (defined-risk credit vertical). It is **not**:
 
 ---
 
-## Wed 2026-09-16 open card (unlock review)
+## Wed 2026-09-16 open card (historical — did not unlock)
 
 **Default bias:** remove the **blanket** credit/STO ban and **allowlist
 defined-risk I4** through `live_order_gate`.

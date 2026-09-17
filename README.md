@@ -6,20 +6,48 @@ This software does **not** promise trading success. It must **not** invent price
 
 ## Current live card (authoritative)
 
-As of **PR #35 on `main`** (2026-09-11/12). Encoded cutoff and session labels use **PT**. Host trading routines use **`CRON_TZ=America/New_York`**. Any older ≥50% cash floor, flatten-at-12:30, or no-overnight policy in this tree is stale.
+As of **2026-09-17 PT** (operator-deployed desk). Encoded cutoff and session labels use **PT**. Host trading routines use **`CRON_TZ=America/New_York`**. This card is **ops context**, not a claim that **this commit** is running on Helsinki. **Merge ≠ Helsinki restart.** Host observations: [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md).
 
+Any older **≥50% cash floor**, **flatten-at-12:30 / cash-flat-by-close**, **no-overnight**, **take-gain ×1.40**, **I1 hard-60s as live consume**, **opportunity / `sit_match` as active hunt**, **UW MCP installed for live**, or **STO unlocked after Wed 2026-09-16** claim in this tree is **stale**.
+
+### Capital / session
+
+- **Planning frame: ~$25k** (may not be fully deposited). Live fills still respect actual Tradier cash/BP. Planning capital ≠ current broker equity
+- **Cash/equity ≥20%** at all times / **max deploy 80%**
 - **Overnight long options: ALLOWED**
 - **12:30 PT = NEW-ENTRY CUTOFF ONLY** (15:30 ET; not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions
-- **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**
-- **One-lot preference (~$200)** — no hard concurrent-position caps, no daily-loser circuit breaker
-- **Entry is BTO-only**; named exits may **sell_to_close** via `tools/live_order_gate` (dry-run / audit). **No raw POST** from this package
-- **Live STO / credit: dated hold through Tue 2026-09-15 RTH** — not a forever ban. **Wed 2026-09-16 open card** = unlock review (default bias: allowlist **defined-risk I4** through `live_order_gate`). **Naked STO stays refused.** Plan + audit: [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
-- **Live orders must NEVER be triggered by WebSocket alone**; final gates recheck fresh Tradier **production** quotes
-- **Grok/LLM is outside the broker execution boundary**: approve/skip on frozen facts only; never set OCC, qty, limit, account, or order action
-- **Take-gain is TRIAL** — arm +40% / keep 50% of peak; **n=1** Fri `QQQ260911P00717000`. Do **not** lock
-- **Open stand-down only 9:30–9:45 ET**, then hunt. Close card **16:00 ET** (= 1:00 PM PT). Close is a card, not a flatten machine
+- **Open stand-down new entries: 9:30–9:45 ET only**, then hunt. Close card **16:00 ET** (= 1:00 PM PT). Close is a card, not a flatten machine
+- **Small size / one-lot preference (~$200)** — no extra house loss caps, no PDT caps, no hard concurrent-position caps, no daily-loser circuit breaker
 
-**Friday 2026-09-11 book (operator-stated; not in `logs/trades.jsonl`):** open $421.74 → close flat $460.56. Sole live lot `QQQ260911P00717000` BTO 1.06 → STC 1.45; Tradier `close_pl` +$39. n=1. Do not treat as expectancy.
+### Hunt loop
+
+- **Live hunt is Continual15** on `CRON_TZ=America/New_York */5 9-15 * * 1-5` (5-minute floor, **not** a literal 15-minute-only loop)
+- **Opportunity / `sit_match` / `shortlist_opportunity` wake: KEEP_PAUSED** (latency / I1_stale history). Not the hunt bus
+- **Helsinki = sensors/webhooks only**; **Grok Bot = sole decision + order path**
+- **Live orders ONLY via `live_order_gate` write-thesis first** — raw POST forbidden. Entry is BTO-only; named exits may **sell_to_close** via the gate (dry-run / audit in this package)
+- **Ask band HARD ±$0.02** at decision **and** submit recheck (`ask_drift`); never chase
+- **I1 freshness SOFT 180s** (hard stale only **>180**). Package default `SIT_MATCH_MAX_AGE_SEC` is still **60s** until an operator copies a change — do not treat that encoded default as the live consume clock. Disagreement OPTIONAL on fresh OCCs; hard exception for same-OCC reentry after `dead_thesis` exit
+- **Hard skips: META / NET / MU / AMD**; no SPCX; no INTC puts
+- **Live STO / credit: still refused** pending **Fri 2026-09-19 I4 review**. Not unlocked. Do not invent an unlock. **Naked STO stays refused.** Plan: [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
+
+### Take-gain (TRIAL — Darryl 2026-09-17)
+
+- **Arm:** bid ≥ entry × **1.25** (was ×1.40; operator-stated INTC miss: peak 2.02 vs old arm 2.03 missed green)
+- **Protect:** entry + **0.50** × (peak_bid − entry); ratchet with peak
+- Dead thesis / operator flatten can override; no first-red stop as a house rule
+- Do **not** lock. Do **not** treat ×1.40 as current. Fri `QQQ260911P00717000` remains historical n=1 only
+
+### UW usage (2026-09-17)
+
+- Live path mainly UW option-trades / flow → Tradier ask match
+- **GUI live on plan:** 0DTE Flow, Interval Flow, Market Tide, Dark Pool/Large Trades, Multi-leg, News, Catalyst/Earnings calendars
+- **GUI still delayed/gated:** Flow Alerts (2-day), Options Screener (2-day), Custom Alerts (30m)
+- **UW MCP: DEFERRED** — do not install; if ever, box-only research toy, **never Helsinki**, **never Continual15 submit path**
+- Continual15 **Friday+ shadow tags** are **SCORE-ONLY**: `stale_event>30s`, `stale_quote>2s`, `duplicate_event`, `spread_or_size`, `multileg_unresolved`, `catalyst_unknown` (+ latency ages)
+
+**Live orders must NEVER be triggered by WebSocket alone**; final gates recheck fresh Tradier **production** quotes. **Grok/LLM is outside the broker execution boundary**: approve/skip on frozen facts only; never set OCC, qty, limit, account, or order action.
+
+**Friday 2026-09-11 book (operator-stated; historical; not in `logs/trades.jsonl`):** open $421.74 → close flat $460.56. Sole live lot `QQQ260911P00717000` BTO 1.06 → STC 1.45; Tradier `close_pl` +$39. n=1. Do not treat as expectancy. Do not invent later fills or P&L.
 
 OpenAI P0.4 flatten-everything / no-overnight is **rejected**. Checklist: [docs/SAFETY.md](docs/SAFETY.md). Gate: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
 
@@ -31,17 +59,17 @@ OpenAI P0.4 flatten-everything / no-overnight is **rejected**. Checklist: [docs/
 | --- | --- | --- | --- |
 | **1 Hot sensor** | Helsinki UW / Finnhub / Tradier → ledger/tape | Continuous | No |
 | **2 Thin ranker** | `groktrading.shortlist` → `shortlist.json` (≤1–3 OCCs) | **5–15s** (default 10) | No |
-| **3 Decision** | **Continual15** + fresh Tradier quotes → thesis → `live_order_gate` | Rolling 15-minute RTH looks | Grok on frozen facts |
+| **3 Decision** | **Continual15** + fresh Tradier quotes → thesis → `live_order_gate` | `*/5` RTH ET (5-minute floor; not 15-minute-only) | Grok on frozen facts |
 
 Rate-limit **candidates**, not the tape. No per-print Grok wake. Host path (ops docs, **not** a deploy claim): `/opt/trading-desk/state/shortlist.json`. Example timer: `deploy/examples/systemd/shortlist-ranker/` — **not auto-enabled.** Merge ≠ Helsinki restart.
 
 `SIT_MATCH_MAX_AGE_SEC=60` is **print freshness (I1)**. Do **not** raise it to match any producer interval. `SIT_MATCH_MIN_INTERVAL_SEC` (package 60; Host Mon prep **300**) is a **Cursor wake bandage**, not the trading latency target and **not the realtime design**. Hunt must not depend on it. Prefer `SIT_MATCH_WEBHOOK` **off** for hunt; optional rare alert only. Webhooks stay for `in_position` / fills / `login_dead`.
 
-Until the ranker file is actually refreshing on the host, Monday hunt is **Continual15 + `shortlist.json`** (when that file is live). **`sit_match` stays OFF.** The optional `shortlist_opportunity` timer stays **paused** unless a wake completes the refuse-or-lift path in **<30s**. Host script `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is operator-side (in-repo contract: `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Emit, if ever enabled: **TOP1_ONLY**, wall-clock `executed_at` freshness, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce **600s**, global min interval **300s**. Live I1 consume stays **60s** — do not unlock I1>60. Weekend sit_match mute may stay; open-card unmute is **not** required.
+**`sit_match` stays OFF.** Opportunity / `shortlist_opportunity` stay **KEEP_PAUSED.** Hunt is **Continual15 + `shortlist.json`** (`*/5` RTH ET) when that file is live. Host script `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is operator-side (in-repo contract: `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Historical emit knobs if a later named review ever re-enables: **TOP1_ONLY**, wall-clock `executed_at` freshness, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce **600s**, global min interval **300s**. Do **not** treat a <30s refuse-or-lift path as an active unlock. Operator live I1 consume is **SOFT 180s** (hard stale only >180). Package `SIT_MATCH_MAX_AGE_SEC` default remains **60s** until copied. Weekend sit_match mute may stay; open-card unmute is **not** required and is not hunt.
 
 ## Decision loop: Continual15 (live hunt)
 
-**Live hunt is Continual15** — plane 3. Rolling 15-minute RTH looks **after** the 9:30–9:45 ET open stand-down, through **15:00 ET** (before the 12:30 PT / 15:30 ET new-entry cutoff). Pull shortlist + fresh Tradier quotes when that file is live; otherwise hunt without the sit_match bus. Grok decides on frozen facts. Helsinki does not.
+**Live hunt is Continual15** — plane 3. Schedule `CRON_TZ=America/New_York */5 9-15 * * 1-5` (**5-minute floor**, not a literal 15-minute-only loop) **after** the 9:30–9:45 ET open stand-down, through **15:00 ET** (before the 12:30 PT / 15:30 ET new-entry cutoff). Pull shortlist + fresh Tradier quotes when that file is live; otherwise hunt without the sit_match bus. Grok decides on frozen facts. Helsinki does not. Friday+ shadow tags on the Continual15 prompt are **SCORE-ONLY** (see live card).
 
 **Opening15** (first-15-minute / ten-stock, Tuesday 2026-09-08 paper pilot) is **research-only**. It is **not** the live strategy. Capture/monitor/report stay quote-only; **no broker order path**. Protocol: [Opening15 decision protocol](docs/OPENING15_DECISION_PROTOCOL.md). Paper runbook: [Opening15 experiment](docs/OPENING15_EXPERIMENT.md). Tuesday readiness notes stay paper: [Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md).
 
@@ -51,23 +79,25 @@ In-repo source of truth: `tools/live_order_gate`. **This package never POSTs** (
 
 | Path | Side | Notes |
 | --- | --- | --- |
-| Entry | `buy_to_open` only | Thesis required; 12:30 PT cutoff; cash debit; exact-side credit/STO **dated hold** (through Tue 2026-09-15 RTH); alphanumeric tag; same-PT-session + 8h thesis TTL |
+| Entry | `buy_to_open` only | Thesis required; 12:30 PT cutoff; cash debit; exact-side credit/STO **still refused** pending Fri 2026-09-19 I4 review; alphanumeric tag; same-PT-session + 8h thesis TTL |
 | Exit | `sell_to_close` / `buy_to_close` | Only named strategies: `take_gain_exit`, `dead_thesis_exit`, `falsifier_exit`, `stop_exit`, `manual_exit`, `time_stop_exit`. Skip cutoff + cash debit. `parent_signal_id` required. Thesis required |
 
 Closes go through `live_order_gate`, not `Executor.maybe_submit`. Details: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
 
 ### I4 / STO dated hold (not a forever ban)
 
-Operator intent **2026-09-12** ([docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)):
+**Current (2026-09-17):** live STO / credit is **still refused** pending **Fri 2026-09-19 I4 review**. Wed 2026-09-16 was the planned unlock card; it did **not** unlock. Do not invent an unlock. **Naked STO stays refused.**
 
-- **Live** STO/credit stays refused **through Tue 2026-09-15 RTH**
+Historical calendar (operator intent **2026-09-12**, [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)):
+
+- **Live** STO/credit was a **dated hold through Tue 2026-09-15 RTH**
 - **Paper I4** Mon–Tue only: SPY/QQQ **$1-wide** defined-risk vertical, qty=1, paper only
-- **Wed 2026-09-16 open card** = unlock review. Default bias = drop the **blanket** ban and **allowlist defined-risk I4** through `live_order_gate` (flag + shape checks). **Not** a raw POST
-- **Naked STO stays refused** after unlock
+- **Wed 2026-09-16 open card** was the planned unlock review (default bias then: allowlist **defined-risk I4** through `live_order_gate`). That card is **past**; current hold is the Fri 2026-09-19 review
+- **Naked STO stays refused** after any later unlock
 - Checklist FAIL → name the gap + next review **≤3 RTH days** (no open-ended ban)
 - After unlock kills: ungated live credit → re-ban+audit; **−1× max_loss twice in 5 sessions** → pause live I4 (**blocks new entries, preserves exits**)
 
-Local Codex gpt-6-astra: **PASS-WITH-FIXES** (not forever-ban). Gaps before Wed unlock:
+Local Codex gpt-6-astra: **PASS-WITH-FIXES** (not forever-ban). Gaps recorded before the historical Wed card (still relevant for any Fri 2026-09-19 unlock):
 
 1. gate still single-leg submit — need full audited spread path before live allowlist
 2. validate OCC root/expiry/type/width/$1/protective direction at live submit
@@ -112,8 +142,9 @@ so Monday I1_stale wake-latency RSI stays portable.
 
 - Never invents NBBO; never places orders; `live_gate=false`
 - Labels such as `yes_latency_fix_wake` are **observational only**
-- Does **not** unlock I1 > 60s, re-enable `sit_match`, or change
-  `MUST_TRADE_SMALL_ASK_CAP`
+- Does **not** re-enable `sit_match` / opportunity wake, or change
+  `MUST_TRADE_SMALL_ASK_CAP`. Operator live I1 is SOFT 180s; this
+  ledger does not unlock it
 - CLI: `run-session --session YYYY-MM-DD`, `open-from-refuses`,
   `mark-session`, `summarize`
 
@@ -156,7 +187,7 @@ Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is *
 
 `sit_match` POSTs are **deprecated as the hunt bus** (PR #34 stopped the firehose; it did not become the realtime design). Prefer `SIT_MATCH_WEBHOOK` **off** for hunt. Optional rare alert mode only. Weekend-muted on the host is fine; open-card unmute is optional.
 
-**Freshness (I1, still 60s):** UW `option-trades` `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Do **not** raise this to match `SIT_MATCH_MIN_INTERVAL_SEC`. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the execution clock. `print_age_sec` is overwritten from `executed_at` at POST. Re-check immediately before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only** debounce (not per OCC\|`executed_at`). Mute: `SIT_MATCH_WEBHOOK=0` and/or mute file `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST, not at detect. Inbox + I1 still refuse stale `executed_at` at consume.
+**Freshness (I1):** operator live consume is **SOFT 180s** (hard stale only **>180**). Package / inbox helper `SIT_MATCH_MAX_AGE_SEC` default remains **60s** until an operator copies a change — do not treat the encoded default as the live clock, and do **not** raise it to match `SIT_MATCH_MIN_INTERVAL_SEC`. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the execution clock. `print_age_sec` is overwritten from `executed_at` at POST. Re-check immediately before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only** debounce (not per OCC\|`executed_at`). Mute: `SIT_MATCH_WEBHOOK=0` and/or mute file `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST, not at detect. Inbox + I1 still refuse stale `executed_at` at consume.
 
 | Knob | Package default (this tree) | Host ops fact | Hunt role |
 | --- | --- | --- | --- |
@@ -167,7 +198,7 @@ Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is *
 
 Package default may still differ until the host copies this tree. **Merge ≠ Helsinki restart.** Do not claim this commit is live on `/opt/trading-desk`.
 
-**Mon hunt posture:** 300s producer ∩ 60s consume is **near-empty**. That is why 300s is not the design. Hunt is **Continual15 + `shortlist.json`** while the opportunity timer is paused. **`sit_match` stays OFF.** Do not “fix” emptiness by widening consume age. Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. Re-enable `shortlist_opportunity` only if a wake completes refuse-or-lift in **<30s**.
+**Hunt posture (2026-09-17):** 300s producer ∩ 60s package consume was **near-empty** — that is why 300s is not the design. Hunt is **Continual15 (`*/5`) + `shortlist.json`**. **Opportunity / `sit_match` / `shortlist_opportunity` stay KEEP_PAUSED.** Do not “fix” emptiness by treating opportunity wake as an active hunt. Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. A <30s refuse-or-lift path is **historical re-enable criteria**, not a current unlock.
 
 Host contract (rare alert): `deploy/examples/helsinki/ws_tape_sit_match.py`. Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`. Ledger may still **store** stale or clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive use fail-closes.
 
@@ -175,7 +206,7 @@ Host contract (rare alert): `deploy/examples/helsinki/ws_tape_sit_match.py`. Sim
 
 | Clock | Zone | Meaning |
 | --- | --- | --- |
-| Host trading routines | **`CRON_TZ=America/New_York`** | Travel-proof. Open card 09:00 ET (not hunt). Continual15 after stand-down through 15:00 ET. Close card **16:00 ET** (= 1:00 PM PT). AH 16:06 ET |
+| Host trading routines | **`CRON_TZ=America/New_York`** | Travel-proof. Open card 09:00 ET (not hunt). Continual15 `*/5 9-15 * * 1-5` after stand-down through 15:00 ET. Close card **16:00 ET** (= 1:00 PM PT). AH 16:06 ET |
 | Open stand-down | ET | **Only 9:30–9:45 ET**, then hunt. Do not lift at 09:00 ET |
 | Encoded new-entry cutoff | **12:30 America/Los_Angeles** | Authoritative for new BTO in `evaluate_gate` / `live_order_gate`. 12:30 PT = 15:30 ET |
 | Repo example crons / installer docs | often `America/Los_Angeles` | **Docs ≠ host.** Do not copy example crons onto trading routines without stating `CRON_TZ` and city |
@@ -223,9 +254,10 @@ This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capi
 
 - **Finnhub ≠ option NBBO.** Do not gate option limit prices on Finnhub ticks.
 - **WebSocket never places orders.**
-- Matching ask uses a **Tradier production** quote.
+- Matching ask uses a **Tradier production** quote. Operator ask band is **HARD ±$0.02** at decision and submit (`ask_drift`); never chase.
 - Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed.
 - **12:30 PT** new-entry cutoff only (America/Los_Angeles). Not a flatten.
+- **UW MCP is DEFERRED** (never Helsinki; never Continual15 submit).
 - **Sandbox ≠ live fill evidence.** Production NBBO is pricing truth.
 
 Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). WebSocket / webhook sequence (print → filter → webhook → Grok → gate → preview→submit): [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md).
@@ -278,7 +310,7 @@ Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, optio
 
 ## Helsinki vs this package
 
-As of **PR #35 on `main`** (package truth). Not a claim this commit is deployed. **Merge ≠ Helsinki restart.**
+As of **2026-09-17 PT** (package docs vs host ops). Not a claim this commit is deployed. **Merge ≠ Helsinki restart.**
 
 | | Live Helsinki (ops context) | This package |
 | --- | --- | --- |
@@ -348,7 +380,7 @@ A typed Python package under `src/groktrading` with:
 
 - Finnhub stock-trade WebSocket helpers (reconnect/backoff, bounded watchlist, atomic redacted JSON, freshness/health, REST probe)
 - Generic Unusual Whales and Tradier clients (timeouts and stale data **fail closed**, dependency injection)
-- Candidate + deterministic gate (sit-2, matching ask, already-run, no first-red, TTL, ≥20% cash reserve, quantity 1, broker-authoritative duplicates, clock, 12:30 PT entry-cutoff)
+- Candidate + deterministic gate (sit-2, matching ask HARD ±$0.02, already-run, no first-red, TTL, ≥20% cash reserve, quantity 1, broker-authoritative duplicates, clock, 12:30 PT entry-cutoff)
 - Production quote gate (OCC, delayed, provider bid/ask dates, spread, no-chase; sandbox/synthetic cannot pass live)
 - Preview→submit order state machine (immutable payload, no blind retry; stub-safe; BTO-only payload)
 - Dry-run `tools/live_order_gate` (BTO entry + named STC/BTC exits; **never POSTs**)
@@ -385,7 +417,7 @@ Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
 | `paper` | No | Tradier sandbox after preview + gate |
 | `live` | No | Requires explicit enablement; **still blocked** from WebSocket callbacks |
 
-Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥20%** at all times (max deploy 80%), **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). The final gate rechecks a **fresh Tradier production option quote** (provider timestamps, OCC, delayed flag), TTL, matching ask, buying power/cash/reserve, quantity **exactly 1**, duplicate/working/in-position from the broker snapshot, market hours, and the 12:30 new-entry cutoff. Candidate booleans cannot pass live alone. Live **closes** use `live_order_gate` named exits, not a raw POST.
+Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥20%** at all times (max deploy 80%), **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). Operator live card adds **ask band HARD ±$0.02** (`ask_drift`), **I1 SOFT 180s**, hard skips **META/NET/MU/AMD**, and **STO still refused** pending Fri 2026-09-19. The final gate rechecks a **fresh Tradier production option quote** (provider timestamps, OCC, delayed flag), TTL, matching ask, buying power/cash/reserve, quantity **exactly 1**, duplicate/working/in-position from the broker snapshot, market hours, and the 12:30 new-entry cutoff. Candidate booleans cannot pass live alone. Live **closes** use `live_order_gate` named exits, not a raw POST.
 
 ## API roles and limitations
 
@@ -494,11 +526,11 @@ Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), pack
 | `src/groktrading/executor.py` | Signals-only stub + live guards |
 | `src/groktrading/paper.py` | Paper ledger |
 | `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
-| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). Credit/STO is a **dated hold** through Tue 2026-09-15 RTH (naked STO stays refused). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) · [STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md) |
+| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). Credit/STO **still refused** pending Fri 2026-09-19 I4 review (naked STO stays refused). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) · [STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md) |
 | `tools/i4_credit_paper/` | Stub README for paper I4 (SPY/QQQ $1 defined-risk vertical). Pack-first; not an executor. |
 | `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
 | `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
-| `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not unlock I1>60. [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
+| `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not change live I1 (operator SOFT 180s). [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
 | `dashboard/` | Observational desk board builder (book / open orders / funnel + optional READ-ONLY `ws_stats`). Static HTML/JSON for `darrylsj/trading-desk-live-board`. No new WS subscriptions; sit_match stays OFF; no opportunity webhook resume. [DASHBOARD.md](docs/DASHBOARD.md) |
 | `scripts/live_board_refresh.py` | Helsinki zero-LLM weekday RTH refresh → `live.json` + Vercel deploy when `vercel.env` has a token. Operator-wired timer only. [LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md) |
 | `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
@@ -519,7 +551,7 @@ Safety details: [docs/SAFETY.md](docs/SAFETY.md).
 - **P0 no raw POST** `tools/live_order_gate` is dry-run / audit only.
 - **Idempotency** Durable SQLite WAL inbox/outbox; weekend/AH digest coalesce.
 
-**Measurement:** freeze strategy params except safety; keep selection / execution / risk separate; **n=3 live days ≠ edge**. Do not invent fills or claim profitability. Take-gain remains **TRIAL n=1**.
+**Measurement:** freeze strategy params except safety; keep selection / execution / risk separate; **n=3 live days ≠ edge**. Do not invent fills or claim profitability. Take-gain remains **TRIAL** (arm ×**1.25** / protect 50% of peak gain — Darryl 2026-09-17). Do not lock. Do not treat ×1.40 as current.
 
 ## Optional research references (not dependencies)
 
