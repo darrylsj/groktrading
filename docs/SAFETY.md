@@ -6,7 +6,7 @@ This is Darryl’s **YOLO** desk. Goal is **capital expansion** on a **$25,000 p
 
 ## Live card (authoritative)
 
-As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on Helsinki. Rewrite any older ≥50% / flatten-at-12:30 / cash-flat-by-close / no-overnight / take-gain ×1.40 / STO-unlocked-after-Wed-9/16 text to this card. Full card: [README.md](../README.md). Host facts: [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md).
+As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on Helsinki. Rewrite any older ≥50% / flatten-at-12:30 / cash-flat-by-close / no-overnight / take-gain ×1.40 / STO-unlocked-after-Wed-9/16 text to this card. Full dated card and unresolved calendar/schedule labels: [CURRENT_POLICY.md](CURRENT_POLICY.md). Host facts: [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md).
 
 - **Overnight long options: ALLOWED.**
 - **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions.
@@ -40,7 +40,7 @@ As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on 
 - Multi-lot options in this policy
 - Invented quotes, fills, or P&L
 - Auto-flatten of an overnight-allowed book at 12:30 PT
-- GPL/AGPL runtime dependencies (Backtrader, Lumibot, Optopsy). See README research notes.
+- GPL/AGPL runtime dependencies (Backtrader, Lumibot, Optopsy). See the open-source pattern references below.
 
 ## Explicit REJECT of OpenAI P0.4 flatten-everything / no-overnight
 
