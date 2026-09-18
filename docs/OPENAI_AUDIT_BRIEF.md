@@ -25,7 +25,7 @@ Encoded gate math in this tree remains **one-lot** (`quantity == 1`, preference 
 1. **Architecture** — Helsinki ingest vs Grok consumer vs this package. [ARCHITECTURE.md](ARCHITECTURE.md), [ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md), [README.md](../README.md).
 2. **Gates** — P0.1 production quote freshness, P0.2 broker-authoritative final gate, P0.3 preview→submit FSM, P0.4 entry-cutoff (no flatten). [SAFETY.md](SAFETY.md), `src/groktrading/gate.py`, `quote_gate.py`, `order_fsm.py`, `policy.py`.
 3. **WebSocket safety** — ticks never place live orders; Finnhub is not option NBBO; final gate rechecks fresh Tradier **production** quotes. [WEBSOCKETS.md](WEBSOCKETS.md).
-4. **Policy / live card** — overnight long options allowed; 12:30 PT = new-entry cutoff only; cash/equity ≥20%; no hard concurrent-position caps; no daily-loser circuit breaker. README live card + [OPERATING_MODEL.md](OPERATING_MODEL.md).
+4. **Policy / live card** — overnight long options allowed; 12:30 PT = new-entry cutoff only; cash/equity ≥20%; Continual15 `*/5`; opportunity wake KEEP_PAUSED; ask band HARD ±$0.02; I1 SOFT 180s; take-gain TRIAL ×1.25; STO refused pending Fri 2026-09-19; UW MCP deferred. README live card + [OPERATING_MODEL.md](OPERATING_MODEL.md) + [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md).
 5. **Secrets posture** — zero credentials in the tree; `scripts/scan_secrets.py` + detect-secrets in CI; examples are `YOUR_*` only.
 6. **LLM boundary** — Grok is outside the broker execution boundary (approve/skip on frozen facts; never sets OCC, qty, limit, account, or order action).
 
@@ -50,7 +50,7 @@ Please recommend how to pursue **capital expansion** on a **$25k YOLO options de
 
 - **Selection** — what to promote / skip given Unusual Whales flow + sit-2 / matching-ask / already-run rails
 - **Multi-lift** — how to think about adding risk **after** a working thesis, without inventing prices and without silently rewriting qty=1 in the gate
-- **Exits / trails** — discuss candidates only. Trail policy is **under trial**, not adopted. If you mention a trail, treat it as a candidate (for example an arm-+50% / keep-60%-of-peak ratchet idea) — **do not lock a take-gain rule** as desk policy in this repo. This tree does not currently encode an adopted trail.
+- **Exits / trails** — discuss candidates only. Operator **TRIAL** take-gain as of 2026-09-17 is arm ×**1.25** / protect 50% of peak gain (not ×1.40). **Do not lock** it as a house rule. This tree does not encode the trail in the gate.
 
 **Reject** “preserve capital / flatten everything / no overnight / raise the cash floor to 50%+” as the default recommendation unless a finding is **safety-critical** (secrets, WS-to-order bypass, quote-freshness hole, credential leak). Expansion advice that ignores the live card is out of scope.
 

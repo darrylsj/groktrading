@@ -283,9 +283,11 @@ def test_tool_stays_observational_and_docs() -> None:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     for body in (readme, doc, tool):
         assert "observational" in body.lower()
-        assert "yes_latency_fix_wake" in body
         assert "live_gate" in body
         assert "Never invent" in body or "never invent" in body
+    # Detailed observational labels live in the tool docs, linked by the README.
+    for body in (doc, tool):
+        assert "yes_latency_fix_wake" in body
     assert "docs/SHADOW_BETS.md" in readme
     assert "stays off" in planes.lower() and "stays off" in readme.lower()
     assert "TOP1_ONLY" in planes

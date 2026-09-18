@@ -49,7 +49,7 @@ portable.
 | --- | --- |
 | `yes_latency_fix_wake` | `I1_stale` / `stale_print` / `sit_match_stale` and (fresh at emit + stale at consume), or I1_stale without hop clocks |
 | `no_latency_fix_wake` | Other refuse reasons, or hops that do not show a wake miss |
-| `yes_fresh_wake` | Consume still ≤ I1 60s |
+| `yes_fresh_wake` | Consume still inside then-I1 60s (historical label; operator live I1 is SOFT 180s as of 2026-09-17) |
 | `unscored` / `other` | Operator-set on the refuse row |
 
 ## Storage

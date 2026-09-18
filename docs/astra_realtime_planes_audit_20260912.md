@@ -1,8 +1,14 @@
 # Astra-style audit — three-plane realtime desk (2026-09-12)
 
+**Historical** as of the audit date. Current operator card (2026-09-17 PT):
+Continual15 `*/5` (not 15-minute-only); opportunity KEEP_PAUSED; I1 SOFT
+180s; take-gain TRIAL ×1.25. See [README.md](../README.md) and
+[REALTIME_PLANES.md](REALTIME_PLANES.md).
+
 Read-only process audit of the hunt architecture after Friday’s book and
 the weekend sit_match mute. **Process vs outcome are not the same
-verdict.** Do not invent prices. Take-gain stays **TRIAL n=1**.
+verdict.** Do not invent prices. Take-gain on this page is the **then**
+TRIAL n=1 / I1 60s design, not the current card.
 **Merge ≠ Helsinki restart.**
 
 **Scope:** git `main` at `e9ecd50` (PR #36) plus this planes PR, plus

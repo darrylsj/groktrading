@@ -52,12 +52,18 @@ Opening15 research (this package; paper only)
 
 ## Live card (authoritative)
 
-Any older ≥50% cash floor, flatten-at-12:30, or no-overnight policy is stale.
+As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on Helsinki. Any older ≥50% cash floor, flatten-at-12:30 / cash-flat-by-close, no-overnight, take-gain ×1.40, opportunity-as-hunt, UW-MCP-for-live, or STO-unlocked-after-Wed-9/16 policy is stale. Full card: [README.md](../README.md).
 
 - **Overnight long options: ALLOWED**
 - **12:30 PT = NEW-ENTRY CUTOFF ONLY** (not a forced flatten). Fail-closed = no new risk; keep monitoring the book
 - **Cash/equity ≥20%** / **max deploy 80%**
-- **Matching ask** on a fresh Tradier **production** quote
+- **Continual15** hunt on `*/5` RTH ET (5-minute floor). Opportunity / `sit_match` stay **KEEP_PAUSED**
+- **Matching ask HARD ±$0.02** on a fresh Tradier **production** quote (`ask_drift`); never chase
+- **I1 SOFT 180s** (hard stale only >180)
+- **Take-gain TRIAL** arm ×**1.25** / protect 50% of peak gain — not ×1.40
+- **Hard skips:** META / NET / MU / AMD
+- **Live STO still refused** pending Fri 2026-09-19 I4 review
+- **UW MCP DEFERRED** (never Helsinki; never Continual15 submit)
 - **One-lot preference**; no hard concurrent-position caps; no daily-loser circuit breaker
 - **Grok / any LLM is outside the broker execution boundary**: approve/skip only; never set OCC, qty, limit, account, or order action
 

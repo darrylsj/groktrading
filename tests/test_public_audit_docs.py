@@ -1,4 +1,4 @@
-"""Guards for the public OpenAI / Claude audit packs and $25k YOLO framing."""
+"""Documentation contracts for onboarding, operator policy, and audit packs."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+CURRENT_POLICY = ROOT / "docs" / "CURRENT_POLICY.md"
 WEBSOCKETS = ROOT / "docs" / "WEBSOCKETS.md"
 PLANES = ROOT / "docs" / "REALTIME_PLANES.md"
 PLANES_AUDIT = ROOT / "docs" / "astra_realtime_planes_audit_20260912.md"
@@ -16,88 +17,67 @@ CLAUDE_AUDIT = ROOT / "docs" / "CLAUDE_AUDIT.md"
 LICENSE = ROOT / "LICENSE"
 
 
-def test_readme_leads_with_public_audit_and_current_desk() -> None:
+def test_readme_explains_workflow_and_implementation_boundaries() -> None:
     text = README.read_text(encoding="utf-8")
     assert text.startswith("# GrokTrading\n")
-    first_h2 = next(line for line in text.splitlines() if line.startswith("## "))
-    assert first_h2.startswith("## Current live card"), first_h2
     assert text.find("Continual15") < text.find("Opening15")
-    assert "e297a0af" not in text
-    head = text[:4000]
+    # Keep the entry point useful without requiring historical incident prose.
     for needle in (
-        "Public reference package",
-        "external audit",
-        "not financial advice",
+        "## How a trade works",
+        "## What is implemented",
+        "## Try it locally",
+        "signals_only",
         "operator-gated",
-        "signals-only",
-        "Continual15",
-        "docs/LIVE_ORDER_GATE.md",
-        "docs/SAFETY.md",
-    ):
-        assert needle in head, needle
-    assert "Live orders are never placed by default" in text
-    for needle in (
-        "YOLO",
+        "Live orders are never placed by default",
+        "not financial advice",
+        "StaticSkipLLM",
+        "groktrading.gate.evaluate_gate",
+        "tools/live_order_gate",
+        "two different gate layers",
+        "matching_ask_tolerance=0",
+        "SIT_MATCH_MAX_AGE_SEC=60",
+        "SOFT 180s",
         "capital expansion",
         "$25,000",
         "Planning capital ≠ current broker equity",
+        "docs/CURRENT_POLICY.md",
+        "docs/LIVE_ORDER_GATE.md",
+        "docs/SAFETY.md",
+        "docs/OBSERVED_DEPLOYMENT.md",
+        "docs/STRATEGY_FACTORY.md",
+        "docs/SHADOW_BETS.md",
         "docs/OPENAI_AUDIT_BRIEF.md",
         "docs/CLAUDE_AUDIT.md",
-        "docs/WEBSOCKETS.md",
-        "docs/ARCHITECTURE.md",
-        "docs/astra_friday_desk_audit_20260911.md",
-        "docs/STO_UNLOCK_PLAN.md",
-        "docs/REALTIME_PLANES.md",
-        "docs/astra_realtime_planes_audit_20260912.md",
-        "CRON_TZ=America/New_York",
-        "sell_to_close",
-        "QQQ260911P00717000",
-        "Helsinki sensor farm",
-        "always-on listen",
-        "Grok Bot only",
-        "Box Trading Desk Archive",
-        "SIT_MATCH_MAX_AGE_SEC",
-        "SIT_MATCH_MIN_INTERVAL_SEC",
-        "SIT_MATCH_WEBHOOK",
-        "sit_match_webhook_muted",
-        "position truth",
-        "Grok Update Computer does not rebuild Helsinki",
-        "flow_ledger",
-        "account_events",
-        "flow-alerts",
-        "tide_state",
-        "UW_WS_URL",
-        "wire companion units",
-        "host-companions",
-        "emit_sit_match=False",
-        "issue_types[]",
-        "Three-plane",
-        "shortlist.json",
-        "not the trading latency",
-        "not the realtime design",
-        "groktrading.shortlist",
-        "tools/shadow_bets",
-        "docs/SHADOW_BETS.md",
-        "yes_latency_fix_wake",
-        "`sit_match` stays OFF",
-        "SHORTLIST_OPP_MAX_AGE_SEC=45",
-        "TOP1_ONLY",
-        "Continual15 + `shortlist.json`",
-        "dashboard/",
-        "docs/DASHBOARD.md",
-        "docs/LIVE_BOARD_REFRESH.md",
-        "uw_opportunity_refuses.jsonl",
-        "trading-desk-live-board",
-        "No new WebSocket subscriptions",
-        "Helsinki owns weekday RTH refresh",
-        "live_board_refresh.py",
     ):
         assert needle in text, needle
-    # Primary frame is $25k; ~$600 must not be the lead sentence.
-    assert "Tradier live cash on the order of **$600**" not in text
-    # Host Mon interval is ops fact; package default stays 60.
-    assert "Host Mon prep" in text
-    assert "**300**" in text
+
+
+def test_current_policy_preserves_dated_operator_card() -> None:
+    text = CURRENT_POLICY.read_text(encoding="utf-8")
+    for needle in (
+        "2026-09-17 PT",
+        "≥20%",
+        "80%",
+        "NEW-ENTRY CUTOFF ONLY",
+        "Overnight long options: ALLOWED",
+        "CRON_TZ=America/New_York",
+        "KEEP_PAUSED",
+        "HARD ±$0.02",
+        "SOFT 180s",
+        "60s",
+        "META / NET / MU / AMD",
+        "1.25",
+        "0.50",
+        "UW MCP: DEFERRED",
+        "SCORE-ONLY",
+        "stale_event>30s",
+        "QQQ260911P00717000",
+        "not in `logs/trades.jsonl`",
+        "STO_UNLOCK_PLAN.md",
+        "2026-09-19 is Saturday",
+        "09:00 through 15:55 ET",
+    ):
+        assert needle in text.replace("**", ""), needle
 
 
 def test_websockets_doc_covers_auditor_topics() -> None:
@@ -151,32 +131,26 @@ def test_websockets_doc_covers_auditor_topics() -> None:
         assert needle in text, needle
 
 
-def test_sto_unlock_plan_is_readme_contract() -> None:
-    """Dated hold + Wed unlock + audit verdict. Not a live flip."""
+def test_sto_unlock_plan_is_linked_from_readme_and_policy() -> None:
+    """Keep the current hold visible; detailed history belongs in the plan."""
     readme = README.read_text(encoding="utf-8")
     for needle in (
         "docs/STO_UNLOCK_PLAN.md",
-        "dated hold through Tue 2026-09-15 RTH",
-        "Wed 2026-09-16 open card",
+        "still refused",
         "Naked STO stays refused",
-        "tools/i4_credit_paper",
-        "PASS-WITH-FIXES",
-        "gate still single-leg submit",
-        "full audited spread path",
-        "protective direction",
-        "spread max-loss vs ≥20% floor",
-        "confirmed fills (not ack=closed)",
-        "SPY/QQQ American/physical",
-        "refuse-only Mon–Tue ≠ lifecycle proof",
-        "one unlock authority (Trading Bot on Wed open checklist PASS)",
-        "naked STO stays refused — do not keep a forever ban",
+        "KEEP_PAUSED",
     ):
         assert needle in readme, needle
+    policy = CURRENT_POLICY.read_text(encoding="utf-8")
+    assert "Fri 2026-09-19 I4 review" in policy
+    assert "intended review date needs operator confirmation" in policy
     text = STO_UNLOCK.read_text(encoding="utf-8")
     for needle in (
         "2026-09-12",
         "Tue 2026-09-15 RTH",
         "Wed 2026-09-16",
+        "Fri 2026-09-19 I4 review",
+        "Did not unlock",
         "defined-risk I4",
         "Naked STO",
         "allowlist",

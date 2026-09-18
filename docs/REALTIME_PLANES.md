@@ -2,6 +2,16 @@
 
 Authoritative hunt architecture. Replaces webhook→LLM `sit_match` firehose.
 
+**Operator overlay 2026-09-17 PT (current):** live hunt is Continual15 on
+`CRON_TZ=America/New_York */5 9-15 * * 1-5` (**5-minute floor**, not a
+literal 15-minute-only loop). Opportunity / `sit_match` /
+`shortlist_opportunity` stay **KEEP_PAUSED**. I1 consume is **SOFT 180s**
+(hard stale only >180). Ask band **HARD ±$0.02**. Take-gain TRIAL arm
+×**1.25** / protect 50% of peak (not ×1.40). UW MCP **DEFERRED**. Friday+
+shadow tags are **SCORE-ONLY**. Package `SIT_MATCH_MAX_AGE_SEC` default
+is still 60s until copied. Full card: [README.md](../README.md). Host
+facts: [OBSERVED_DEPLOYMENT.md](OBSERVED_DEPLOYMENT.md).
+
 **Merge ≠ Helsinki restart.** This file is package truth. It is **not** a
 claim the host already runs this commit, that the ranker timer is enabled,
 or that `/opt/trading-desk/state/shortlist.json` exists on Helsinki.
@@ -69,7 +79,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | **1 Hot sensor** | Helsinki `trading-desk-tape` + `trading-desk-finnhub` | Continuous WS/REST | No | No |
 | **2 Thin ranker** | `groktrading.shortlist` / `scripts/shortlist_ranker.py` | **5–15s** (default **10s**) | No | No |
-| **3 Decision** | Continual15 on the Grok Bot | Rolling 15-minute RTH looks after 09:30–09:45 ET stand-down, through **15:00 ET** | Yes (frozen facts only) | Only via `live_order_gate` after fresh Tradier quotes |
+| **3 Decision** | Continual15 on the Grok Bot | `*/5` RTH ET (5-minute floor; not 15-minute-only) after 09:30–09:45 ET stand-down, through **15:00 ET** | Yes (frozen facts only) | Only via `live_order_gate` after fresh Tradier quotes |
 
 Rate-limit **candidates** (≤1–3 OCCs in `shortlist.json`), **not** the tape.
 The hot sensor must keep writing. The ranker is a filter, not a mute on UW.
@@ -78,7 +88,7 @@ The hot sensor must keep writing. The ranker is a filter, not a mute on UW.
 
 | Knob | Meaning | Default | Must not |
 | --- | --- | --- | --- |
-| `SIT_MATCH_MAX_AGE_SEC` | **Print freshness (I1).** UW `executed_at` age at emit **and** consume | **60s** | Raise it to match any producer interval (including 300s) |
+| `SIT_MATCH_MAX_AGE_SEC` | **Print freshness (I1).** Package / inbox helper default | **60s** (package). Operator live consume **SOFT 180s** (hard stale only >180) | Raise the helper to match any producer interval (including 300s) and call that the live clock |
 | `SHORTLIST_MAX_AGE_SEC` | Ranker print-age cap | Unset → I1 60s | Set above I1. Optional **tighten 15–30s** for lifts. Ranker clamps any widen down to I1 |
 | `SHORTLIST_CADENCE_SEC` | Ranker timer | **10** (clamp 5–15) | Treat 300s as this cadence |
 | `SHORTLIST_STALE_SEC` | **Document** freshness for Continual15 (`ranked_at`) | **30s** (or `2 × cadence`) | Raise to 300s so a dead ranker still hunts |
@@ -154,9 +164,11 @@ Timer loop on the Bot:
 5. `tools/live_order_gate` (BTO entry / named STC exits). This package
    never POSTs.
 
-Continual15 window: after **09:30–09:45 ET** open stand-down, through
-**15:00 ET** (before 12:30 PT / 15:30 ET new-entry cutoff). Close card
-**16:00 ET**. Encoded cutoff stays **12:30 America/Los_Angeles**.
+Continual15 window: `CRON_TZ=America/New_York */5 9-15 * * 1-5` after
+**09:30–09:45 ET** open stand-down, through **15:00 ET** (before 12:30 PT
+/ 15:30 ET new-entry cutoff). Close card **16:00 ET**. Encoded cutoff
+stays **12:30 America/Los_Angeles**. The “15” in Continual15 is the
+strategy name, **not** a claim of one look per 15 minutes.
 
 Opening15 is research-only. It is not this loop.
 
@@ -168,25 +180,26 @@ Opening15 is research-only. It is not this loop.
 | fills / working-order / `login_dead` | Session integrity. **Keep.** |
 | `cash_up` | 12:30 PT entry-cutoff notice (`entry_cutoff_only_no_flatten`) |
 | `day_win_target` | Informational (`auto_flatten: false`) |
-| `sit_match` | **Deprecated as hunt bus.** **`sit_match` stays OFF.** Do
-  not unmute for hunt. Optional rare alert remains unused. Still I1 60s
-  if anyone ever turns it on. |
-| `shortlist_opportunity` | **Paused by default.** Host script
+| `sit_match` | **Deprecated as hunt bus.** **KEEP_PAUSED.** Do
+  not unmute for hunt. Optional rare alert remains unused. |
+| `shortlist_opportunity` | **KEEP_PAUSED.** Host script
   `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is
   operator-side (in-repo contract:
   `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Not the
-  hunt bus while the timer is paused. |
+  hunt bus. |
 
 `SIT_MATCH_MIN_INTERVAL_SEC=300` on the host is how Friday’s firehose was
 stopped. Leave it as a bandage on the optional alert path. **Default hunt
 must not depend on it.** **`sit_match` stays OFF.**
 
-### Opportunity wake-latency posture (2026-09-14)
+### Opportunity wake-latency posture (KEEP_PAUSED as of 2026-09-17)
 
-Monday `I1_stale` backlog was wake latency, not a reason to widen I1.
-Emit knobs if the host timer is ever enabled: TOP1_ONLY, wall-clock
-`executed_at`, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce 600s, global
-min interval 300s. Re-enable only if refuse-or-lift completes in <30s.
+Monday `I1_stale` backlog was wake latency. **Current:** opportunity /
+`sit_match` / `shortlist_opportunity` stay **KEEP_PAUSED**. The <30s
+refuse-or-lift path below is **historical re-enable criteria**, not an
+active unlock. Emit knobs if a later named review ever re-enables:
+TOP1_ONLY, wall-clock `executed_at`, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC
+debounce 600s, global min interval 300s.
 
 | Knob | Value | Must not |
 | --- | --- | --- |
@@ -196,8 +209,8 @@ min interval 300s. Re-enable only if refuse-or-lift completes in <30s.
 | `SHORTLIST_OPP_MAX_AGE_SEC` | **45** | Raise toward 300s or past I1 60s |
 | OCC debounce | **600s** | Per OCC\|`executed_at` firehose |
 | Global min interval | **300s** | Treat as hunt cadence |
-| Live I1 consume | **60s** | Unlock I1>60 so stale wakes “pass” |
-| Re-enable opportunity timer | only if a wake completes the **refuse-or-lift** path in **<30s** | Re-enable on hope / backlog pressure |
+| Live I1 consume | Operator **SOFT 180s** (hard stale only >180). Package helper default **60s** | Treat package 60s as the live clock, or unlock further so stale wakes “pass” |
+| Opportunity timer | **KEEP_PAUSED** | Re-enable on hope / backlog pressure |
 | Hunt while timer paused | **Continual15 + `shortlist.json`** | Wait on opportunity / sit_match POSTs |
 | `MUST_TRADE_SMALL_ASK_CAP` | **$1.50** (unchanged) | Widen the live must-trade cap |
 
@@ -219,11 +232,13 @@ Until `shortlist.json` is actually refreshing on the host:
 3. After an operator copies the ranker timer and confirms
    `/opt/trading-desk/state/shortlist.json` `ranked_at` is ≤30s old in RTH,
    Continual15 may pull the shortlist. That copy is **not** this merge.
-4. Re-enable the `shortlist_opportunity` timer **only** if a wake
-   completes refuse-or-lift in **<30s**. Otherwise leave it paused.
+4. **`shortlist_opportunity` stays KEEP_PAUSED** (2026-09-17). The <30s
+   refuse-or-lift path is historical criteria, not a current unlock.
 5. Finnhub was restarted (ops fact). Restarting Finnhub again is still an
    operator action. This PR does not restart it.
-6. Take-gain remains **TRIAL n=1**. Do not lock. Live I1 stays **60s**.
+6. Take-gain remains **TRIAL** (arm ×**1.25** / protect 50% of peak —
+   Darryl 2026-09-17). Do not lock. Do not treat ×1.40 as current.
+   Operator live I1 is **SOFT 180s**.
 
 **Merge ≠ Helsinki restart.** Merging this repo does not enable the timer,
 does not unmute sit_match, and does not deploy `/opt/trading-desk`.

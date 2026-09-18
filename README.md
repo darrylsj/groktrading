@@ -1,539 +1,245 @@
 # GrokTrading
 
-**Public reference package** intended for **external audit** (including OpenAI review under `darrylsj`). This is **not financial advice**. Secret-free **reference and deployment package** for a Helsinki-hosted, Grok-assisted options desk. **Helsinki** is always-on sensors (no LLM, no order router). **Grok Bot** decides. Default mode is **signals-only**. Paper is explicit. **Live orders are never placed by default.** Live trading is **operator-gated**. Merge ≠ Helsinki restart.
-
-This software does **not** promise trading success. It must **not** invent prices or P&L. Host observations are ops context, not a claim this commit is deployed. See [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md).
-
-## Current live card (authoritative)
-
-As of **PR #35 on `main`** (2026-09-11/12). Encoded cutoff and session labels use **PT**. Host trading routines use **`CRON_TZ=America/New_York`**. Any older ≥50% cash floor, flatten-at-12:30, or no-overnight policy in this tree is stale.
-
-- **Overnight long options: ALLOWED**
-- **12:30 PT = NEW-ENTRY CUTOFF ONLY** (15:30 ET; not a forced flatten). Fail-closed = no new risk; continue monitoring existing positions
-- **Cash/equity ≥20%** at all times as a pre-entry reserve / **max deploy 80%**
-- **One-lot preference (~$200)** — no hard concurrent-position caps, no daily-loser circuit breaker
-- **Entry is BTO-only**; named exits may **sell_to_close** via `tools/live_order_gate` (dry-run / audit). **No raw POST** from this package
-- **Live STO / credit: dated hold through Tue 2026-09-15 RTH** — not a forever ban. **Wed 2026-09-16 open card** = unlock review (default bias: allowlist **defined-risk I4** through `live_order_gate`). **Naked STO stays refused.** Plan + audit: [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
-- **Live orders must NEVER be triggered by WebSocket alone**; final gates recheck fresh Tradier **production** quotes
-- **Grok/LLM is outside the broker execution boundary**: approve/skip on frozen facts only; never set OCC, qty, limit, account, or order action
-- **Take-gain is TRIAL** — arm +40% / keep 50% of peak; **n=1** Fri `QQQ260911P00717000`. Do **not** lock
-- **Open stand-down only 9:30–9:45 ET**, then hunt. Close card **16:00 ET** (= 1:00 PM PT). Close is a card, not a flatten machine
-
-**Friday 2026-09-11 book (operator-stated; not in `logs/trades.jsonl`):** open $421.74 → close flat $460.56. Sole live lot `QQQ260911P00717000` BTO 1.06 → STC 1.45; Tradier `close_pl` +$39. n=1. Do not treat as expectancy.
-
-OpenAI P0.4 flatten-everything / no-overnight is **rejected**. Checklist: [docs/SAFETY.md](docs/SAFETY.md). Gate: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
-
-## Three-plane realtime desk
-
-**This is the realtime design.** It replaces webhook→LLM `sit_match` firehose. Full write-up: [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md). Audit: [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md).
-
-| Plane | Who | Cadence | LLM? |
-| --- | --- | --- | --- |
-| **1 Hot sensor** | Helsinki UW / Finnhub / Tradier → ledger/tape | Continuous | No |
-| **2 Thin ranker** | `groktrading.shortlist` → `shortlist.json` (≤1–3 OCCs) | **5–15s** (default 10) | No |
-| **3 Decision** | **Continual15** + fresh Tradier quotes → thesis → `live_order_gate` | Rolling 15-minute RTH looks | Grok on frozen facts |
-
-Rate-limit **candidates**, not the tape. No per-print Grok wake. Host path (ops docs, **not** a deploy claim): `/opt/trading-desk/state/shortlist.json`. Example timer: `deploy/examples/systemd/shortlist-ranker/` — **not auto-enabled.** Merge ≠ Helsinki restart.
-
-`SIT_MATCH_MAX_AGE_SEC=60` is **print freshness (I1)**. Do **not** raise it to match any producer interval. `SIT_MATCH_MIN_INTERVAL_SEC` (package 60; Host Mon prep **300**) is a **Cursor wake bandage**, not the trading latency target and **not the realtime design**. Hunt must not depend on it. Prefer `SIT_MATCH_WEBHOOK` **off** for hunt; optional rare alert only. Webhooks stay for `in_position` / fills / `login_dead`.
-
-Until the ranker file is actually refreshing on the host, Monday hunt is **Continual15 + `shortlist.json`** (when that file is live). **`sit_match` stays OFF.** The optional `shortlist_opportunity` timer stays **paused** unless a wake completes the refuse-or-lift path in **<30s**. Host script `/opt/trading-desk/bin/shortlist_opportunity_webhook.py` is operator-side (in-repo contract: `deploy/examples/helsinki/shortlist_opportunity_webhook.py`). Emit, if ever enabled: **TOP1_ONLY**, wall-clock `executed_at` freshness, `SHORTLIST_OPP_MAX_AGE_SEC=45`, OCC debounce **600s**, global min interval **300s**. Live I1 consume stays **60s** — do not unlock I1>60. Weekend sit_match mute may stay; open-card unmute is **not** required.
-
-## Decision loop: Continual15 (live hunt)
-
-**Live hunt is Continual15** — plane 3. Rolling 15-minute RTH looks **after** the 9:30–9:45 ET open stand-down, through **15:00 ET** (before the 12:30 PT / 15:30 ET new-entry cutoff). Pull shortlist + fresh Tradier quotes when that file is live; otherwise hunt without the sit_match bus. Grok decides on frozen facts. Helsinki does not.
-
-**Opening15** (first-15-minute / ten-stock, Tuesday 2026-09-08 paper pilot) is **research-only**. It is **not** the live strategy. Capture/monitor/report stay quote-only; **no broker order path**. Protocol: [Opening15 decision protocol](docs/OPENING15_DECISION_PROTOCOL.md). Paper runbook: [Opening15 experiment](docs/OPENING15_EXPERIMENT.md). Tuesday readiness notes stay paper: [Tuesday execution readiness](docs/TUESDAY_EXECUTION_READINESS.md).
-
-## live_order_gate (entry + exit)
-
-In-repo source of truth: `tools/live_order_gate`. **This package never POSTs** (P0). Dry-run form + audit only. The Bot / operator HTTP client is a separate step. **PR #35** ported Friday’s STC exit path into git. Package `evaluate_gate` / `OrderPayload.side` remain **BTO-only** so the FSM does not grow a credit type.
-
-| Path | Side | Notes |
-| --- | --- | --- |
-| Entry | `buy_to_open` only | Thesis required; 12:30 PT cutoff; cash debit; exact-side credit/STO **dated hold** (through Tue 2026-09-15 RTH); alphanumeric tag; same-PT-session + 8h thesis TTL |
-| Exit | `sell_to_close` / `buy_to_close` | Only named strategies: `take_gain_exit`, `dead_thesis_exit`, `falsifier_exit`, `stop_exit`, `manual_exit`, `time_stop_exit`. Skip cutoff + cash debit. `parent_signal_id` required. Thesis required |
-
-Closes go through `live_order_gate`, not `Executor.maybe_submit`. Details: [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md).
-
-### I4 / STO dated hold (not a forever ban)
-
-Operator intent **2026-09-12** ([docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)):
-
-- **Live** STO/credit stays refused **through Tue 2026-09-15 RTH**
-- **Paper I4** Mon–Tue only: SPY/QQQ **$1-wide** defined-risk vertical, qty=1, paper only
-- **Wed 2026-09-16 open card** = unlock review. Default bias = drop the **blanket** ban and **allowlist defined-risk I4** through `live_order_gate` (flag + shape checks). **Not** a raw POST
-- **Naked STO stays refused** after unlock
-- Checklist FAIL → name the gap + next review **≤3 RTH days** (no open-ended ban)
-- After unlock kills: ungated live credit → re-ban+audit; **−1× max_loss twice in 5 sessions** → pause live I4 (**blocks new entries, preserves exits**)
-
-Local Codex gpt-6-astra: **PASS-WITH-FIXES** (not forever-ban). Gaps before Wed unlock:
-
-1. gate still single-leg submit — need full audited spread path before live allowlist
-2. validate OCC root/expiry/type/width/$1/protective direction at live submit
-3. define cash budget / spread max-loss vs ≥20% floor
-4. exit evidence must require confirmed fills (not ack=closed)
-5. fix settlement language — SPY/QQQ American/physical; timed pre-expiry close; paper intrinsic = simulation
-6. refuse-only Mon–Tue ≠ lifecycle proof; require deterministic lifecycle test if no paper trade
-7. one unlock authority (Trading Bot on Wed open checklist PASS) + controlled flag; pause blocks new entries, preserves exits
-8. naked STO stays refused — do not keep a forever ban
-
-I4 is **not** I1 print freshness, **not** I1 `must_trade_small`, **not** I2 sit-2, and **not** a Wheel Desk (CSP/CC). Continual15 remains BTO debit hunt. This PR does **not** flip the gate.
-
-Paper toolkit path: [`tools/i4_credit_paper`](tools/i4_credit_paper) (stub README; pack-first). Do not treat the stub as an executor.
-
-Optional green-week (2026-09-12) add-ons — **not live gates**: overnight
-carry notes on `write-thesis` (`--overnight-carry` requires DTE / event risk /
-rationale; `how_it_dies` still required); shadow GEX 60-minute paired scorer
-in [`tools/gex_shadow`](tools/gex_shadow) (`live_gate=false`; never invents
-marks). Helsinki **shortlist deploy is operator-side**. Note:
-[docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md).
-
-## Strategy factory (observational ledger)
-
-Hypothesis ledger for continuous strategy discovery
-(generate → paper → validate → kill). **Observational only.** Ported from
-the Trading Desk pack so Continual15 prompts stay portable.
-
-- Never calls Tradier / UW; never invents prices or P&L
-- `live_gate=false` always — does **not** flip `live_order_gate`
-- STO / I4 remain on the dated unlock plan
-- Does **not** replace `live_order_gate` / `evaluate_gate`
-
-In-repo SoT: [`tools/strategy_factory`](tools/strategy_factory). Desk
-defaults: [`config/strategy_factory.json`](config/strategy_factory.json).
-Doc: [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md).
-
-## Shadow bets RSI (observational)
-
-Refuse ledger → Tradier-cited shadow outcomes. Ported from the Trading
-Desk pack (`/home/box/agent-data/projects/trading-desk/tools/shadow_bets/`)
-so Monday I1_stale wake-latency RSI stays portable.
-
-- Never invents NBBO; never places orders; `live_gate=false`
-- Labels such as `yes_latency_fix_wake` are **observational only**
-- Does **not** unlock I1 > 60s, re-enable `sit_match`, or change
-  `MUST_TRADE_SMALL_ASK_CAP`
-- CLI: `run-session --session YYYY-MM-DD`, `open-from-refuses`,
-  `mark-session`, `summarize`
-
-In-repo SoT: [`tools/shadow_bets`](tools/shadow_bets). Doc:
-[docs/SHADOW_BETS.md](docs/SHADOW_BETS.md).
-
-## Desk live board (observational)
-
-Static opportunity funnel + optional READ-ONLY Helsinki health
-snapshots. Ported so `dashboard/` exists on GitHub (it was pack-only).
-
-- Reads `uw_opportunity_refuses.jsonl` (refuse reasons, last evidence
-  OCCs) plus optional shortlist / shadow-summary hooks
-- Optional `ws_stats` from `finnhub_tape.json` (connection / freshness /
-  symbols) and `live_tape` health (`flow_n` / `flow_http` / `errors` /
-  `candidates`). **No new WebSocket subscriptions.** **`sit_match` stays
-  OFF.** **No `shortlist_opportunity` resume.**
-- Writes `board.json` + `index.html` for the sibling Vercel site
-  [`darrylsj/trading-desk-live-board`](https://github.com/darrylsj/trading-desk-live-board)
-- Never invents prices / P&L / OCCs. CI uses fixtures — does **not**
-  claim Helsinki files exist. `live_gate=false`
-- **Helsinki owns weekday RTH refresh** (zero LLM, no Cursor wake):
-  `scripts/live_board_refresh.py` + `trading-desk-live-board-refresh.timer`
-  (09:00–15:55 ET Mon–Fri / 5m). Continual15 still writes pack evidence
-  cards separately. Board may lag refuse ledger until that file is on
-  the host. [docs/LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md)
-
-In-repo SoT: [`dashboard/`](dashboard/). Doc:
-[docs/DASHBOARD.md](docs/DASHBOARD.md).
-
-## Helsinki sit_match (deprecated as hunt bus)
-
-Helsinki is an **exchange-grade sensor farm + append-only research DB**. It is **always-on listen** with API keys on the host. It is **not** a decision engine and it is **not** an order router. Plane 1 writes the tape; plane 2 ranks; **Grok Bot only** decides.
-
-| Role | Who |
-| --- | --- |
-| Listen / normalize / freshness / filter / ledger | **Helsinki** (no LLM) |
-| Thin shortlist (≤1–3 OCCs, 5–15s) | **Helsinki ranker** (no LLM) — package helper, host-wired |
-| Decide / place orders | **Grok Bot only** |
-
-`sit_match` POSTs are **deprecated as the hunt bus** (PR #34 stopped the firehose; it did not become the realtime design). Prefer `SIT_MATCH_WEBHOOK` **off** for hunt. Optional rare alert mode only. Weekend-muted on the host is fine; open-card unmute is optional.
-
-**Freshness (I1, still 60s):** UW `option-trades` `executed_at` age ≤ `SIT_MATCH_MAX_AGE_SEC` (default **60s**). Do **not** raise this to match `SIT_MATCH_MIN_INTERVAL_SEC`. `created_at` / `timestamp` / inbound `print_age_sec` are **not** the execution clock. `print_age_sec` is overwritten from `executed_at` at POST. Re-check immediately before HTTP (`sit_match_stale_at_post`); stamp `emitted_at`. **OCC-only** debounce (not per OCC\|`executed_at`). Mute: `SIT_MATCH_WEBHOOK=0` and/or mute file `/opt/trading-desk/state/sit_match_webhook_muted` → `sit_match_webhook_muted`. Call `prepare_sit_match_outbound` on the host tape (`ws_tape.py`) at POST, not at detect. Inbox + I1 still refuse stale `executed_at` at consume.
-
-| Knob | Package default (this tree) | Host ops fact | Hunt role |
-| --- | --- | --- | --- |
-| `SIT_MATCH_MIN_INTERVAL_SEC` | **60** | **300** (Mon prep bandage) | **Not** trading latency. Hunt must not depend on it |
-| `SIT_MATCH_MAX_AGE_SEC` | **60** (inbox + I1 + ranker print clock) | **60** | Print freshness. Do **not** raise to match producer |
-| `SIT_MATCH_WEBHOOK` | unset = optional producer may emit unless muted | Weekend-muted | Hunt default **off** |
-| Ranker cadence | 10s (clamp 5–15) | Not claimed deployed | Plane 2 |
-
-Package default may still differ until the host copies this tree. **Merge ≠ Helsinki restart.** Do not claim this commit is live on `/opt/trading-desk`.
-
-**Mon hunt posture:** 300s producer ∩ 60s consume is **near-empty**. That is why 300s is not the design. Hunt is **Continual15 + `shortlist.json`** while the opportunity timer is paused. **`sit_match` stays OFF.** Do not “fix” emptiness by widening consume age. Reserve webhooks for **`in_position` / fills / working-order / `login_dead`**. Re-enable `shortlist_opportunity` only if a wake completes refuse-or-lift in **<30s**.
-
-Host contract (rare alert): `deploy/examples/helsinki/ws_tape_sit_match.py`. Simulate: `scripts/simulate_sit_match_webhook.py` (local 127.0.0.1 only; does not read `grok-webhook.env`). Non-finite limits (`inf` / `NaN`) fail closed. Package: `groktrading.sit_match`. Ledger may still **store** stale or clock-less prints for research (`groktrading.flow_ledger`); freshness-sensitive use fail-closes.
-
-## Clocks
-
-| Clock | Zone | Meaning |
-| --- | --- | --- |
-| Host trading routines | **`CRON_TZ=America/New_York`** | Travel-proof. Open card 09:00 ET (not hunt). Continual15 after stand-down through 15:00 ET. Close card **16:00 ET** (= 1:00 PM PT). AH 16:06 ET |
-| Open stand-down | ET | **Only 9:30–9:45 ET**, then hunt. Do not lift at 09:00 ET |
-| Encoded new-entry cutoff | **12:30 America/Los_Angeles** | Authoritative for new BTO in `evaluate_gate` / `live_order_gate`. 12:30 PT = 15:30 ET |
-| Repo example crons / installer docs | often `America/Los_Angeles` | **Docs ≠ host.** Do not copy example crons onto trading routines without stating `CRON_TZ` and city |
-
-Friday’s close card wrongly fired at 13:00 America/Toronto (mid-RTH). Default host TZ is how that happened. Any new cron or close card must state `CRON_TZ` and city.
-
-## Operator mandate (YOLO — capital expansion)
-
-This is Darryl’s **YOLO account**. The goal is **capital expansion**, not capital preservation. Do **not** frame the desk as a “don’t lose” or preservation book.
-
-| Frame | Meaning |
-| --- | --- |
-| **Planning / selection / multi-lift sizing** | **$25,000** desk capital |
-| **Live Tradier fills** | May still be **cash-constrained** on a **smaller funded balance** until the $25k is deposited |
-| **Do not confuse** | Planning capital ≠ current broker equity. Auditors must not assume the live book already holds $25k. |
-
-**Milestone spirit:** grow aggressively within the live-card risk rails (cash/equity ≥20% / max deploy 80%, overnight OK, 12:30 PT = new-entry cutoff only). Encoded gate math stays **one-lot** (`qty == 1`); $25k is the planning frame, not a claim that the funded account is already $25k.
-
-**Historical note (not the primary frame):** the live funded book started small (early operator notes used on the order of hundreds of dollars; first milestone $1,000, then $10,000). Planning capital is **$25k**.
-
-## Auditor links
-
-- **Safety:** [docs/SAFETY.md](docs/SAFETY.md)
-- **WebSockets:** [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md)
-- **live_order_gate:** [docs/LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md)
-- **STO / I4 dated unlock:** [docs/STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md)
-- **Green-week optional (2026-09-12):** [docs/GREEN_WEEK_OPTIONAL_20260912.md](docs/GREEN_WEEK_OPTIONAL_20260912.md)
-- **Strategy factory (observational):** [docs/STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md)
-- **Shadow bets RSI (observational):** [docs/SHADOW_BETS.md](docs/SHADOW_BETS.md)
-- **Desk live board (observational):** [docs/DASHBOARD.md](docs/DASHBOARD.md)
-- **Helsinki RTH live-board refresh (zero LLM):** [docs/LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md)
-- **Friday desk audit:** [docs/astra_friday_desk_audit_20260911.md](docs/astra_friday_desk_audit_20260911.md)
-- **Realtime planes:** [docs/REALTIME_PLANES.md](docs/REALTIME_PLANES.md)
-- **Planes audit:** [docs/astra_realtime_planes_audit_20260912.md](docs/astra_realtime_planes_audit_20260912.md)
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Also: [docs/OPENAI_AUDIT_BRIEF.md](docs/OPENAI_AUDIT_BRIEF.md) · [docs/CLAUDE_AUDIT.md](docs/CLAUDE_AUDIT.md) · [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md)
-
-## Architecture
-
-![GrokTrading architecture](docs/groktrading-architecture.png)
-
-**Outside APIs** supply Unusual Whales options flow, Finnhub stock trades and news, and Tradier production quotes, balances, positions, orders, and account events; Tradier sandbox is paper-lifecycle only (15-minute delayed data). **Helsinki** is always-on and non-LLM (planes 1–2): `trading-desk-tape` and `trading-desk-finnhub` write tape JSON continuously; a thin ranker may emit `shortlist.json` every 5–15s (≤1–3 OCCs; **not auto-deployed**); deterministic filters apply sit-2 / matching ask / skip already-run / 20% cash reserve; signed webhooks are reserved for `in_position` / fills / `login_dead` (not the hunt bus). The **Grok Bot** (plane 3, **Continual15**) writes thesis / approve-skip on **frozen facts**, then a deterministic final gate (fresh Tradier OCC quote TTL, quantity 1, duplicates, 12:30 new-entry cutoff) before preview → submit. Routines and the audit pack (`LESSONS`, `trades.jsonl`, `CHANGELOG`) stay local. The **Passive Reviewer** reads that audit pack **outside** the active loop and has no control or order permissions.
-
-**Hard rules**
-
-- **Finnhub ≠ option NBBO.** Do not gate option limit prices on Finnhub ticks.
-- **WebSocket never places orders.**
-- Matching ask uses a **Tradier production** quote.
-- Maintain **≥20% cash/equity** (max deploy 80%). Overnight longs allowed.
-- **12:30 PT** new-entry cutoff only (America/Los_Angeles). Not a flatten.
-- **Sandbox ≠ live fill evidence.** Production NBBO is pricing truth.
-
-Legend and the same chart: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md). Longer write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). WebSocket / webhook sequence (print → filter → webhook → Grok → gate → preview→submit): [docs/WEBSOCKETS.md](docs/WEBSOCKETS.md).
+GrokTrading supports a **Grok-assisted options trading desk**. It looks for recent
+options-flow activity, checks whether the same contract is still available near
+the observed price, asks Grok to approve or skip a written trade thesis, and
+uses deterministic checks before an order can proceed.
+
+The live search routine is called **Continual15**. This repository contains its
+Python building blocks, research tools, and operating documentation. The Bot's
+scheduled decision routine and parts of the deployed sensor system are managed
+separately; installing this package does not start an autonomous trading bot.
+
+**Status:** alpha reference package. The default is `signals_only`; live trading
+is operator-gated. Live orders are never placed by default. There is no verified
+profitability claim. This is not financial advice.
+
+[How it works](#how-a-trade-works) · [Implementation status](#what-is-implemented)
+· [Current policy](#current-live-card) · [Try it locally](#try-it-locally)
+· [Documentation](#documentation)
+
+## How a trade works
+
+The working hypothesis is that **recent options flow, supporting evidence, and
+an executable price may identify a short-term opportunity**. Flow supplies a
+candidate to investigate; it does not prove a trade will be profitable. The
+shortlist sorts eligible contracts by recency, not by predicted return.
+
+1. **Observe the market.** The always-on server, **Helsinki**, collects Unusual
+   Whales options flow, Finnhub stock activity, and Tradier data. It stores market
+   observations in local tapes and a flow ledger. Helsinki runs no LLM and does
+   not place orders.
+2. **Narrow the candidates.** The Python ranker filters recent flow prints by
+   contract, price band, excluded symbols, and supplied session/position facts.
+   It produces up to three distinct contracts in `shortlist.json`. Its default
+   price band is $0.50–$2.00 per option share; this is separate from entry sizing.
+3. **Make a decision.** Continual15 periodically reads the shortlist when it is
+   deployed and fresh. The Bot assembles fresh Tradier quotes and other evidence
+   for Grok to review. Grok returns **approve or skip**, a thesis, and the facts
+   it relied on. Contract, quantity, price, account, and order action belong to
+   deterministic execution code. The repo provides this interface and a default
+   skip adapter, not the deployed Grok scheduler or model integration.
+4. **Check the proposed entry.** Approval is only one input. The package gate
+   checks print/quote age, matching ask, session confirmations, prior activity,
+   broker positions and working orders, cash reserve, quantity, market hours,
+   and the entry cutoff. Missing or stale required evidence blocks new risk.
+   The Bot also requires a written thesis and a condition that would invalidate it.
+5. **Preview, submit, and reconcile.** The package order state machine previews
+   the immutable entry payload, refreshes inputs, reruns the gate, and can submit
+   through an explicitly configured broker. An ambiguous response must be
+   reconciled by order tag before retrying. An acknowledgment is not a fill.
+6. **Manage the position and record the outcome.** The reported Bot process
+   monitors the thesis and the trial take-gain rule. Named exits require an exit
+   thesis linked to the entry. The 12:30 PT cutoff blocks new entries; existing
+   long options may remain overnight. Decisions, refusals, and confirmed fills
+   provide evidence for later review.
 
 ```mermaid
-flowchart LR
-  subgraph Outside["Outside World APIs"]
-    UW["Unusual Whales\nREST options flow\nask-side prints"]
-    FH["Finnhub\nWS stock trades\nREST news / earnings"]
-    TP["Tradier Production\nquotes · balances\npositions · orders\naccount events"]
-    TS["Tradier Sandbox\npaper lifecycle only\n15-min delayed data"]
-  end
-  subgraph Helsinki["Helsinki — always-on, non-LLM"]
-    TAPE["trading-desk-tape\nUW + Tradier → live_tape.json"]
-    FHSVC["trading-desk-finnhub\nWS → finnhub_tape.json"]
-    FILT["Deterministic filters\nsit-2 · matching ask\nskip already-run · 20% cash"]
-    RANK["Thin ranker 5–15s\nshortlist.json ≤1–3 OCCs"]
-    HOOK["Signed webhook outbox\nin_position / fills / login_dead"]
-    NIGHT["Nightly print scorer cron"]
-  end
-  subgraph Grok["Grok Bot computer — LLM"]
-    LLM["Thesis / approve-skip\non frozen facts only"]
-    GATE["Final gate\nfresh Tradier OCC quote TTL\nqty=1 · duplicates\n12:30 new-entry cutoff"]
-    EXEC["Preview → submit\nlive orders"]
-    AUDIT["Audit pack\nLESSONS · trades.jsonl\nCHANGELOG"]
-    ROUT["Routines\nstand-down · Continual15 · close\nafter-hours · overnight"]
-  end
-  REV["Passive Trade Reviewer\noutside active loop"]
-  UW --> TAPE
-  FH --> FHSVC
-  TP --> TAPE
-  TP --> GATE
-  TAPE --> FILT
-  FHSVC --> FILT
-  FILT --> RANK
-  RANK -->|"pull shortlist"| LLM
-  FILT --> HOOK
-  HOOK -->|"in_position / fills / login_dead"| LLM
-  LLM --> GATE
-  GATE --> EXEC
-  EXEC -->|"live"| TP
-  EXEC -.->|"paper verify"| TS
-  GATE --> AUDIT
-  ROUT --> AUDIT
-  NIGHT --> AUDIT
-  AUDIT --> REV
+flowchart TD
+  UW["Unusual Whales flow"] --> H["Helsinki sensors and ledger"]
+  FH["Finnhub stock context"] --> H
+  T["Tradier quotes and account state"] --> H
+  H --> R["Shortlist ranker"]
+  R --> G["Grok thesis: approve or skip"]
+  G -->|Approve| B["Bot policy and execution checks"]
+  T -->|Fresh recheck| B
+  B -->|Pass| O["Preview, submit, reconcile"]
+  G -->|Skip| A["Decision and outcome records"]
+  B -->|Refuse| A
+  O --> A
+  A --> V["Offline review and research"]
 ```
 
-Helsinki **ingests**, **normalizes**, enforces **freshness**, **filters**, optionally ranks a shortlist, and keeps **paper/live env files separate**. Units are **systemd** with **0600** env files. There is **no LLM on Helsinki** and **no per-print Grok wake**. The **LLM thesis / approve-skip** path (Continual15) works on **frozen facts only** and must not call Tradier. The **deterministic final gate / preview→submit executor** on the Grok Bot computer **does** use Tradier production for fresh OCC quotes and live orders. The **passive reviewer** is outside the runtime loop ([docs/REVIEWER.md](docs/REVIEWER.md)). Webhook outbox is **not** the hunt bus.
+This is the desk's intended division of responsibility. The ranker needs
+operator deployment, and the gate components below require integration.
+WebSocket events never directly trigger live orders. Opportunity webhooks
+(`sit_match` and `shortlist_opportunity`) remain **KEEP_PAUSED**; `sit_match`
+stays OFF. Position/fill notifications serve a separate monitoring role.
 
-## Helsinki vs this package
+## What is implemented
 
-As of **PR #35 on `main`** (package truth). Not a claim this commit is deployed. **Merge ≠ Helsinki restart.**
+There are **two different gate layers**. `groktrading.gate.evaluate_gate`
+validates a candidate against market/account facts. `tools/live_order_gate`
+validates the Bot's entry or exit thesis and builds an order form. Calling the
+second does not automatically run the first.
 
-| | Live Helsinki (ops context) | This package |
+| Component | What this repository provides | Boundary or remaining integration |
 | --- | --- | --- |
-| Tree | Hand-built `/opt/trading-desk` (no `.git`) | Git repo; installer default `/opt/groktrading` |
-| Units | `trading-desk-tape.service` (`ws_tape.py`) + `trading-desk-finnhub.service` | Example `groktrading-*.service` |
-| Orders | **No** preview→submit. Webhooks: `sit_match`, `in_position`, `cash_up` (`entry_cutoff_only_no_flatten`), `day_win_target` (`auto_flatten: false`) | Stub-safe `OrderMachine` (BTO) + dry-run `live_order_gate` (BTO entry / named STC exits) on the Grok consumer side |
-| `sit_match` interval | Host Mon prep **300s** (weekend-muted; bandage, not hunt) | Default `SIT_MATCH_MIN_INTERVAL_SEC` **60** |
-| Other webhooks | In-memory debounce ~90s (weekend same-digest spam) | SQLite WAL inbox/outbox + AH/weekend digest coalesce |
-| Trading clocks | Host routines **`CRON_TZ=America/New_York`** | Encoded cutoff 12:30 PT; example crons often `America/Los_Angeles` |
+| [Sensors and feeds](src/groktrading/feeds/) | Provider clients, parsers, freshness helpers, and [host companion scripts](deploy/examples/systemd/host-companions/) | Several package CLIs are offline skeletons. Live companions require operator wiring; the existing host tape is separately maintained. |
+| [Shortlist](src/groktrading/shortlist.py) | Deterministic filtering, newest-first ranking, and JSON output; default 10-second cadence, configurable within 5–15 seconds | Example timer is not auto-enabled. Missing input produces an empty shortlist. |
+| [LLM interface](src/groktrading/llm.py) | Typed approve/skip contract and `StaticSkipLLM` | No bundled live Grok adapter or Continual15 scheduler. |
+| [Candidate gate](src/groktrading/gate.py) and [quote checks](src/groktrading/quote_gate.py) | Entry checks using supplied quotes, broker snapshots, and session facts | Callers must fetch current inputs. Entry models are buy-to-open only. |
+| [Bot thesis gate](tools/live_order_gate/) | Entry/exit thesis validation, form construction, and audit records | **Dry-run only; never POSTs.** It does not fetch quotes or enforce all candidate-gate checks. Bot HTTP submission is a separate integration. |
+| [Order lifecycle](src/groktrading/order_fsm.py) and [Tradier adapter](src/groktrading/brokers/tradier.py) | Preview, final gate, submit, and reconciliation primitives | Can submit through a configured broker. `Executor.maybe_submit` itself only previews after a passing gate. These are not automatically wired to the thesis CLI. |
+| [Deployment tooling](docs/DEPLOY.md) | Installer, environment templates, and service examples | Installing files or merging a PR does not update the live Helsinki tree. |
 
-Package hardening ships here first. Copy debounce/idempotency/`live_order_gate` onto the host only after an **operator-authorized** restart. **Grok Update Computer does not rebuild Helsinki.**
+The distinction matters: **“never POSTs” describes `tools/live_order_gate`, not
+the entire repository.** The Tradier client contains preview and submit methods.
+See [the thesis-gate contract](docs/LIVE_ORDER_GATE.md) and
+[execution checks](docs/SAFETY.md) before integrating them.
 
-## Helsinki sensor farm
+### Code defaults versus reported desk policy
 
-Hot research window is SQLite / day packs on limited disk (**7–14 days**). Cold history is **Box Trading Desk Archive** (`daily/YYYY-MM-DD/…`, no secrets).
+The operator snapshot and executable defaults differ. Documentation updates do
+not configure the running Bot or widen these defaults.
 
-- **No LLM on Helsinki.** No 10k-universe spray. **WebSocket → orders is forbidden.**
-- **P0 (merged):** append-only `flow_ledger`, Tradier **account-events**
-  position-truth helper, Box cold-rotate, `sit_match` freshness (#24/#25),
-  POST-time `print_age_sec` overwrite + mute + interval (#34),
-  `live_order_gate` STC (#35).
-- **P1/P2 (this package):** helpers only — UW **flow-alerts** poller (emit on
-  **new alert id**), tide + optional net-prem `tide_state.json`, bounded Tradier quote
-  interest, thin RTH screener snapshot, shadow minute-marks, `UW_WS_URL`
-  probe stub, Finnhub watch widen + overnight news, replay scorecard
-  skeleton. Package CLIs stay **offline skeletons**.
-- **Host companions (repo artifacts, operator-wired):** live **urllib**
-  pollers matching Helsinki 2026-09-08 under `scripts/` (`helsinki_http.py`
-  `UrllibHttp` — not httpx; `flow_ledger_companion.py`,
-  `flow_alerts_companion.py`, `tide_companion.py`, `screener_companion.py`,
-  `quote_interest_companion.py`) plus example units in
-  `deploy/examples/systemd/host-companions/`. Example units use
-  **`User=tradingdesk`** (not root) and omit webhook env on units that
-  never emit webhooks. urllib GETs do not follow redirects (Authorization
-  is not re-sent). **`install_helsinki.sh` does not copy, enable, or start
-  them.** **emit_sit_match=False.** Flow-alerts material is local JSONL
-  only (no Grok webhook). Authorization Bearer is runtime env only. Not a
-  claim these processes are live on Helsinki. **ETF `issue_types[]` is
-  required** on the option-trades companion query (alongside Common
-  Stock) so SPY/QQQ can appear in the flow ledger; Common Stock alone
-  dropped those ETF prints (0 SPY/QQQ 2026-09-10 through most of
-  2026-09-14).
-- **Account-events WS** (`wss://ws.tradier.com`): **position truth** only —
-  fills/cancels keep `in_position` honest after flatten. Never a submit path.
-  Package helper: `groktrading.feeds.account_events`. Example unit
-  `groktrading-account-events.service` is **files only** (not enabled by
-  `install_helsinki.sh`). Do **not** auto-start it.
-- **Box cold-rotate:** `scripts/box_cold_rotate.py` + [docs/BOX_ARCHIVE.md](docs/BOX_ARCHIVE.md).
-  Deny-list blocks `.env` / tokens / credentials, **symlinks**, paths
-  outside the archive root, and non-export suffixes. Delete only after
-  verified upload or `--confirm-delete`.
-- **Hot retention:** `scripts/hot_ledger_retain.py` purges `uw_flow.sqlite`
-  after a verified Box export (7–14 day window) and bounds companion JSONL.
-  Example timer/cron under `deploy/examples/systemd/hot-retention/` — do
-  **not** enable from this repo. Replay scorecard counts are **not**
-  performance evidence.
-- **Recovery:** SSH + systemd on the host. **Merging this repo does not
-  deploy Helsinki** and does **not** restart live units. After merge, an
-  operator must copy helpers into the live tape if needed and **wire companion units
-  separately** (copy `deploy/examples/systemd/host-companions/`
-  yourself). `ws_tape.py` stays host-owned. Account-events stays **files-only /
-  disabled**. **Merge ≠ Helsinki restart.**
-
-## What this is
-
-A typed Python package under `src/groktrading` with:
-
-- Finnhub stock-trade WebSocket helpers (reconnect/backoff, bounded watchlist, atomic redacted JSON, freshness/health, REST probe)
-- Generic Unusual Whales and Tradier clients (timeouts and stale data **fail closed**, dependency injection)
-- Candidate + deterministic gate (sit-2, matching ask, already-run, no first-red, TTL, ≥20% cash reserve, quantity 1, broker-authoritative duplicates, clock, 12:30 PT entry-cutoff)
-- Production quote gate (OCC, delayed, provider bid/ask dates, spread, no-chase; sandbox/synthetic cannot pass live)
-- Preview→submit order state machine (immutable payload, no blind retry; stub-safe; BTO-only payload)
-- Dry-run `tools/live_order_gate` (BTO entry + named STC/BTC exits; **never POSTs**)
-- Signed webhook sender plus durable SQLite WAL inbox/outbox idempotency (AH/weekend digest coalesce)
-- LLM interface: **approve/skip + thesis** from assembled facts only; **no broker access**; never sets OCC/qty/limit/account/order action
-- Signals-only executor stub and explicit live gating (WebSocket cannot submit live)
-- Paper recorder/reconciler (production NBBO truth vs sandbox delayed fills, `signal_id`, preview-before-order, same-session paper file)
-- 12:30 PT new-entry cutoff policy (not a forced flatten; overnight long options allowed; alert if cutoff cancel fails)
-- systemd/env **examples**, portable host installer (`scripts/install_helsinki.sh`), JSON Schema, CI, tests
-
-## Persistent logs
-
-Secret-free, append-only records. Rules: [docs/LOGS.md](docs/LOGS.md).
-
-| Path | Role |
-| --- | --- |
-| [CHANGELOG.md](CHANGELOG.md) | Development log (Keep a Changelog; America/Los_Angeles dates) |
-| [logs/trades.jsonl](logs/trades.jsonl) | Live trade journal (one JSON object per round-trip; open lot allowed) |
-
-`thinking.jsonl` is the mixed decision tape on the host. It is **not** committed and is **not** a substitute for either file above. Friday’s QQQ lot is **not** journaled here. n=3 is not an edge. Never commit secrets.
-
-## What this is not
-
-- A claim that Helsinki already runs **this** commit
-- A Backtrader/LEAN/Lumibot application (see research notes below)
-- A place for API tokens, webhook secrets, or host IPs
-- A claim that Opening15 is the live hunt (that is Continual15)
-
-## Operating modes
-
-| Mode | Default | Orders |
+| Setting | Checked-in behavior/default | Operator report, 2026-09-17 PT |
 | --- | --- | --- |
-| `signals_only` | Yes | Never |
-| `paper` | No | Tradier sandbox after preview + gate |
-| `live` | No | Requires explicit enablement; **still blocked** from WebSocket callbacks |
+| Flow-print freshness | `SIT_MATCH_MAX_AGE_SEC=60`; used by the ranker and live candidate gate | **SOFT 180s**, hard stale above 180 seconds |
+| Ask tolerance | `GateContext.matching_ask_tolerance=0` — exact ask by default | **HARD ±$0.02** at decision and submit recheck |
+| Other freshness clocks | Quote age 5 seconds; candidate TTL 15 seconds; shortlist document age 30 seconds by default | These are separate from flow-print age and the hunt interval |
+| Hunt cadence | No Continual15 scheduler in this package | Five-minute schedule; “15” is a strategy name |
+| Take-gain | Bot process; not an automatic exit implementation in the thesis gate | Trial: arm at 1.25× entry, protect 50% of peak gain |
+| Symbol exclusions | The shortlist excludes META, NET, MU, AMD, SPCX, and INTC puts | Same desk exclusions; the candidate gate is not a substitute for the ranker |
 
-Live policy encoded in the gate: **one-lot options**, **sit-2**, **matching ask**, **skip already-run**, **no first-red**, **no spray**, cash/equity **≥20%** at all times (max deploy 80%), **overnight long options allowed**, **12:30 PT new-entry cutoff only** (not a forced flatten). The final gate rechecks a **fresh Tradier production option quote** (provider timestamps, OCC, delayed flag), TTL, matching ask, buying power/cash/reserve, quantity **exactly 1**, duplicate/working/in-position from the broker snapshot, market hours, and the 12:30 new-entry cutoff. Candidate booleans cannot pass live alone. Live **closes** use `live_order_gate` named exits, not a raw POST.
+The ranker cannot recover prints it already discarded under its own freshness
+limit. A later 180-second consume policy does not make a 60-second producer
+accept older prints. The reported live configuration has not been verified by
+this repository. Sources: [models](src/groktrading/models.py),
+[policy constants](src/groktrading/policy.py), [print clock](src/groktrading/sit_match.py),
+and [operator snapshot](docs/CURRENT_POLICY.md).
 
-## API roles and limitations
+## Current live card
 
-### Finnhub
+**Operator-reported as of 2026-09-17 PT.** The complete dated card is in
+[Current desk policy](docs/CURRENT_POLICY.md); host observations are in
+[Observed deployment](docs/OBSERVED_DEPLOYMENT.md). These are records of reported
+policy, not proof that this commit is deployed.
 
-- **REST** (plan-entitled): quote, news, earnings, fundamentals, sentiment — `https://finnhub.io/api/v1`.
-- **WebSocket**: `wss://ws.finnhub.io` for **stock trades / last prints**.
-- **Finnhub does not provide option NBBO.** Do not gate option limit prices on Finnhub ticks.
-- **Plan limits vary.** Missing entitlements fail closed; do not fabricate series.
+- **Mandate:** capital expansion (the operator's “YOLO” account). Planning capital
+  is **$25,000**; actual Tradier cash/equity controls affordability.
+  Planning capital ≠ current broker equity.
+- **Entries:** buy to open, quantity one; preserve cash/equity ≥20% and max deploy
+  80%. The package checks this on entry. Overnight long options are allowed.
+- **Session:** no new entries during 09:30–09:45 ET. The stated Continual15 hunt
+  window then runs through 15:00 ET. The separate hard new-entry cutoff is
+  **12:30 PT / 15:30 ET**; it does not flatten the book.
+- **Exits:** use a named exit thesis and `sell_to_close` for a long option. The
+  trial take-gain arms when bid reaches **entry × 1.25** and sets protection at
+  **entry + 0.50 × (peak bid − entry)**, ratcheting with the peak. Thesis failure
+  or an operator exit can override it. This is a rule under evaluation.
+- **Credit/STO:** still refused pending a named I4 review. Naked STO stays refused.
+  The [review plan](docs/STO_UNLOCK_PLAN.md) does not itself enable a spread executor.
+- **Data and diagnostics:** UW MCP is deferred; opportunity webhooks remain
+  paused. Friday+ shadow tags are score-only and do not change live gates.
 
-Docs: https://finnhub.io/docs/api
+**Open documentation questions:** the recorded cron
+`CRON_TZ=America/New_York` with `*/5 9-15 * * 1-5` fires from 09:00 through 15:55 ET,
+so it requires separate session/window checks to match the stated hunt hours.
+The I4 source says “Fri 2026-09-19”, but that date is Saturday. The intended
+review date needs confirmation; the hold remains in force. Neither ambiguity
+is resolved by changing trading behavior in this README.
 
-### Unusual Whales
+## Try it locally
 
-- Live **options flow / option-trades** and published **ask-side, premium, volume, OI** fields.
-- **Configurable base URL** (default `https://api.unusualwhales.com`).
-- Docs: https://api.unusualwhales.com/ and https://unusualwhales.com/skill.md
-- This repo does **not** invent extra endpoint paths. Operators pass documented paths into the generic client.
-
-### Tradier
-
-| | Production | Sandbox |
-| --- | --- | --- |
-| REST | `https://api.tradier.com/v1/` | `https://sandbox.tradier.com/v1/` |
-| Market stream | `https://stream.tradier.com/v1/` | **None** (no delayed MD stream) |
-| Account events | `wss://ws.tradier.com` | `wss://sandbox-ws.tradier.com` |
-
-Surfaces used conceptually: **quotes, chains, balances, positions, orders, preview, clock, account events**.
-
-Opening15 macro VIX is requested as **`VIX`**, then **`I:VIX`**, then **`$VIX.X`**. Coverage is available only when Tradier returns one of those; the collector does not invent an index print. Sandbox has **no indices**.
-
-Sandbox (official market-data / FAQ docs): **~15-minute delayed** data, **no market-data stream**, **no Greeks**, **no indices**, **no tick timesales**; **account-event streaming is available**. **Production NBBO is pricing truth.**
-
-Docs: https://docs.tradier.com/docs/endpoints
-
-### Grok
-
-Thesis and **approve/skip** from assembled facts only. Never invent market data. The LLM must not hold broker credentials or call Tradier. Fresh OCC quotes and live orders go through the **deterministic gate / executor**, which **does** call Tradier production. Submit/close policy for the Bot is `tools/live_order_gate` (dry-run here).
-
-## Install and test
+Requires **Python 3.11+**. From a checkout:
 
 ```bash
+git clone https://github.com/darrylsj/groktrading.git
+cd groktrading
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
-ruff check src tests scripts
+python -m pip install -e ".[dev]"
+```
+
+Run an offline shortlist example with a deliberately empty input. No credentials,
+network calls, model, or broker connection are needed:
+
+```bash
+mkdir -p research-runs/readme-demo
+python -c 'from pathlib import Path; Path("research-runs/readme-demo/prints.json").write_text("[]\n")'
+groktrading-shortlist \
+  --prints research-runs/readme-demo/prints.json \
+  --out research-runs/readme-demo/shortlist.json
+python -m json.tool research-runs/readme-demo/shortlist.json
+```
+
+Expect schema `groktrading.shortlist.v1`, `candidates: []`,
+`empty_reason: "no_fresh_prints"`, and `emit_sit_match: false`. This exercises the
+local data contract, not a market signal. [The ranker guide](docs/REALTIME_PLANES.md)
+describes real ledger/tape inputs and timer wiring.
+
+Run the repository checks:
+
+```bash
+ruff check src tests scripts tools
 pytest
 mypy src/groktrading
 python scripts/scan_secrets.py
 ```
 
-## Rebuild / new host
+`signals_only`, `paper`, and `live` are integration modes; changing a mode is not
+a complete trading setup. The default executor records signals without placing
+orders. Paper/live callers must explicitly configure their broker and lifecycle.
+Keep production pricing evidence separate from sandbox execution artifacts.
+For host setup, use [Deploy](docs/DEPLOY.md) or
+[Rebuild on a new provider](docs/REBUILD_NEW_PROVIDER.md). The installer defaults
+to `/opt/groktrading`; the reported live host uses `/opt/trading-desk`.
 
-Portable, secret-free host install (new VPS or parallel rebuild next to live Helsinki): **[docs/DEPLOY.md](docs/DEPLOY.md)**. Different-provider full rebuild (copy secrets by key name, recreate units/crons, cutover): **[docs/REBUILD_NEW_PROVIDER.md](docs/REBUILD_NEW_PROVIDER.md)**.
+## Research and supporting tools
 
-```bash
-# files only — no enable, no start, no secrets, no live trading
-sudo ./scripts/install_helsinki.sh --dry-run
-sudo ./scripts/install_helsinki.sh
-```
+These help evaluate decisions and operations. They do not authorize live trading
+or automatically improve the strategy.
 
-Defaults: `INSTALL_ROOT=/opt/groktrading` (not legacy `/opt/trading-desk`), package-named units `groktrading-*.service` (not `trading-desk-*.service`), `signals_only`. Merging this repo still does **not** mean Helsinki runs this commit.
-
-## Deployment examples vs observed host
-
-- Copy-paste units and env **templates**: [deploy/examples](deploy/examples) (placeholders only; **root-only 0600** — see `PERMISSIONS.md`).
-- **Observed** Helsinki units (`trading-desk-finnhub.service`, `trading-desk-tape.service`, env paths, validated Finnhub WS/REST, successful webhook test): [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md).
-- Merging Finnhub tape into the existing Tradier/UW `live_tape.json` is an **explicit remaining deployment step**.
-- **Do not** restart Helsinki from a cloud agent.
-
-## Package layout
-
-| Path | Role |
+| Tool | Purpose and status |
 | --- | --- |
-| `src/groktrading/feeds/finnhub.py` | WS parse, backoff, watchlist, health, REST probe |
-| `src/groktrading/feeds/unusual_whales.py` | Generic UW GET |
-| `src/groktrading/feeds/tradier.py` | Generic Tradier quotes/balances/clock/preview |
-| `src/groktrading/brokers/` | Venue-aware `Broker` protocol; `TradierBroker`; Schwab OAuth helper + fail-closed stub |
-| `docs/DUAL_BROKER.md` | Dual-broker plan (OAuth helper; no dual-fire; exits follow holding venue; Tue Opening15 untouched) |
-| `src/groktrading/gate.py` | Deterministic final gate |
-| `src/groktrading/quote_gate.py` | P0.1 production quote validation |
-| `src/groktrading/order_fsm.py` | P0.3 preview→submit lifecycle |
-| `src/groktrading/idempotency.py` | Durable inbox/outbox (SQLite WAL) |
-| `src/groktrading/flow_ledger.py` | Append-only UW flow ledger (SQLite); sit_match emit stays fail-closed |
-| `src/groktrading/feeds/flow_alerts.py` | P1 UW flow-alerts poller; emit on new alert id only |
-| `src/groktrading/feeds/tide_state.py` | P1 market-tide + optional net-prem → `tide_state.json` |
-| `src/groktrading/feeds/quote_subscribe.py` | P1 bounded Tradier quote interest; `ws_tape.py` is host-owned |
-| `src/groktrading/shortlist.py` | Plane 2 thin ranker; `shortlist.json` ≤1–3 OCCs; no sit_match; no LLM |
-| `scripts/shortlist_ranker.py` | Ranker CLI (offline-safe). Host path `/opt/trading-desk/state/shortlist.json` is docs, not auto-deploy |
-| `src/groktrading/feeds/screener_snapshot.py` | P1 thin RTH screener snapshot; no sit_match spray |
-| `src/groktrading/feeds/shadow_marks.py` | P2 shadow minute-marks (quotes only; no orders) |
-| `src/groktrading/feeds/uw_ws.py` | P2 `UW_WS_URL` probe stub; fail-closed if unset; no invented protocol |
-| `src/groktrading/replay_scorecard.py` | P2 ledger replay counts (first-print / already-run / stale); no PnL |
-| `scripts/*_companion.py` | Host live pollers (secret-free). Operator-wired; not auto-enabled |
-| `deploy/examples/systemd/host-companions/` | Example companion units + replay-scorecard timer (not installer-managed) |
-| `src/groktrading/feeds/account_events.py` | Tradier account-events parse/backoff; position truth; never orders |
-| `src/groktrading/box_rotate.py` | Box cold-rotate deny-list + 7–14d keep-hot + delete guard |
-| `src/groktrading/retention.py` | Verified hot-ledger purge + companion JSONL bound |
-| `scripts/hot_ledger_retain.py` | Operator retain CLI (examples only; no live timer enable) |
-| `src/groktrading/webhook.py` | HMAC + durable or in-memory idempotency |
-| `docs/WEBSOCKETS.md` | Auditor WS/webhook map (Finnhub ≠ option NBBO; WS never orders) |
-| `docs/BOX_ARCHIVE.md` | Hot ledger vs Box `daily/YYYY-MM-DD/` cold archive |
-| `docs/OPENAI_AUDIT_BRIEF.md` | What to review / what not to change / $25k YOLO ask |
-| `docs/CLAUDE_AUDIT.md` | External Claude audit: live card, Opening15 paper path, APIs, local tests |
-| `src/groktrading/llm.py` | Decision protocol (approve/skip only) |
-| `src/groktrading/executor.py` | Signals-only stub + live guards |
-| `src/groktrading/paper.py` | Paper ledger |
-| `src/groktrading/policy.py` | Live card + 12:30 PT entry-cutoff |
-| `tools/live_order_gate/` | Bot submit/close policy: BTO entry fail-closed; STC/BTC exits. Dry-run; never POSTs. Optional overnight-carry thesis notes (soft). Credit/STO is a **dated hold** through Tue 2026-09-15 RTH (naked STO stays refused). [LIVE_ORDER_GATE.md](docs/LIVE_ORDER_GATE.md) · [STO_UNLOCK_PLAN.md](docs/STO_UNLOCK_PLAN.md) |
-| `tools/i4_credit_paper/` | Stub README for paper I4 (SPY/QQQ $1 defined-risk vertical). Pack-first; not an executor. |
-| `tools/gex_shadow/` | Shadow GEX 60-minute ask→bid pair scorer. `live_gate=false`. Never invents marks. |
-| `tools/strategy_factory/` | Observational hypothesis ledger (generate→paper→validate→kill). `live_gate=false`. No broker calls; no invented prices. Does not replace `live_order_gate`. [STRATEGY_FACTORY.md](docs/STRATEGY_FACTORY.md) |
-| `tools/shadow_bets/` | Observational refuse→Tradier-mark RSI (`run-session`, `open-from-refuses`, `mark-session`, `summarize`). Never invents NBBO. Labels such as `yes_latency_fix_wake` do not unlock I1>60. [SHADOW_BETS.md](docs/SHADOW_BETS.md) |
-| `dashboard/` | Observational desk board builder (book / open orders / funnel + optional READ-ONLY `ws_stats`). Static HTML/JSON for `darrylsj/trading-desk-live-board`. No new WS subscriptions; sit_match stays OFF; no opportunity webhook resume. [DASHBOARD.md](docs/DASHBOARD.md) |
-| `scripts/live_board_refresh.py` | Helsinki zero-LLM weekday RTH refresh → `live.json` + Vercel deploy when `vercel.env` has a token. Operator-wired timer only. [LIVE_BOARD_REFRESH.md](docs/LIVE_BOARD_REFRESH.md) |
-| `config/strategy_factory.json` | Desk defaults for the factory (cap 3 / session / category; confirmation allowlist; `live_gate` forced false) |
-| `docs/GREEN_WEEK_OPTIONAL_20260912.md` | Weekend optional tools pointer; Helsinki shortlist deploy is operator-side |
-| `docs/REALTIME_PLANES.md` | Three-plane hunt SoT (hot sensor / ranker / Continual15) |
-| `docs/astra_realtime_planes_audit_20260912.md` | Astra A–F on planes vs 300s sit_match |
-| `docs/astra_friday_desk_audit_20260911.md` | Fri 2026-09-11 process vs outcome; Mon refuse list |
-| `schemas/` | JSON Schema for tape/gate/LLM artifacts |
+| [Opening15](docs/OPENING15_EXPERIMENT.md) | Separate paper experiment covering the opening 15 minutes; not Continual15. Its [decision protocol](docs/OPENING15_DECISION_PROTOCOL.md) defines evaluation criteria. |
+| [Research cycle](docs/GROK_RESEARCH_HANDOFF.md) | Evidence capture, Codex CLI selection, outcome resolution, bounded next-day memory, and reviewed prompt versions. A research workflow, not proof the live Bot self-improves. |
+| [Strategy factory](docs/STRATEGY_FACTORY.md) | Observational hypothesis ledger: propose, collect evidence, paper, validate, reject/retire. `live_gate=false`; even `live_allow` does not enable `live_order_gate`. |
+| [Shadow bets](docs/SHADOW_BETS.md) | Observational study of refused candidates using supplied Tradier marks. `live_gate=false`; labels do not re-enable a webhook or change freshness policy. |
+| [GEX shadow](tools/gex_shadow/) | Paired quote study of gamma-exposure ideas; observational only. |
+| [Desk board](docs/DASHBOARD.md) | Static decision-funnel and optional read-only health views. [Refresh operations](docs/LIVE_BOARD_REFRESH.md) are separate from trading. |
+| [Dual-broker work](docs/DUAL_BROKER.md) | Tradier adapter plus Schwab OAuth helper and fail-closed stub; not a completed second execution venue. |
 
-## Hardening (package-first)
+**Evidence standard:** never invent prices, fills, or P&L. Tests establish behavior
+under their fixtures; they do not establish trading edge or deployed health.
+Sandbox fills and shadow marks must be labeled separately from confirmed live
+fills. Historical anecdotes, including the September 11 QQQ trade, belong in
+[dated audit notes](docs/astra_friday_desk_audit_20260911.md), not a performance claim.
 
-Safety details: [docs/SAFETY.md](docs/SAFETY.md).
+## Documentation
 
-- **P0.1** Quote freshness: OCC after normalize; `delayed==false`; ask>0; bid≥0; bid≤ask; provider `bid_date`/`ask_date` age; reject future timestamps; max spread; no-chase; sandbox/synthetic cannot pass live.
-- **P0.2** Final gate: sit / already-run / duplicate / position from durable session facts + fresh broker account/positions/orders/clock. Qty=1. Cash floor ≥20%. No WS-direct submit.
-- **P0.3** Order FSM: `RECEIVED → … → PREVIEW → FINAL_GATE → SUBMIT → ACK → FILLED/REJECTED → FLAT_RECONCILED`. Immutable payload; never blind-retry (query Tradier by `tag=signal_id` first). Paper/stub modes need no credentials.
-- **P0.4 rewritten** Entry-cutoff only. **Reject** flatten-everything / no-overnight.
-- **P0 no raw POST** `tools/live_order_gate` is dry-run / audit only.
-- **Idempotency** Durable SQLite WAL inbox/outbox; weekend/AH digest coalesce.
+| If you want to… | Read |
+| --- | --- |
+| Understand the strategy and terminology | [Operating model](docs/OPERATING_MODEL.md), [current policy](docs/CURRENT_POLICY.md) |
+| Trace sensors, ranking, and decisions | [Realtime planes](docs/REALTIME_PLANES.md), [architecture](docs/ARCHITECTURE.md), [WebSockets and webhooks](docs/WEBSOCKETS.md) |
+| Review order checks and exits | [Safety](docs/SAFETY.md), [thesis gate](docs/LIVE_ORDER_GATE.md), [I4 review plan](docs/STO_UNLOCK_PLAN.md) |
+| Understand provider roles | [API matrix](docs/API_MATRIX.md): UW for flow, Finnhub for stock context, Tradier production for option quotes and broker state. Finnhub stock ticks are not option NBBO. |
+| Deploy or rebuild | [Deploy](docs/DEPLOY.md), [new-provider rebuild](docs/REBUILD_NEW_PROVIDER.md), [observed host](docs/OBSERVED_DEPLOYMENT.md), [examples](deploy/examples/) |
+| Find evidence and retention rules | [Logs](docs/LOGS.md), [trade journal](logs/trades.jsonl), [Box archive](docs/BOX_ARCHIVE.md), [changelog](CHANGELOG.md) |
+| Conduct an external audit | [OpenAI brief](docs/OPENAI_AUDIT_BRIEF.md), [Claude brief](docs/CLAUDE_AUDIT.md), [passive reviewer](docs/REVIEWER.md) |
 
-**Measurement:** freeze strategy params except safety; keep selection / execution / risk separate; **n=3 live days ≠ edge**. Do not invent fills or claim profitability. Take-gain remains **TRIAL n=1**.
+Use code to establish package behavior, the dated policy card for operator intent,
+and deployment records for host observations. Older dated audits describe the
+system they reviewed; they do not override a later policy snapshot.
 
-## Optional research references (not dependencies)
-
-Do **not** add these to `pyproject.toml`. Licensing and product fit are the operator’s problem:
-
-- **LEAN** (QuantConnect) — official Tradier plugin, **Apache-2.0**; preview/submit shape is a **design reference only**.
-- **NautilusTrader** — reconciliation / lifecycle concepts; design reference only. Not the runtime.
-- **Lumibot** — Tradier support; **GPL** — do not vendor into this tree.
-- **Optopsy** — useful options studies if isolated; **AGPL** — do not import.
-- **QuantLib / vollib** — pricing research; optional, not required here.
-- **Backtrader** — **not used** (avoid GPL entanglement and the wrong execution model).
-
-This package is **not** a LEAN/C#/Nautilus/Lumibot/Optopsy migration.
+**Glossary:** an **OCC** identifies an option contract; **NBBO** is the national
+best bid and offer; **BTO/STC/STO** mean buy to open / sell to close / sell to open.
+**Sit-2 (I2)** is the two-confirmation entry path; **I1** also labels the
+`must_trade_small` exception, which bypasses only the sit-2 count check in the
+candidate gate. **I4** is the proposed defined-risk credit-spread experiment.
+**RTH** means regular trading hours; **PT/ET** mean US Pacific/Eastern time.
 
 ## License
 
-MIT — appropriate for a **public** GitHub reference package. Still: no warranty, no performance claims, no financial advice, no live trading by default.
+[MIT](LICENSE). No warranty or promised investment return.

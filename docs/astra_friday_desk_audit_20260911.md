@@ -1,8 +1,13 @@
 # Astra-style desk audit — Fri 2026-09-11 → Mon 2026-09-14
 
+**Historical** as of the audit date. Current operator card (2026-09-17 PT):
+take-gain TRIAL arm ×**1.25** / protect 50% of peak (not ×1.40); I1 SOFT
+180s; STO still refused pending Fri 2026-09-19. See [README.md](../README.md).
+
 Read-only audit of what got Darryl’s Tradier one-lot desk to Friday’s
 flat, plus the in-repo STC port. **Process vs outcome are not the same
-verdict.** Do not invent prices. Take-gain stays **TRIAL n=1**.
+verdict.** Do not invent prices. Take-gain on this page is the **then**
+TRIAL (arm +40% / n=1), not the current card.
 
 **Scope:** git `main` at `88c0c16` (PR #34) plus operator-stated Friday
 facts below. Host `ws_tape.py`, Grok Bot routines, and the box hot-patch

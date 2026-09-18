@@ -7,6 +7,34 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Changed
+
+- Public docs aligned to **operator-deployed desk as of 2026-09-17 PT**
+  (README live card, [docs/OBSERVED_DEPLOYMENT.md](docs/OBSERVED_DEPLOYMENT.md),
+  current-policy pages). **Not** a claim this commit is running on
+  Helsinki. **No SSH. No secrets. No invented fills/P&L.**
+  Current card: cash/equity **≥20%** / max deploy 80%; overnight longs
+  **ALLOWED**; **12:30 PT = new-entry cutoff only** (not flatten /
+  not cash-flat-by-close); Continual15 hunt on
+  `CRON_TZ=America/New_York */5 9-15 * * 1-5` (5-minute floor, not a
+  literal 15-minute-only loop); opportunity / `sit_match` /
+  `shortlist_opportunity` **KEEP_PAUSED**; ask band **HARD ±$0.02**
+  (`ask_drift`); I1 **SOFT 180s** (hard stale only >180; package
+  `SIT_MATCH_MAX_AGE_SEC` default still 60s until copied); live orders
+  **`live_order_gate` only**; take-gain **TRIAL** arm ×**1.25** /
+  protect 50% of peak gain (Darryl 2026-09-17 after operator-stated
+  INTC miss — **not** ×1.40); live STO **still refused** pending
+  **Fri 2026-09-19 I4 review** (Wed 2026-09-16 did not unlock); hard
+  skips **META/NET/MU/AMD**; **UW MCP DEFERRED** (box-only research if
+  ever; never Helsinki; never Continual15 submit); Continual15 Friday+
+  shadow tags **SCORE-ONLY**
+  (`stale_event>30s`, `stale_quote>2s`, `duplicate_event`,
+  `spread_or_size`, `multileg_unresolved`, `catalyst_unknown`); UW GUI
+  Flow Alerts / Screener gated delayed, 0DTE / Interval / Tide / dark
+  pool / multi-leg / news / calendars live on plan. Older ≥50% cash,
+  flatten-by-close, opportunity-as-hunt, take-gain ×1.40, UW-MCP-for-live,
+  and STO-unlocked-after-Wed-9/16 claims are marked historical.
+
 ### Added
 
 - Helsinki **zero-LLM weekday RTH live-board refresh** (2026-09-15)
