@@ -20,6 +20,13 @@ stub as a live or paper executor.
 
 ---
 
+**Calendar clarification:** the source label “Fri 2026-09-19 I4 review” is
+internally inconsistent: September 19, 2026 is Saturday; Friday is September 18.
+The quoted label below is retained as operator provenance, not a resolved
+appointment. The operator must confirm the intended review date. No date label
+or passage of time unlocks STO; the current refusal remains in force.
+See [CURRENT_POLICY.md](CURRENT_POLICY.md).
+
 ## Current posture (as of 2026-09-17 PT)
 
 | Item | Status |

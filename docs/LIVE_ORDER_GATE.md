@@ -1,7 +1,11 @@
 # live_order_gate (in-repo SoT)
 
-Grok Bot submit/close policy. **This package never POSTs.** Dry-run form +
-audit only. The Bot / operator HTTP client is a separate step.
+Grok Bot submit/close policy. **This tool never POSTs.** Dry-run form +
+audit only. The Bot / operator HTTP client is a separate step. The repository also contains
+Tradier submit methods and an entry order state machine; this CLI does not call
+them or automatically run `groktrading.gate.evaluate_gate`.
+
+Dated operator policy: [CURRENT_POLICY.md](CURRENT_POLICY.md).
 
 Until this note, `tools/live_order_gate` was **not in this tree**. The Grok
 box hot-patched STC so Friday’s QQQ lot could close. GitHub `main` was still

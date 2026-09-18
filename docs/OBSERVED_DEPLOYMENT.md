@@ -4,7 +4,7 @@ This file records **operator-observed** host facts. It is **not** a claim that *
 
 A portable installer now lives in-repo (`scripts/install_helsinki.sh`, [DEPLOY.md](DEPLOY.md)). Different-provider full rebuild (secrets by key name, legacy scripts, two crons, cutover): [REBUILD_NEW_PROVIDER.md](REBUILD_NEW_PROVIDER.md). That is rebuild tooling only. **This commit is still not the live Helsinki tree** until an operator cutover is recorded here.
 
-Public live-card SoT: [README.md](../README.md) **Current live card**. Safety checklist: [SAFETY.md](SAFETY.md).
+Dated operator policy: [CURRENT_POLICY.md](CURRENT_POLICY.md), including unresolved calendar/schedule labels. Introduction: [README.md](../README.md). Safety checklist: [SAFETY.md](SAFETY.md).
 
 ## Operator-locked desk (2026-09-17 PT)
 
