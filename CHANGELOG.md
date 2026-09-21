@@ -7,6 +7,15 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Idea Funnel B operating card
+  ([docs/IDEA_FUNNEL_B.md](docs/IDEA_FUNNEL_B.md)): ranked multi-source
+  ingest (sit2 / Continual15 + Unusual Whales on Helsinki, Trade Machine
+  trial, Options AI trial) with shadow-parallel scoring and live
+  `top_clear_one_lots` on Tradier only. Vendors never autofire. Docs
+  only; no profitability claim.
+
 ### Changed
 
 - Public docs aligned to **operator-deployed desk as of 2026-09-17 PT**
