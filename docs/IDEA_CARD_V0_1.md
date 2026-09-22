@@ -31,6 +31,8 @@ Rule: `ask_at_print = float(shortlist.premium)`.
 
 ## Ship gate
 
-Normalize code for this card ships only after the schema file is in-repo and
-a golden round-trip exists. Designing against v0.1 is fine. `get_ideas.py`
-is a separate shadow board feed and is not that normalizer.
+`tools/idea_board_scrape/idea_card_map.py` maps a board into card records
+with provenance. Empty legs set `legs_missing` and are not a contract.
+OCC is copied only when the leg already has an OCC symbol. That mapping
+does not replace the UW normalizer, and it does not authorize
+`live_order_gate`.

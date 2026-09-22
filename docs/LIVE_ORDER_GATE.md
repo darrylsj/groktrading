@@ -67,6 +67,8 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 - Tag `A-Za-z0-9` only (Tradier).
 - Same PT session + 8h entry thesis TTL.
 - Exit thesis cannot be submitted as a BTO (`exit_thesis_not_for_submit`).
+- Idea-board output is not an input. `get_ideas.py` does not call this
+  gate. Shadow/paper provenance on an idea card is not a submit.
 - **Broad-ETF long puts** (2026-09-21): `refuse_long_put_on_broad_etf`
   rejects buy-to-open puts on IWM, SPY, and QQQ at submit. Calls on those
   names, puts on other underlyings, and STC/BTC exits are not this rule.

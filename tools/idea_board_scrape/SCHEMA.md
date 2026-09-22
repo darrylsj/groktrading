@@ -38,6 +38,8 @@
 
 ## Rules
 - Only fields visible in UI (or captured XHR JSON). Never invent prices/strikes.
-- Paper/shadow only — scrapers never place broker orders.
+- Empty `legs` is `legs_missing` on the idea card. It is not a complete contract.
+- Paper/shadow provenance is required of any adapter and is not itself an order.
+- Scrapers never place broker orders and do not call `live_order_gate`.
 - If login wall: stop, report refs for in-chat form / 1Password; do not type secrets into chat.
 - Prefer SPA XHR JSON when available; else DOM card scrape; OCR last resort.

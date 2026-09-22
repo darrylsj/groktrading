@@ -17,17 +17,22 @@ desk sync. Vendors never autofire. Live mode stays Tradier
 Ingest → normalize one card → desk gates → score (multi-source bonus) →
 **shadow many in parallel** → **live Tradier top-clear one-lots only**.
 
-Trade Machine and Options AI ingest in this repository is the shadow/paper
-HAR path, not a live order path:
+Trade Machine ingest is an explicit redacted HAR
+(`GET` `www.trademachine.com` `action=tm_get_today2_strategy_results`, HTTP 200,
+latest response, source observation time). Options AI HAR→ideas is **off**.
+Chain XHR (`expire-strikes`, `chain-details`, quotes) is quotes-only.
+Options AI enters only as a validated DOM QuickStrike or Strategy Builder
+board (`--from-board`). ClickOptions is the wrong host.
 
-1. Capture a HAR with `tools/idea_board_scrape/cdp_har_capture.js` (box computerUse).
-2. Redact with `tools/idea_board_scrape/redact_har.py`.
-3. Build `idea_board.v0_1` with `tools/idea_board_scrape/get_ideas.py --from-har …`
-   for `--source trademachine` and `--source options_ai`.
+`--source both` keeps every input (a Trade Machine `--from-har` is not dropped
+when an Options AI `--from-board` is also passed) and writes the shadow
+pointer only after both products validate.
 
-That CLI writes evidence boards, a ledger line, and a shadow pointer. It does
-not submit orders. Do not wire it to live Tradier. Playbook:
-[tools/idea_board_scrape/PIPELINE.md](../tools/idea_board_scrape/PIPELINE.md).
+Shadow metadata does **not** authorize an order. An adapter must require
+`provenance.execution_realm` of `shadow` or `paper` and
+`live_order_gate: false`. `get_ideas.py` does not call `live_order_gate`.
+A later paper one-lot, if enabled, is `https://sandbox.tradier.com/v1` only.
+Playbook: [tools/idea_board_scrape/PIPELINE.md](../tools/idea_board_scrape/PIPELINE.md).
 
 ## Live mode
 

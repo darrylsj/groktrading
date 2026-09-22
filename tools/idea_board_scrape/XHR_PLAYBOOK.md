@@ -48,7 +48,12 @@ Only on the parent-approved signed-in profile. Log `xhr`/`fetch` URL + status + 
 5. Identify array-of-cards vs GraphQL `{ data: ... }` wrappers.  
 6. Update endpoint ledger in the research note (Speculative → Confirmed).
 
-### Heuristic JSON → schema keys
+Options AI HAR heuristic publication is **disabled**. Do not map
+`expire-strikes`, `chain-details`, or quotes into idea cards. ClickOptions
+is the wrong host. DOM QuickStrike / Strategy Builder boards are the only
+Options AI input until a Confirmed idea endpoint exists.
+
+### Heuristic JSON → schema keys (Trade Machine confirmed fields only)
 
 | Look for | Map to |
 |---|---|

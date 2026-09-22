@@ -16,19 +16,24 @@
 
 ## CLI
 
+There is no default HAR. Pass the capture you just redacted. `--source both`
+requires one Trade Machine input and one Options AI DOM board. A `--from-har`
+is not dropped when `--from-board` is also set. The shadow file is replaced
+only after every source succeeds.
+
 ```bash
-# TradeMachine from today’s confirmed HAR
+python3 tools/idea_board_scrape/redact_har.py /tmp/tm.har /tmp/tm_REDACTED.har
+
 python3 tools/idea_board_scrape/get_ideas.py --source trademachine \
-  --from-har evidence/idea_boards/har/trademachine_today_20260921_0910_pt_REDACTED.har
+  --from-har /tmp/tm_REDACTED.har
 
-# Options AI (after OAI HAR exists)
+# Options AI: validated DOM board. HAR→ideas is disabled.
 python3 tools/idea_board_scrape/get_ideas.py --source options_ai \
-  --from-har evidence/idea_boards/har/options_ai_board_*_REDACTED.har
+  --from-board evidence/idea_boards/options_ai_20260921_0846_pt.json
 
-# Both (uses each --from-har; or defaults to latest known HARs)
 python3 tools/idea_board_scrape/get_ideas.py --source both \
-  --from-har evidence/idea_boards/har/trademachine_today_20260921_0910_pt_REDACTED.har \
-  --from-har evidence/idea_boards/har/options_ai_board_….har
+  --from-har /tmp/tm_REDACTED.har \
+  --from-board evidence/idea_boards/options_ai_20260921_0846_pt.json
 ```
 
 ## Confirmed endpoints (as of 2026-09-21)
@@ -37,7 +42,7 @@ python3 tools/idea_board_scrape/get_ideas.py --source both \
 |---|---|---|
 | TradeMachine | `GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results` | Today board feed (Confirmed) |
 | TradeMachine | `tm_get_strategy_result` + `attach_live_option_quotes` | Legs for Active cards |
-| Options AI | **No dedicated idea XHR** (2026-09-21 HAR) | Ideas via authenticated **DOM QuickStrike** scrape; chain/quote XHR is market data only |
+| Options AI | **No dedicated idea XHR** (2026-09-21 HAR) | DOM QuickStrike / Strategy Builder boards only. `expire-strikes`, `chain-details`, and quotes are not idea cards. HAR heuristic is disabled. |
 
 ## Cadence (proposed)
 
@@ -46,6 +51,7 @@ RTH: every 30–60 min via routine calling computerUse capture → `get_ideas.py
 ## Guardrails
 
 - Paid session only; no redistributing commercial feeds.
-- Never commit raw HAR / cookies / tokens.
-- `no_invented_prices: true` always.
-- Live Tradier lifts still go through `live_order_gate` + Continual15 gates — idea boards do not submit.
+- Never commit a HAR. `redact_har.py` refuses a destination name without `REDACTED`. Unsupported body encodings fail closed.
+- `no_invented_prices: true` always. Do not invent Options AI status, mode, or login health from chain JSON.
+- Shadow pointer metadata is not a live-order authorization. Adapters must require `provenance.execution_realm` of `shadow` or `paper`.
+- `get_ideas.py` does not call `live_order_gate`. A future paper one-lot is `https://sandbox.tradier.com/v1` only.

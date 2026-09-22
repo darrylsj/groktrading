@@ -3,7 +3,9 @@
 Normalized Trade Machine and Options AI boards from the desk sync. Shadow/paper
 only. `shareKey` values in the Trade Machine sample are `[REDACTED]`.
 
-These files are fixtures for `tools/idea_board_scrape/get_ideas.py --from-board`.
-The capture HAR is not in git. Redact with `redact_har.py` before any HAR is saved.
+The Options AI file is a DOM QuickStrike board, not a HAR normalize.
+`get_ideas.py` will not build Options AI ideas from chain or quote JSON.
+The capture HAR is not in git. `redact_har.py` fails closed on unsupported
+encodings and refuses a raw output filename.
 
 Do not treat prices in the Options AI sample as live fills or as an order ticket.

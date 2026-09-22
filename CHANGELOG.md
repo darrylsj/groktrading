@@ -37,6 +37,22 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- **2026-09-21 Astra fail-closed on the idea path:** `redact_har.py` and
+  `cdp_har_capture.js` scrub API-key headers, Referer/Location/redirectURL,
+  form bodies, `postData.params`, page titles, and base64 utf-8 bodies.
+  Unsupported encodings fail closed. Raw HAR names are refused, and no
+  `.har` is tracked.
+- Options AI HAR→ideas is disabled. DOM QuickStrike / Strategy Builder
+  boards only. Chain/quote XHR is not mapped. ClickOptions is rejected.
+- Trade Machine accepts only host + GET + exact action + HTTP 200, uses
+  the latest response, stamps source observation time, and refuses the
+  fixed default HAR plus stale captures. HTTP 401 is not AUTHENTICATED.
+  Open_ legs from `attach_live_option_quotes` are kept; closing marks are
+  not. `idea_card` mapping carries provenance. `--source both` merges one
+  board per product into the shadow pointer only after both succeed.
+- Paper one-lot stub (`tools/idea_board_scrape/paper_lift.py`) is
+  `https://sandbox.tradier.com/v1` only and does not submit. Shadow
+  metadata is not a live-order boundary.
 - **2026-09-21 desk sync** (Helsinki / Grok Bot box → this repo):
   - `tools/idea_board_scrape/`: HAR capture helper, `redact_har.py`, and
     `get_ideas.py` building `idea_board.v0_1` for Trade Machine and

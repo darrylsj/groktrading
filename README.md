@@ -37,19 +37,22 @@ Full card: [Idea Funnel B](docs/IDEA_FUNNEL_B.md). Schema notes:
 [idea_card v0.1](docs/IDEA_CARD_V0_1.md).
 
 Trade Machine and Options AI boards in this repo are **shadow/paper**.
-Capture a HAR, redact it, then build `idea_board.v0_1`. This path never
-submits a live order.
+That label is not an order. Any adapter must require paper/shadow
+provenance. `get_ideas.py` is not wired to `live_order_gate`.
+
+Trade Machine: capture a HAR outside the repo, redact it, then pass that
+file explicitly. Options AI ideas come from a validated DOM QuickStrike or
+Strategy Builder board. Chain/quote HAR JSON is not an idea feed.
 
 ```bash
-node tools/idea_board_scrape/cdp_har_capture.js /tmp/tm.har
-python tools/idea_board_scrape/redact_har.py /tmp/tm.har /tmp/tm_REDACTED.har
-python tools/idea_board_scrape/get_ideas.py --source trademachine \
-  --from-har /tmp/tm_REDACTED.har
-python tools/idea_board_scrape/get_ideas.py --source options_ai \
-  --from-har /tmp/options_ai_REDACTED.har
+node tools/idea_board_scrape/cdp_har_capture.js /tmp/tm_REDACTED.har
+python tools/idea_board_scrape/redact_har.py /tmp/tm_REDACTED.har /tmp/tm_REDACTED.har
+python tools/idea_board_scrape/get_ideas.py --source both \
+  --from-har /tmp/tm_REDACTED.har \
+  --from-board evidence/idea_boards/options_ai_20260921_0846_pt.json
 ```
 
-Do not commit raw or redacted HARs. Playbook:
+Do not commit HAR files. There is no baked-in default HAR. Playbook:
 [tools/idea_board_scrape/PIPELINE.md](tools/idea_board_scrape/PIPELINE.md).
 
 ## How a trade works
