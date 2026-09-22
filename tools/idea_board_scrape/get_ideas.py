@@ -126,16 +126,39 @@ def validate_options_ai_dom_board(board: dict) -> dict:
     if board.get("no_invented_prices") is not True:
         raise SystemExit("options_ai: no_invented_prices must be true")
     out = json.loads(json.dumps(board))
+    for idea in out["ideas"]:
+        _apply_compare_metrics(idea)
     capture = "dom_quickstrike" if "quickstrike" in board_name.lower() else "dom_strategy_builder"
     provenance = dict(out.get("provenance") or {})
     provenance.setdefault("capture", capture)
     provenance["har_heuristic"] = False
     provenance["chain_xhr_mapped"] = False
+    provenance["compare_metrics_invented"] = False
+    provenance["expected_move_is_not_a_probability"] = True
     provenance["execution_realm"] = "shadow"
     provenance["authorizes_live_orders"] = False
     provenance["live_order_gate"] = False
     out["provenance"] = provenance
     return out
+
+
+def _apply_compare_metrics(idea: dict) -> None:
+    """Keep max risk / max gain / PoP only when the DOM already has them.
+
+    Chain quotes and Expected Move are not those fields. Missing stays null.
+    """
+    ui = idea.get("ui_fields")
+    if not isinstance(ui, dict):
+        ui = {}
+        idea["ui_fields"] = ui
+    for key in ("max_risk", "max_gain", "pop"):
+        if idea.get(key) is None and ui.get(key) is not None:
+            idea[key] = ui.get(key)
+        elif key not in idea:
+            idea[key] = None
+    present = all(idea.get(key) is not None for key in ("max_risk", "max_gain", "pop"))
+    idea["compare_metrics_present"] = present
+    idea["compare_metrics_source"] = "dom" if present else "absent"
 
 
 def build_board(

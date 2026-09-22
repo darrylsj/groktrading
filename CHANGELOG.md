@@ -37,6 +37,23 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- **2026-09-21 product-use landing:** [docs/IDEA_PRODUCT_USE.md](docs/IDEA_PRODUCT_USE.md)
+  (Options AI Compare metrics and Expected Move = 92.5% ATM straddle, not a
+  probability; Trade Machine Active-only, alerts/ProScan),
+  [docs/UNDERUSE_GAP_20260921.md](docs/UNDERUSE_GAP_20260921.md), and the
+  planning-only [$25k stack consult](docs/STACK_25K_YOLO_CONSULT_20260921.md).
+  README Idea Funnel B states the sandbox paper prove-it, the Friday
+  2026-09-25 PT prove/kill, and a Monday 2026-09-28 hard cancel if unproven.
+  No profitability claim.
+- `tools/tradier_paper/`: sandbox one-lots at `https://sandbox.tradier.com/v1`
+  only. Credentials stay in host env. Default dry-run; `--submit` is required
+  to POST. Near Active is not lifted. Options AI needs DOM max risk, max gain,
+  and PoP. Buy-to-open puts on IWM/SPY/QQQ stay refused.
+- `tools/idea_shadow_rank/`: shadow-only open slate. Active outranks Near
+  Active. Missing Compare metrics stay null.
+- Trade Machine normalize lists Active first and marks empty Near Active legs
+  as expected. Options AI DOM validation copies max risk / max gain / PoP when
+  present and does not invent them from chain data.
 - **2026-09-21 Astra fail-closed on the idea path:** `redact_har.py` and
   `cdp_har_capture.js` scrub API-key headers, Referer/Location/redirectURL,
   form bodies, `postData.params`, page titles, and base64 utf-8 bodies.

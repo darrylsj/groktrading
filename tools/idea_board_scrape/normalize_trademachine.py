@@ -55,6 +55,14 @@ def _status(row: dict) -> str:
     return "Near Active"
 
 
+def _status_rank(status: str) -> int:
+    if status == "Active":
+        return 0
+    if status == "Near Active":
+        return 1
+    return 2
+
+
 def _query(url: str) -> dict[str, list[str]]:
     return urllib.parse.parse_qs(urllib.parse.urlsplit(url).query, keep_blank_values=True)
 
@@ -281,11 +289,12 @@ def normalize(
     for row in rows:
         template = row.get("templateType") or ""
         legs = _legs_for_row(row, joined)
+        status = _status(row)
         ideas.append(
             {
                 "ticker": row.get("ticker"),
                 "strategy": TEMPLATE_LABELS.get(template, template or None),
-                "status": _status(row),
+                "status": status,
                 "direction": None,
                 "legs": legs,
                 "entry": {"display": None, "mid": None},
@@ -305,16 +314,22 @@ def normalize(
                         else "absent"
                     ),
                     "legs_missing": not legs,
+                    "legs_expected": status == "Active",
+                    "empty_legs_expected": status != "Active" and not legs,
                 },
             }
         )
+    ideas.sort(key=lambda idea: _status_rank(str(idea.get("status"))))
     active = sum(1 for idea in ideas if idea.get("status") == "Active")
+    near_active = sum(1 for idea in ideas if idea.get("status") == "Near Active")
     notes = [
         "Normalized from TradeMachine Today XHR (exact tm_get_today2_strategy_results).",
+        "Active rows are listed first. Trade only Active. Near Active is watch-only.",
         "as_of_pt is the source response time, not the extract time.",
         "Shadow/paper only — scraper does not place orders.",
         "no_invented_prices: entry.mid stays null. ISO expiry is not inferred from labels.",
-        "Empty legs mean the Show Options payload was absent, not a complete contract.",
+        "Empty Near Active legs are expected (Show Options is an Active control).",
+        "Empty Active legs mean the Show Options payload was absent, not a complete contract.",
     ]
     if login_health != "AUTHENTICATED":
         notes.append("Empty HTTP 200 array is not treated as AUTHENTICATED.")
@@ -332,6 +347,7 @@ def normalize(
         "counts": {
             "ideas": len(ideas),
             "active": active,
+            "near_active": near_active,
             "with_legs": sum(1 for idea in ideas if idea["legs"]),
         },
         "screenshots": [],

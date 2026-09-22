@@ -96,7 +96,7 @@ Login wall → `login_health: NOT_AUTHENTICATED`, empty `ideas`, stop (see SCHEM
 
 1. TradeMachine Today HAR → redact → map → `idea_board.v0_1` → ledger.  
 2. Sanity-check vs latest GUI capture (`evidence/trademachine_ideas_*`).  
-3. Options AI login → board HAR → same pipeline (paper/trial mode).  
+3. Options AI DOM QuickStrike / Strategy Builder board (not a HAR heuristic). Copy max risk, max gain, and PoP when shown.  
 4. Promote confirmed endpoints into the research ledger.  
 5. Automate repeatable XHR pull only after ≥1 Confirmed path per source.
 

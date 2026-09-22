@@ -11,7 +11,7 @@ import pytest
 
 import tools.idea_board_scrape.get_ideas as get_ideas
 from tools.idea_board_scrape.idea_card_map import board_to_idea_cards
-from tools.idea_board_scrape.normalize_trademachine import rows_from_har
+from tools.idea_board_scrape.normalize_trademachine import normalize, rows_from_har
 from tools.idea_board_scrape.paper_lift import PAPER_API_BASE, PaperLiftError, paper_one_lot_ready
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,6 +150,27 @@ def test_latest_200_wins_and_observation_time_is_source_time(tmp_path: Path) -> 
     assert cards[0]["vendor_status"] == "Active"
 
 
+def test_active_rows_sort_first_and_near_active_legs_stay_empty() -> None:
+    board = normalize(
+        [
+            _row("SMH", active=0),
+            _row("XLK", active=1, share="s_xlk"),
+            _row("BAC", active=0),
+        ],
+        endpoint="GET test",
+        observed_at=NOW,
+        login_health="AUTHENTICATED",
+        legs_by_key={"share:s_xlk": [{"side": "LONG", "right": "C", "strike": 194}]},
+    )
+    assert [idea["ticker"] for idea in board["ideas"]] == ["XLK", "SMH", "BAC"]
+    near = board["ideas"][1]
+    assert near["legs"] == []
+    assert near["ui_fields"]["empty_legs_expected"] is True
+    assert near["ui_fields"]["legs_expected"] is False
+    assert board["ideas"][0]["ui_fields"]["legs_expected"] is True
+    assert board["counts"]["near_active"] == 2
+
+
 def test_negative_tm_host_method_action_status_and_401(tmp_path: Path) -> None:
     wrong_host = tmp_path / "trademachine_wrong.har"
     _write_har(
@@ -255,6 +276,20 @@ def test_options_ai_dom_board_keeps_observed_fields(tmp_path: Path) -> None:
     assert board["provenance"]["har_heuristic"] is False
     assert board["provenance"]["chain_xhr_mapped"] is False
     assert board["provenance"]["live_order_gate"] is False
+    assert board["provenance"]["compare_metrics_invented"] is False
+    assert board["ideas"][0]["compare_metrics_present"] is False
+    assert board["ideas"][0]["max_risk"] is None
+    assert board["ideas"][0]["pop"] is None
+
+    rich = json.loads(json.dumps(sample))
+    rich["ideas"][0]["ui_fields"]["max_risk"] = 120
+    rich["ideas"][0]["ui_fields"]["max_gain"] = 340
+    rich["ideas"][0]["ui_fields"]["pop"] = 0.62
+    captured = get_ideas.validate_options_ai_dom_board(rich)
+    assert captured["ideas"][0]["compare_metrics_present"] is True
+    assert captured["ideas"][0]["compare_metrics_source"] == "dom"
+    assert captured["ideas"][0]["pop"] == 0.62
+    assert captured["ideas"][1]["pop"] is None
 
     thin = json.loads(json.dumps(sample))
     thin["ideas"][0].pop("status")

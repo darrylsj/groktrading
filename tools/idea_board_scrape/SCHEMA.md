@@ -43,3 +43,19 @@
 - Scrapers never place broker orders and do not call `live_order_gate`.
 - If login wall: stop, report refs for in-chat form / 1Password; do not type secrets into chat.
 - Prefer SPA XHR JSON when available; else DOM card scrape; OCR last resort.
+
+## Options AI DOM card fields
+
+Copy when the DOM shows them. Leave null otherwise. Never invent from chain
+quotes or from Expected Move (92.5% of the ATM straddle, not a probability):
+
+- `max_risk`, `max_gain`, `pop`
+- `compare_metrics_present` is true only when all three are present
+- `compare_metrics_source` is `dom` or `absent`
+
+## Trade Machine status
+
+- `Active` is the only tradable status. Legs come from Show Options
+  (`tm_get_strategy_result` + `attach_live_option_quotes`).
+- `Near Active` is watch-only. Empty legs are expected (`empty_legs_expected`).
+- Boards list Active rows before Near Active. Do not invent legs.

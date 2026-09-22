@@ -23,26 +23,46 @@ profitability claim. This is not financial advice.
 Locked 2026-09-20 PT (window ~ through 2026-10-04). Ranked ideas from
 three sources plus tape. Vendors never autofire. Live mode is
 `top_clear_one_lots` only — Tradier one-lots after desk gates. Shadow
-may run many ideas in parallel. Not a profitability claim.
+may run many ideas in parallel. **Not a profitability claim.**
 
-| Source | Role |
+| Source | Vendor-intended use on this desk |
 | --- | --- |
-| sit2 / Continual15 + Unusual Whales | Proprietary flow shortlist on Helsinki |
-| Trade Machine | Visual Today setups (GUI/XHR; trial) |
-| Options AI | Paper / expected-move ideas (trial) |
+| sit2 / Continual15 + Unusual Whales | Proprietary flow shortlist. Live stays on Helsinki behind `live_order_gate`. |
+| Trade Machine | Today board. Trade **Active** only (Near Active is watch). Show Options / OCC, then alerts and ProScan. Trial. |
+| Options AI | Fast Trade or Scanner → Compare (max risk, max gain, PoP at mid). Expected Move is 92.5% of the ATM straddle, not a probability. Trial. |
+
+Without Active → resolvable OCC and sandbox paper fills, the paid products
+are underused: the desk has about zero Trade Machine paper fills, get-ideas
+has not been run on an RTH cadence, Trade Machine OCC is incomplete, Options
+AI cards are missing risk/gain/PoP, and alerts / ProScan are unused.
+[Underuse gap](docs/UNDERUSE_GAP_20260921.md).
 
 Pipeline: ingest → normalize one card → desk gates → score (multi-source
 bonus) → shadow many in parallel → live Tradier top-clear one-lots only.
-Full card: [Idea Funnel B](docs/IDEA_FUNNEL_B.md). Schema notes:
+Full card: [Idea Funnel B](docs/IDEA_FUNNEL_B.md). Product use:
+[IDEA_PRODUCT_USE.md](docs/IDEA_PRODUCT_USE.md). Planning-only stack note:
+[$25k consult](docs/STACK_25K_YOLO_CONSULT_20260921.md). Schema:
 [idea_card v0.1](docs/IDEA_CARD_V0_1.md).
 
 Trade Machine and Options AI boards in this repo are **shadow/paper**.
 That label is not an order. Any adapter must require paper/shadow
 provenance. `get_ideas.py` is not wired to `live_order_gate`.
 
-Trade Machine: capture a HAR outside the repo, redact it, then pass that
+**Paper prove-it** is the Tradier sandbox account (`YOUR_SANDBOX_ACCOUNT_ID`
+from host env `TRADIER_PAPER_ACCOUNT_ID`) at `https://sandbox.tradier.com/v1`
+only. Never `api.tradier.com`. The live production account is not published
+here and is not a paper target. In-app Options AI paper is not Tradier paper.
+Never auto broker-connect Options AI to the live account.
+`tools/tradier_paper/` defaults to dry-run; `--submit` is the only POST, and
+it stays on the sandbox. Buy-to-open puts on IWM, SPY, and QQQ stay refused.
+
+Trade Machine trial **prove/kill is Friday 2026-09-25 end of day PT**. Hard
+cancel Monday 2026-09-28 if Active → OCC and paper fills are still unproven.
+
+Trade Machine capture: a HAR outside the repo, redact it, then pass that
 file explicitly. Options AI ideas come from a validated DOM QuickStrike or
-Strategy Builder board. Chain/quote HAR JSON is not an idea feed.
+Strategy Builder board. Copy max risk, max gain, and PoP when the DOM shows
+them. Chain/quote HAR JSON is not an idea feed.
 
 ```bash
 node tools/idea_board_scrape/cdp_har_capture.js /tmp/tm_REDACTED.har
@@ -50,9 +70,11 @@ python tools/idea_board_scrape/redact_har.py /tmp/tm_REDACTED.har /tmp/tm_REDACT
 python tools/idea_board_scrape/get_ideas.py --source both \
   --from-har /tmp/tm_REDACTED.har \
   --from-board evidence/idea_boards/options_ai_20260921_0846_pt.json
+python tools/idea_shadow_rank/rank_open_slate.py
 ```
 
-Do not commit HAR files. There is no baked-in default HAR. Playbook:
+Do not commit HAR files, tokens, or account numbers. There is no baked-in
+default HAR. Playbook:
 [tools/idea_board_scrape/PIPELINE.md](tools/idea_board_scrape/PIPELINE.md).
 
 ## How a trade works
@@ -246,6 +268,8 @@ or automatically improve the strategy.
 | [Shadow bets](docs/SHADOW_BETS.md) | Observational study of refused candidates using supplied Tradier marks. `live_gate=false`; labels do not re-enable a webhook or change freshness policy. |
 | [GEX shadow](tools/gex_shadow/) | Paired quote study of gamma-exposure ideas; observational only. |
 | [Idea board scrape](tools/idea_board_scrape/PIPELINE.md) | HAR → redact → `get_ideas.py` → `idea_board.v0_1` for Trade Machine and Options AI. Shadow/paper only; never live submit. |
+| [Idea shadow rank](tools/idea_shadow_rank/README.md) | Ranks those boards. Shadow only. Does not invent prices or Compare metrics. |
+| [Tradier paper](tools/tradier_paper/README.md) | Sandbox one-lots at `https://sandbox.tradier.com/v1`. Dry-run unless `--submit`. |
 | [Desk board](docs/DASHBOARD.md) | Static decision-funnel and optional read-only health views. [Refresh operations](docs/LIVE_BOARD_REFRESH.md) are separate from trading. |
 | [Dual-broker work](docs/DUAL_BROKER.md) | Tradier adapter plus Schwab OAuth helper and fail-closed stub; not a completed second execution venue. |
 
@@ -259,7 +283,7 @@ fills. Historical anecdotes, including the September 11 QQQ trade, belong in
 
 | If you want to… | Read |
 | --- | --- |
-| Understand the strategy and terminology | [Operating model](docs/OPERATING_MODEL.md), [current policy](docs/CURRENT_POLICY.md), [Idea Funnel B](docs/IDEA_FUNNEL_B.md) |
+| Understand the strategy and terminology | [Operating model](docs/OPERATING_MODEL.md), [current policy](docs/CURRENT_POLICY.md), [Idea Funnel B](docs/IDEA_FUNNEL_B.md), [product use](docs/IDEA_PRODUCT_USE.md) |
 | Trace sensors, ranking, and decisions | [Realtime planes](docs/REALTIME_PLANES.md), [architecture](docs/ARCHITECTURE.md), [WebSockets and webhooks](docs/WEBSOCKETS.md) |
 | Review order checks and exits | [Safety](docs/SAFETY.md), [thesis gate](docs/LIVE_ORDER_GATE.md), [I4 review plan](docs/STO_UNLOCK_PLAN.md) |
 | Understand provider roles | [API matrix](docs/API_MATRIX.md): UW for flow, Finnhub for stock context, Tradier production for option quotes and broker state. Finnhub stock ticks are not option NBBO. |

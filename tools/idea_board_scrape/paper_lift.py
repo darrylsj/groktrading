@@ -1,4 +1,7 @@
-"""Tradier PAPER one-lot stub. Not wired to live_order_gate.
+"""Tradier PAPER one-lot decision stub. Not wired to live_order_gate.
+
+The submitting sandbox client is ``tools/tradier_paper/`` (dry-run unless
+``--submit``). This module still never places an order.
 
 The only paper HTTP base this desk may use later is
 ``https://sandbox.tradier.com/v1``. The sandbox account id stays in host

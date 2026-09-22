@@ -6,6 +6,11 @@
 .env.*
 !.env.example
 !**/.env.example
+*.env
+credentials/
+
+# Runtime shadow pointers (not source)
+/state/
 *.pem
 *.key
 id_rsa*
