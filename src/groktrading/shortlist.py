@@ -16,6 +16,9 @@ Host path (ops fact, not a deploy claim):
 ``/opt/trading-desk/state/shortlist.json``. Cadence 5–15s (default 10).
 ``live_tape.json`` shape is host-owned and not in this tree — inputs are a
 JSON list of UW-like rows, optional tape keys, or ``flow_ledger``.
+``FLOW_LEDGER_PATH`` and ``LIVE_TAPE_PATH`` are both read when set. The
+ledger window is the 200 newest rows that actually stored ``executed_at``;
+clock-less flow-alert inserts (``created_at`` only) must not fill it.
 Offline skeleton writes an empty document when no input exists.
 
 Hunt prefers ``SIT_MATCH_WEBHOOK`` off. Merge ≠ Helsinki restart.
@@ -47,6 +50,7 @@ from groktrading.sit_match import (
     extract_executed_at,
     extract_occ,
     parse_executed_at,
+    parse_execution_clock,
     resolve_sit_match_max_age,
     sit_match_max_age_sec,
     sit_match_occ_key,
@@ -111,6 +115,26 @@ _TAPE_LIST_KEYS: tuple[str, ...] = (
     "items",
     "data",
     "flow",
+)
+# Same UW print, wrapped. Not a second clock and not ``created_at``.
+_CLOCK_ENVELOPES: tuple[str, ...] = ("data", "trade", "option_trade", "candidate")
+_LIFT_KEYS: tuple[str, ...] = (
+    "occ",
+    "option_symbol",
+    "option_chain",
+    "option_chain_id",
+    "ticker",
+    "underlying",
+    "ticker_symbol",
+    "underlying_symbol",
+    "nbbo_ask",
+    "ask",
+    "print",
+    "price",
+    "option_type",
+    "put_call",
+    "type",
+    "source",
 )
 EmptyReason = Literal["no_input", "no_fresh_prints", "all_filtered"] | None
 
@@ -343,25 +367,71 @@ def extract_source(payload: Mapping[str, Any]) -> str:
     return "option-trades"
 
 
+def _clock_source(payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Mapping that actually carries ``executed_at``. Never ``created_at``."""
+    if payload.get("executed_at") not in (None, ""):
+        return payload
+    for key in _CLOCK_ENVELOPES:
+        nested = payload.get(key)
+        if isinstance(nested, Mapping) and nested.get("executed_at") not in (None, ""):
+            return nested
+    return None
+
+
+def promote_print_clock(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy UW ``executed_at`` onto the print the ranker classifies.
+
+    Websocket prints send that field as epoch milliseconds. Nested
+    ``data`` / ``trade`` / ``option_trade`` / ``candidate`` envelopes are
+    the same print. ``created_at`` and ``timestamp`` are not copied onto
+    ``executed_at`` and are not a freshness clock.
+    """
+    out = dict(payload)
+    source = _clock_source(payload)
+    if source is None:
+        return out
+    raw_clock = source.get("executed_at")
+    parsed = parse_execution_clock(raw_clock)
+    if source is not payload:
+        for key in _LIFT_KEYS:
+            if out.get(key) in (None, "") and source.get(key) not in (None, ""):
+                out[key] = source[key]
+    if parsed is not None:
+        out["executed_at"] = executed_at_iso(parsed)
+    elif out.get("executed_at") in (None, ""):
+        out["executed_at"] = raw_clock
+    return out
+
+
 def extract_prints(payload: object) -> list[Mapping[str, Any]]:
     """Best-effort print list. Unknown ``live_tape.json`` shapes → empty.
 
-    Host tape schema is not in this git tree. Do not invent rows.
+    Host tape schema is not in this git tree. Do not invent rows. When
+    several list keys are present, prefer the list that already carries
+    ``executed_at`` so a clock-less pool cannot hide match rows.
     """
     if isinstance(payload, Sequence) and not isinstance(payload, (str, bytes, bytearray)):
         return [row for row in payload if isinstance(row, Mapping)]
     if not isinstance(payload, Mapping):
         return []
+    lists: list[list[Mapping[str, Any]]] = []
     for key in _TAPE_LIST_KEYS:
         raw = payload.get(key)
         if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes, bytearray)):
-            return [row for row in raw if isinstance(row, Mapping)]
-    if any(
-        payload.get(key) not in (None, "")
-        for key in ("occ", "option_symbol", "option_chain", "executed_at")
-    ):
-        return [payload]
-    return []
+            rows = [row for row in raw if isinstance(row, Mapping)]
+            if rows:
+                lists.append(rows)
+    if not lists:
+        if any(
+            payload.get(key) not in (None, "")
+            for key in ("occ", "option_symbol", "option_chain", "executed_at")
+        ):
+            return [payload]
+        return []
+    for rows in lists:
+        if any(_clock_source(row) is not None for row in rows):
+            return rows
+    return lists[0]
 
 
 def load_json_object(path: Path) -> object:
@@ -441,6 +511,7 @@ def classify_print(
     premium_hi: Decimal = PREMIUM_BAND_HI,
 ) -> tuple[ShortlistCandidate | None, str | None]:
     """Return (candidate, None) or (None, skip_reason)."""
+    payload = promote_print_clock(payload)
     freshness = evaluate_sit_match_freshness(
         extract_executed_at(payload),
         now,
@@ -771,13 +842,20 @@ def write_shortlist(path: Path, document: ShortlistDocument) -> None:
 
 
 def prints_from_ledger(path: Path) -> list[Mapping[str, Any]]:
-    """Map flow_ledger rows to ranker prints. Missing file → empty (no invent)."""
+    """Map flow_ledger rows that stored ``executed_at``. Missing file → empty.
+
+    The window is 200 clocked rows, not the 200 newest inserts. Clock-less
+    flow-alert rows are not invented into candidates and are not returned.
+    """
     if not path.is_file() and str(path) != ":memory:":
         return []
     from groktrading.flow_ledger import FlowLedger
 
     rows: list[Mapping[str, Any]] = []
-    for row in FlowLedger(path).iter_recent(limit=200):
+    # Clock-less flow-alert rows must not consume this window. The 2026-09-22
+    # hunt saw skip_tally missing_executed_at=200 / candidates=[] because the
+    # newest 200 inserts had an empty execution clock while tape prints did not.
+    for row in FlowLedger(path).iter_recent(limit=200, require_executed_at=True):
         payload: dict[str, Any] = {
             "occ": row.occ,
             "ticker": row.ticker,
@@ -885,13 +963,12 @@ def main(argv: list[str] | None = None) -> int:
     prints_path = Path(args.prints) if str(args.prints).strip() else None
     tape_path = Path(args.tape) if str(args.tape).strip() else None
     ledger_raw = str(args.ledger).strip() or env.get("FLOW_LEDGER_PATH", "").strip()
-    if not ledger_raw and tape_path is None and prints_path is None:
+    # LIVE_TAPE_PATH is an input even when the ledger env is set. The example
+    # unit sets both; ignoring the tape dropped match rows that had executed_at.
+    if tape_path is None:
         tape_env = env.get("LIVE_TAPE_PATH", "").strip()
         if tape_env:
             tape_path = Path(tape_env)
-        ledger_env = env.get("FLOW_LEDGER_PATH", "").strip()
-        if ledger_env:
-            ledger_raw = ledger_env
     ledger_path = Path(ledger_raw) if ledger_raw else None
     already_raw = _optional_json(Path(args.already_run) if str(args.already_run).strip() else None)
     held_raw = _optional_json(Path(args.in_position) if str(args.in_position).strip() else None)

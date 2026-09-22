@@ -177,6 +177,53 @@ def parse_executed_at(value: object) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def parse_execution_clock(value: object) -> datetime | None:
+    """Parse UW ``executed_at`` only: ISO-8601, or the websocket epoch form.
+
+    REST option-trades use an ISO string. The websocket ``option_trades``
+    channel uses the same field as unix milliseconds (docs: OptionTrade
+    ``executed_at``). Seconds are accepted when the magnitude is 10 digits.
+    This is not a ``created_at`` / ``timestamp`` substitute — callers must
+    pass the execution-clock field itself. ``parse_executed_at`` stays
+    ISO-only so sit_match cannot treat a bare integer as a clock unless a
+    ranker/ledger mapper has already identified it as ``executed_at``.
+    """
+    parsed = parse_executed_at(value)
+    if parsed is not None:
+        return parsed
+    epoch_s = _executed_at_epoch_seconds(value)
+    if epoch_s is None:
+        return None
+    try:
+        return datetime.fromtimestamp(epoch_s, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _executed_at_epoch_seconds(value: object) -> float | None:
+    """Unix seconds for a numeric ``executed_at``. Junk magnitudes → None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text or not text.isdigit():
+            return None
+        number = float(text)
+    else:
+        return None
+    if not math.isfinite(number) or number <= 0:
+        return None
+    # 13-digit UW websocket milliseconds vs 10-digit seconds.
+    if number >= 100_000_000_000:
+        number = number / 1000.0
+    # 2001-09-09 .. 2286-11-20 in seconds. Smaller numbers are not this clock.
+    if number < 1_000_000_000 or number >= 10_000_000_000:
+        return None
+    return number
+
+
 def extract_executed_at(payload: Mapping[str, Any]) -> object:
     """Top-level ``executed_at``, else nested ``candidate.executed_at``."""
     raw = payload.get("executed_at")
