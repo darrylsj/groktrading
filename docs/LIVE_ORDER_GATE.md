@@ -7,6 +7,8 @@ them or automatically run `groktrading.gate.evaluate_gate`.
 
 Dated operator policy: [CURRENT_POLICY.md](CURRENT_POLICY.md).
 
+`live_explicitly_enabled` provenance (default false, what flips it, WebSocket ban, gate + order FSM re-check) is in [SAFETY.md](SAFETY.md). This CLI does not set that flag.
+
 Until this note, `tools/live_order_gate` was **not in this tree**. The Grok
 box hot-patched STC so Friday’s QQQ lot could close. GitHub `main` was still
 BTO-only at submit: `close_with_audit` reused entry `assert_submit_policy` and

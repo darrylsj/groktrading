@@ -23,14 +23,59 @@ As of **2026-09-17 PT** (operator-deployed desk). Not a claim this commit is on 
 
 ## Defaults
 
-- `OperatingMode.SIGNALS_ONLY`
-- `live_explicitly_enabled=False`
+- `OperatingMode.SIGNALS_ONLY` (`modes.DEFAULT_MODE`)
+- `live_explicitly_enabled=False` (provenance below)
 - Executor WebSocket path raises `LiveGatingError` if live mode is requested
 - On-disk JSON is redacted
 - HTTP timeouts fail closed
 - `policy.CASH_EQUITY_FLOOR = 0.20` / `MAX_DEPLOY_RATIO = 0.80`
 - `policy.OVERNIGHT_LONG_OPTIONS_ALLOWED = True`
 - `policy.ENTRY_CUTOFF_FLATTENS_BOOK = False`
+
+## `live_explicitly_enabled` provenance
+
+Fail-closed. The default is **False**. Aria’s 2026-09-21 source audit asked for one place that states exactly how the live desk flips it. This section is that place.
+
+### Defaults (all false)
+
+| Layer | Symbol | Default |
+| --- | --- | --- |
+| Gate context | `models.GateContext.live_explicitly_enabled` | `False` |
+| Order FSM | `order_fsm.OrderMachine.live_explicitly_enabled` | `False` |
+| Executor | `executor.Executor.live_explicitly_enabled` | `False` |
+| Tape skeleton | `cli.tape_skeleton_main` writes JSON `"live_explicitly_enabled": false` | hardcoded false |
+| Mode | `modes.DEFAULT_MODE` | `OperatingMode.SIGNALS_ONLY` |
+
+### What flips it true
+
+No module under `src/groktrading/` assigns `live_explicitly_enabled=True`. No file under `config/` sets it. The package does not read `GROKTRADING_LIVE_EXPLICITLY_ENABLED` (or any other env var) into that field.
+
+Checked-in examples keep the operator env var **false**:
+
+- `deploy/examples/env/groktrading.env.example`
+- `deploy/examples/env/tradier-live.env.example`
+- `deploy/examples/env/tradier-sandbox.env.example`
+
+`scripts/install_helsinki.sh` does not set `GROKTRADING_LIVE_EXPLICITLY_ENABLED`. [DEPLOY.md](DEPLOY.md) tells the operator to keep it false. Setting the variable on a host does not, by itself, open the money path.
+
+The in-process flip is a caller passing `live_explicitly_enabled=True` into `GateContext`, `OrderMachine`, or `Executor`. Production modules in this repo do not do that. Tests set it true only to prove the wall (`tests/test_gate.py`, `tests/test_order_fsm.py`, `tests/test_executor_llm.py`).
+
+`tools/live_order_gate` is a separate dry-run thesis CLI (`evaluate_submit_policy`). It does not read this flag, does not call `gate.evaluate_gate`, and does not POST (`tools/live_order_gate/cli.py`).
+
+### WebSocket events cannot directly trigger live
+
+- `gate.evaluate_gate` appends `GateReason.WS_DIRECT_LIVE_FORBIDDEN` when `candidate.from_websocket` and the mode is live.
+- `Executor.on_websocket_event` sets `from_websocket=True` and raises `LiveGatingError` when the context or the executor mode is live.
+- `OrderMachine.final_gate` raises `LiveGatingError` when the mode is live and `candidate.from_websocket`.
+- `Executor.maybe_submit` raises the same error on that combination.
+
+### Gate and order FSM both re-check
+
+- `gate.evaluate_gate` appends `GateReason.LIVE_NOT_ENABLED` when the mode is live and `ctx.live_explicitly_enabled` is false.
+- `OrderMachine.final_gate` raises `LiveGatingError("live placement requires live_explicitly_enabled")` before it calls `evaluate_gate`, then copies `self.live_explicitly_enabled` into the context so the gate checks the flag again.
+- `Executor.maybe_submit` raises the same `LiveGatingError` when the executor mode is live and its flag is false.
+
+Live placement still needs `OperatingMode.LIVE`, the flag true on the object that submits, a passed gate, and the FSM re-check. This page does not change those defaults.
 
 ## Forbidden
 
