@@ -1,0 +1,884 @@
+{
+  "schema": "idea_board.v0_1",
+  "source": "options_ai",
+  "as_of_pt": "2026-09-21 08:46:47 PT",
+  "source_url": "https://trade.options.ai/trade/AAPL?expirationDate=2026-09-25&tradeDirection=ALL&quickstrike=true",
+  "login_health": "AUTHENTICATED",
+  "mode": "paper",
+  "board": "Trade/AAPL QuickStrike All",
+  "board_context": {
+    "underlying": "AAPL",
+    "underlying_last_visible": "$338.27",
+    "underlying_change_visible": "+2.14 (+0.64%)",
+    "quote_timestamp_visible": "11:46:33 AM Eastern",
+    "expiry": "2026-09-25",
+    "expiry_ui": "Sep 25 (4d)",
+    "expected_move_visible": "1.94%",
+    "expected_move_bounds_visible": {
+      "up": "344.83",
+      "down": "331.70"
+    },
+    "watchlist_snapshot": {
+      "expiry_ui": "Sep 25 (4d)",
+      "rows": [
+        {
+          "ticker": "AAPL",
+          "price": "337.82",
+          "change": "+1.69 (0.50%)",
+          "expected_move": "\u00b11.95% ($6.57)",
+          "iv": "24.1%",
+          "flow_bias": "Mild Bullish",
+          "flow_score": 21,
+          "liquidity": "99/100"
+        },
+        {
+          "ticker": "AMZN",
+          "price": "255.93",
+          "change": "+2.22 (0.88%)",
+          "expected_move": "\u00b12.47% ($6.33)",
+          "iv": "30.6%",
+          "flow_bias": "Mild Bullish",
+          "flow_score": 33,
+          "liquidity": "99/100"
+        },
+        {
+          "ticker": "NVDA",
+          "price": "225.32",
+          "change": "+3.06 (1.37%)",
+          "expected_move": "\u00b12.53% ($5.69)",
+          "iv": "31.5%",
+          "flow_bias": "Mild Bullish",
+          "flow_score": 23,
+          "liquidity": "100/100"
+        },
+        {
+          "ticker": "SPY",
+          "price": "770.54",
+          "change": "+8.85 (1.16%)",
+          "expected_move": "\u00b10.88% ($6.79)",
+          "iv": "10.9%",
+          "flow_bias": "Neutral",
+          "flow_score": 5,
+          "liquidity": "99/100"
+        },
+        {
+          "ticker": "TSLA",
+          "price": "374.55",
+          "change": "+10.28 (2.82%)",
+          "expected_move": "\u00b13.43% ($12.86)",
+          "iv": "42.5%",
+          "flow_bias": "Mild Bullish",
+          "flow_score": 20,
+          "liquidity": "98/100"
+        }
+      ]
+    }
+  },
+  "ideas": [
+    {
+      "ticker": "AAPL",
+      "strategy": "Call",
+      "status": "Available",
+      "direction": "Bullish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bullish | Call | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Call Spread",
+      "status": "Available",
+      "direction": "Bullish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bullish | Call Spread | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Bull Put Spread",
+      "status": "Available",
+      "direction": "Bullish",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 327.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bullish | Bull Put Spread | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Call Butterfly",
+      "status": "Available",
+      "direction": "Bullish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 352.5,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bullish | Long Call Butterfly | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Cash Secured Put",
+      "status": "Available",
+      "direction": "Bullish",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bullish | Cash Secured Put | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Iron Condor",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 347.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 327.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Iron Condor | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Iron Butterfly",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Iron Butterfly | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Short Straddle",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Short Straddle | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Short Strangle",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Short Strangle | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Call Butterfly",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Long Call Butterfly | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Put Butterfly",
+      "status": "Available",
+      "direction": "Neutral",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Neutral | Long Put Butterfly | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Put",
+      "status": "Available",
+      "direction": "Bearish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bearish | Put | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Put Spread",
+      "status": "Available",
+      "direction": "Bearish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 332.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bearish | Put Spread | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Bear Call Spread",
+      "status": "Available",
+      "direction": "Bearish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 347.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bearish | Bear Call Spread | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Put Butterfly",
+      "status": "Available",
+      "direction": "Bearish",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 322.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bearish | Long Put Butterfly | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Short Call",
+      "status": "Available",
+      "direction": "Bearish",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Credit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Bearish | Short Call | Credit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Straddle",
+      "status": "Available",
+      "direction": "Volatility",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Volatility | Long Straddle | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Long Strangle",
+      "status": "Available",
+      "direction": "Volatility",
+      "legs": [
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-25",
+          "strike": 332.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Volatility | Long Strangle | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Call Calendar",
+      "status": "Available",
+      "direction": "Calendars",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-28",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Calendars | Call Calendar | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Put Calendar",
+      "status": "Available",
+      "direction": "Calendars",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-28",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Calendars | Put Calendar | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Call Diagonal",
+      "status": "Available",
+      "direction": "Calendars",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "C",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-28",
+          "strike": 345,
+          "right": "C",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Calendars | Call Diagonal | Debit | Expiry Sep 25 (4d)"
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "Put Diagonal",
+      "status": "Available",
+      "direction": "Calendars",
+      "legs": [
+        {
+          "side": "SHORT",
+          "expiry": "2026-09-25",
+          "strike": 337.5,
+          "right": "P",
+          "display_price": null
+        },
+        {
+          "side": "LONG",
+          "expiry": "2026-09-28",
+          "strike": 330,
+          "right": "P",
+          "display_price": null
+        }
+      ],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "pricing": "Debit",
+        "quickstrike": true,
+        "expiry_ui": "Sep 25 (4d)",
+        "selected_expiry": "2026-09-25"
+      },
+      "raw_text": "AAPL | Calendars | Put Diagonal | Debit | Expiry Sep 25 (4d)"
+    }
+  ],
+  "counts": {
+    "ideas": 22,
+    "active": 0,
+    "bullish": 5,
+    "neutral": 6,
+    "bearish": 5,
+    "volatility": 2,
+    "calendars": 4
+  },
+  "screenshots": [
+    "evidence/idea_boards/options_ai_20260921_0846_pt_board.png",
+    "evidence/idea_boards/options_ai_20260921_0846_pt_board_full.png",
+    "evidence/idea_boards/options_ai_20260921_0846_pt_watchlist.png"
+  ],
+  "notes": [
+    "Session was already authenticated; Paper Trade was selected and Live Trade was not selected. No credentials were entered and no password was visible in screenshots.",
+    "The AAPL Strategy Builder was captured with All selected and expiry Sep 25 (4d); 22 visible QuickStrike setup cards were scraped across Bullish, Neutral, Bearish, Volatility, and Calendars.",
+    "Legs/expiries/strikes/rights were taken from the visible selected-card leg labels and the resulting page state; duplicate legs are preserved for butterfly structures. No broker order, paper order, Live Trade action, or broker link was used.",
+    "The setup cards showed Debit/Credit classification but did not show a consolidated entry debit/credit price; entry.display and entry.mid are therefore null. No prices were invented.",
+    "Underlying and watchlist quote fields are UI snapshots and may drift during refresh; the AAPL board quote was $338.27 at 11:46:33 AM Eastern in the board screenshot.",
+    "No XHR URLs or HAR were captured because the available browser tool surface exposed no network log/DevTools export."
+  ],
+  "no_invented_prices": true
+}

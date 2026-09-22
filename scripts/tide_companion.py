@@ -21,7 +21,15 @@ from helsinki_http import UrllibHttp  # noqa: E402
 
 from groktrading.feeds.tide_state import tide_poll_sec, write_tide_state  # noqa: E402
 from groktrading.feeds.unusual_whales import UnusualWhalesClient  # noqa: E402
-from groktrading.timeutil import UTC  # noqa: E402
+from groktrading.timeutil import UTC, market_session_kind  # noqa: E402
+
+OFF_RTH_SLEEP_SEC = float(os.environ.get("TIDE_OFF_RTH_SLEEP_SEC", "900"))
+RTH_ONLY = os.environ.get("TIDE_RTH_ONLY", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 DEFAULT_STATE = "/var/lib/trading-desk/state/tide_state.json"
 
@@ -66,6 +74,15 @@ def main() -> int:
     while True:
         interval = tide_poll_sec(env)
         try:
+            if RTH_ONLY and market_session_kind(clock.now()) != "rth":
+                ts = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+                print(
+                    f"tide_companion: ts={ts} skip=not_rth "
+                    f"sleep={OFF_RTH_SLEEP_SEC} no_http",
+                    flush=True,
+                )
+                time.sleep(OFF_RTH_SLEEP_SEC)
+                continue
             doc = write_tide_state(
                 client,
                 state_path,

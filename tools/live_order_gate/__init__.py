@@ -14,8 +14,10 @@ from tools.live_order_gate.gate import (
     assert_submit_policy,
     build_tradier_form_from_thesis,
     close_with_audit,
+    emit_shared_intel_close,
     evaluate_close_policy,
     evaluate_submit_policy,
+    refuse_long_put_on_broad_etf,
     write_thesis,
 )
 
@@ -29,9 +31,11 @@ __all__ = [
     "build_tradier_form_from_thesis",
     "carry_gate_document",
     "close_with_audit",
+    "emit_shared_intel_close",
     "evaluate_close_policy",
     "evaluate_submit_policy",
     "overnight_carry_notes_required",
+    "refuse_long_put_on_broad_etf",
     "stamp_thesis_artifacts",
     "write_thesis",
 ]

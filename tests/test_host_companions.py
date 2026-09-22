@@ -107,6 +107,12 @@ def test_flow_alerts_companion_defaults_are_closed() -> None:
     text = (ROOT / "scripts" / "flow_alerts_companion.py").read_text(encoding="utf-8")
     assert "emit_sit_match=False" in text
     assert "No Grok webhook" in text or "no_webhook" in text
+    assert "RTH_ONLY" in text
+    assert "market_session_kind" in text
+    assert "skip=not_rth" in text
+    tide = (ROOT / "scripts" / "tide_companion.py").read_text(encoding="utf-8")
+    assert "RTH_ONLY" in tide
+    assert "skip=not_rth" in tide
 
 
 def test_quote_interest_one_pass_writes_state(tmp_path: Path, monkeypatch: Any) -> None:

@@ -31,7 +31,15 @@ from groktrading.feeds.flow_alerts import (  # noqa: E402
 from groktrading.feeds.unusual_whales import UnusualWhalesClient  # noqa: E402
 from groktrading.flow_ledger import FlowLedger  # noqa: E402
 from groktrading.io_atomic import write_json_atomic  # noqa: E402
-from groktrading.timeutil import UTC  # noqa: E402
+from groktrading.timeutil import UTC, market_session_kind  # noqa: E402
+
+OFF_RTH_SLEEP_SEC = float(os.environ.get("FLOW_ALERTS_OFF_RTH_SLEEP_SEC", "900"))
+RTH_ONLY = os.environ.get("FLOW_ALERTS_RTH_ONLY", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 DEFAULT_LEDGER = "/var/lib/trading-desk/ledger/uw_flow.sqlite"
 DEFAULT_SEEN = "/var/lib/trading-desk/ledger/flow_alerts_seen.json"
@@ -95,6 +103,15 @@ def main() -> int:
     while True:
         interval = flow_alerts_poll_sec(env)
         try:
+            if RTH_ONLY and market_session_kind(clock.now()) != "rth":
+                ts = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+                print(
+                    f"flow_alerts_companion: ts={ts} skip=not_rth "
+                    f"sleep={OFF_RTH_SLEEP_SEC} no_http",
+                    flush=True,
+                )
+                time.sleep(OFF_RTH_SLEEP_SEC)
+                continue
 
             def on_material(hit) -> None:
                 # No Grok webhook tonight — JSONL only.

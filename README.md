@@ -15,8 +15,42 @@ is operator-gated. Live orders are never placed by default. There is no verified
 profitability claim. This is not financial advice.
 
 [How it works](#how-a-trade-works) · [Implementation status](#what-is-implemented)
-· [Current policy](#current-live-card) · [Try it locally](#try-it-locally)
-· [Documentation](#documentation)
+· [Current policy](#current-live-card) · [Idea Funnel B](#idea-funnel-b-multi-source)
+· [Try it locally](#try-it-locally) · [Documentation](#documentation)
+
+## Idea Funnel B (multi-source)
+
+Locked 2026-09-20 PT (window ~ through 2026-10-04). Ranked ideas from
+three sources plus tape. Vendors never autofire. Live mode is
+`top_clear_one_lots` only — Tradier one-lots after desk gates. Shadow
+may run many ideas in parallel. Not a profitability claim.
+
+| Source | Role |
+| --- | --- |
+| sit2 / Continual15 + Unusual Whales | Proprietary flow shortlist on Helsinki |
+| Trade Machine | Visual Today setups (GUI/XHR; trial) |
+| Options AI | Paper / expected-move ideas (trial) |
+
+Pipeline: ingest → normalize one card → desk gates → score (multi-source
+bonus) → shadow many in parallel → live Tradier top-clear one-lots only.
+Full card: [Idea Funnel B](docs/IDEA_FUNNEL_B.md). Schema notes:
+[idea_card v0.1](docs/IDEA_CARD_V0_1.md).
+
+Trade Machine and Options AI boards in this repo are **shadow/paper**.
+Capture a HAR, redact it, then build `idea_board.v0_1`. This path never
+submits a live order.
+
+```bash
+node tools/idea_board_scrape/cdp_har_capture.js /tmp/tm.har
+python tools/idea_board_scrape/redact_har.py /tmp/tm.har /tmp/tm_REDACTED.har
+python tools/idea_board_scrape/get_ideas.py --source trademachine \
+  --from-har /tmp/tm_REDACTED.har
+python tools/idea_board_scrape/get_ideas.py --source options_ai \
+  --from-har /tmp/options_ai_REDACTED.har
+```
+
+Do not commit raw or redacted HARs. Playbook:
+[tools/idea_board_scrape/PIPELINE.md](tools/idea_board_scrape/PIPELINE.md).
 
 ## How a trade works
 
@@ -208,6 +242,7 @@ or automatically improve the strategy.
 | [Strategy factory](docs/STRATEGY_FACTORY.md) | Observational hypothesis ledger: propose, collect evidence, paper, validate, reject/retire. `live_gate=false`; even `live_allow` does not enable `live_order_gate`. |
 | [Shadow bets](docs/SHADOW_BETS.md) | Observational study of refused candidates using supplied Tradier marks. `live_gate=false`; labels do not re-enable a webhook or change freshness policy. |
 | [GEX shadow](tools/gex_shadow/) | Paired quote study of gamma-exposure ideas; observational only. |
+| [Idea board scrape](tools/idea_board_scrape/PIPELINE.md) | HAR → redact → `get_ideas.py` → `idea_board.v0_1` for Trade Machine and Options AI. Shadow/paper only; never live submit. |
 | [Desk board](docs/DASHBOARD.md) | Static decision-funnel and optional read-only health views. [Refresh operations](docs/LIVE_BOARD_REFRESH.md) are separate from trading. |
 | [Dual-broker work](docs/DUAL_BROKER.md) | Tradier adapter plus Schwab OAuth helper and fail-closed stub; not a completed second execution venue. |
 
@@ -221,7 +256,7 @@ fills. Historical anecdotes, including the September 11 QQQ trade, belong in
 
 | If you want to… | Read |
 | --- | --- |
-| Understand the strategy and terminology | [Operating model](docs/OPERATING_MODEL.md), [current policy](docs/CURRENT_POLICY.md) |
+| Understand the strategy and terminology | [Operating model](docs/OPERATING_MODEL.md), [current policy](docs/CURRENT_POLICY.md), [Idea Funnel B](docs/IDEA_FUNNEL_B.md) |
 | Trace sensors, ranking, and decisions | [Realtime planes](docs/REALTIME_PLANES.md), [architecture](docs/ARCHITECTURE.md), [WebSockets and webhooks](docs/WEBSOCKETS.md) |
 | Review order checks and exits | [Safety](docs/SAFETY.md), [thesis gate](docs/LIVE_ORDER_GATE.md), [I4 review plan](docs/STO_UNLOCK_PLAN.md) |
 | Understand provider roles | [API matrix](docs/API_MATRIX.md): UW for flow, Finnhub for stock context, Tradier production for option quotes and broker state. Finnhub stock ticks are not option NBBO. |

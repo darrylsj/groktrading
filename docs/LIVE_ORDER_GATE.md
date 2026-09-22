@@ -67,6 +67,10 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 - Tag `A-Za-z0-9` only (Tradier).
 - Same PT session + 8h entry thesis TTL.
 - Exit thesis cannot be submitted as a BTO (`exit_thesis_not_for_submit`).
+- **Broad-ETF long puts** (2026-09-21): `refuse_long_put_on_broad_etf`
+  rejects buy-to-open puts on IWM, SPY, and QQQ at submit. Calls on those
+  names, puts on other underlyings, and STC/BTC exits are not this rule.
+  Code: `refuse_long_put_on_broad_etf`.
 
 ## Exit (`take_gain_exit` and named exits)
 
@@ -77,6 +81,11 @@ flag this CLI sets (`preview=true`). There is no `--submit` / live POST.
 - **Skips** 12:30 cutoff and cash debit.
 - `parent_signal_id` required. Closed parent/signal → `already_closed`.
 - `write_thesis` allows exit sides; that is not a credit-ban hole.
+- Allowed flatten calls `emit_shared_intel_close`. This tool still does
+  not POST and does not SSH while `shared_intel_dry_run` stays true
+  (the default). A missing entry or exit fill is `missing_fills`; the
+  limit is not copied in as a fill. Live append is
+  `tools/shared_intel` with `dry_run=False` after a confirmed close.
 
 ## Not encoded here
 

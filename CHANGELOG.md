@@ -37,6 +37,22 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- **2026-09-21 desk sync** (Helsinki / Grok Bot box → this repo):
+  - `tools/idea_board_scrape/`: HAR capture helper, `redact_har.py`, and
+    `get_ideas.py` building `idea_board.v0_1` for Trade Machine and
+    Options AI. Shadow/paper only; does not submit.
+  - `tools/shared_intel/`: append closed trades to the Helsinki
+    shared-intel ledger (`SHARED_INTEL_LOCAL_TRADES` for offline use).
+    Live account id is not in git.
+  - `tools/live_order_gate`: `refuse_long_put_on_broad_etf` at BTO submit
+    for IWM/SPY/QQQ puts, and `emit_shared_intel_close` on an allowed
+    flatten (dry-run unless explicitly appended).
+  - Idea Funnel B + idea_card v0.1 docs
+    ([docs/IDEA_FUNNEL_B.md](docs/IDEA_FUNNEL_B.md),
+    [docs/IDEA_CARD_V0_1.md](docs/IDEA_CARD_V0_1.md)). UW idea-card
+    normalizer and schema file remain out of tree.
+  - Flow-alerts and tide companions skip HTTP outside RTH
+    (`FLOW_ALERTS_RTH_ONLY` / `TIDE_RTH_ONLY`, default on).
 - Helsinki **zero-LLM weekday RTH live-board refresh** (2026-09-15)
   [`scripts/live_board_refresh.py`](scripts/live_board_refresh.py) +
   `trading-desk-live-board-refresh.service` / `.timer`. Reads host
