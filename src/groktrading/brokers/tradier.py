@@ -16,7 +16,11 @@ from groktrading.models import AccountSnapshot, ClockSnapshot, OptionQuote
 
 @dataclass
 class TradierBroker:
-    """Phase A live/paper venue. Delegates 1:1 to TradierClient."""
+    """Phase A live/paper venue. Delegates 1:1 to TradierClient.
+
+    The active REST base and account alias are logged once when the wrapped
+    ``TradierClient`` is constructed.
+    """
 
     client: TradierClient
     venue_id: VenueId = "tradier"

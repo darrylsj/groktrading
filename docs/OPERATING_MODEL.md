@@ -14,7 +14,7 @@ There is also a Tradier sandbox paper account. Operator goals are not forecasts.
 | --- | --- | --- |
 | `signals_only` (default) | Implicit | No |
 | `paper` | Explicit `GROKTRADING_MODE=paper` | Sandbox only, after preview + gate |
-| `live` | Explicit mode **and** `live_explicitly_enabled` | Never from this package by default; WS path hard-fails |
+| `live` | Explicit `OperatingMode.LIVE` **and** `live_explicitly_enabled=True` on `GateContext`, `OrderMachine`, or `Executor`. No env or config file in this repo sets that flag. Provenance: [SAFETY.md](SAFETY.md). | Never from this package by default; WS path hard-fails |
 
 ## Live rules (operator policy encoded in the gate)
 

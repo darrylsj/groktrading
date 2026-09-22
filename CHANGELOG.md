@@ -7,6 +7,13 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Added
+
+- Aria source-audit yellows from **2026-09-21** (`docs/ARIA_SOURCE_AUDIT_20260921.md`), observability and docs only. Live defaults stay fail-closed (`live_explicitly_enabled` remains false; no live-order path change).
+  - `TradierClient` logs one line at init: the REST base from `rest_base(env)` (the host the client already uses) and the account source (`TRADIER_ACCOUNT_ID` when that env value is the constructed id, otherwise `constructor`) plus an `acct-` sha256 alias. Tokens and raw account ids are not logged.
+  - [docs/SAFETY.md](docs/SAFETY.md) records `live_explicitly_enabled` provenance: default false, no in-repo env/config sets it true, WebSocket events cannot trigger live, and `evaluate_gate` plus `OrderMachine.final_gate` both re-check.
+  - [scripts/deployed_head_drift.py](scripts/deployed_head_drift.py) and [docs/DEPLOYED_HEAD_DRIFT.md](docs/DEPLOYED_HEAD_DRIFT.md): local `git rev-parse HEAD` versus an operator-supplied deployed SHA. No SSH and no deploy.
+
 ### Changed
 
 - Public docs aligned to **operator-deployed desk as of 2026-09-17 PT**

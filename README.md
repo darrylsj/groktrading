@@ -226,6 +226,7 @@ fills. Historical anecdotes, including the September 11 QQQ trade, belong in
 | Review order checks and exits | [Safety](docs/SAFETY.md), [thesis gate](docs/LIVE_ORDER_GATE.md), [I4 review plan](docs/STO_UNLOCK_PLAN.md) |
 | Understand provider roles | [API matrix](docs/API_MATRIX.md): UW for flow, Finnhub for stock context, Tradier production for option quotes and broker state. Finnhub stock ticks are not option NBBO. |
 | Deploy or rebuild | [Deploy](docs/DEPLOY.md), [new-provider rebuild](docs/REBUILD_NEW_PROVIDER.md), [observed host](docs/OBSERVED_DEPLOYMENT.md), [examples](deploy/examples/) |
+| Compare a deployed fingerprint to git HEAD | [Deployed-vs-HEAD drift](docs/DEPLOYED_HEAD_DRIFT.md) (read-only; no SSH) |
 | Find evidence and retention rules | [Logs](docs/LOGS.md), [trade journal](logs/trades.jsonl), [Box archive](docs/BOX_ARCHIVE.md), [changelog](CHANGELOG.md) |
 | Conduct an external audit | [OpenAI brief](docs/OPENAI_AUDIT_BRIEF.md), [Claude brief](docs/CLAUDE_AUDIT.md), [passive reviewer](docs/REVIEWER.md) |
 

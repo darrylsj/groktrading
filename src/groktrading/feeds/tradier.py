@@ -13,7 +13,11 @@ available in sandbox. Production NBBO is pricing truth.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import logging
+import os
+import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal, Protocol
@@ -29,6 +33,13 @@ SANDBOX_REST = "https://sandbox.tradier.com/v1"
 PRODUCTION_STREAM = "https://stream.tradier.com/v1"
 PRODUCTION_ACCOUNT_WS = "wss://ws.tradier.com"
 SANDBOX_ACCOUNT_WS = "wss://sandbox-ws.tradier.com"
+
+_LOG = logging.getLogger(__name__)
+
+# Account id is selected by the caller. When that value equals this env var,
+# the init log names the variable. The value itself is never logged.
+ACCOUNT_ID_ENV = "TRADIER_ACCOUNT_ID"
+_ACCOUNT_SOURCE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,64}$")
 
 
 class HttpJson(Protocol):
@@ -52,6 +63,45 @@ class Clock(Protocol):
 
 def rest_base(env: TradierEnv) -> str:
     return PRODUCTION_REST if env == "production" else SANDBOX_REST
+
+
+def tradier_account_alias(account_id: str) -> str:
+    """Opaque ``acct-`` alias. Same digest as ``research.collectors.account_alias``.
+
+    The raw account id is not returned.
+    """
+    digest = hashlib.sha256(account_id.encode("utf-8")).hexdigest()[:12]
+    return "acct-" + digest
+
+
+def resolve_account_id_source(account_id: str, explicit: str | None = None) -> str:
+    """Name the selected account source. Never returns the id or a token.
+
+    An explicit source is kept only when it is an env-var-shaped identifier.
+    Otherwise the source is ``TRADIER_ACCOUNT_ID`` when that variable equals
+    the constructed account id, or ``constructor`` when it does not.
+    """
+    if explicit is not None and _ACCOUNT_SOURCE_RE.fullmatch(explicit):
+        return explicit
+    configured = os.environ.get(ACCOUNT_ID_ENV)
+    if configured and account_id and configured == account_id:
+        return ACCOUNT_ID_ENV
+    return "constructor"
+
+
+def format_tradier_init_log(
+    *,
+    env: str,
+    base_url: str,
+    account_id_source: str,
+    account_alias: str,
+) -> str:
+    """One structured line. Callers must pass ``rest_base(env)``, not a new URL."""
+    return (
+        "tradier_client_init "
+        f"env={env} base_url={base_url} "
+        f"account_id_source={account_id_source} account_alias={account_alias}"
+    )
 
 
 def account_events_ws(env: TradierEnv) -> str:
@@ -139,6 +189,27 @@ class TradierClient:
     env: TradierEnv
     freshness_ttl_seconds: float = 5.0
     last_quote_ts: datetime | None = None
+    account_id_source: str | None = None
+    active_rest_base: str = field(init=False)
+    account_alias: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        """Log the host and account source once. Requests keep using ``rest_base``."""
+        base_url = rest_base(self.env)
+        source = resolve_account_id_source(self.account_id, self.account_id_source)
+        alias = tradier_account_alias(self.account_id)
+        self.active_rest_base = base_url
+        self.account_alias = alias
+        self.account_id_source = source
+        _LOG.info(
+            "%s",
+            format_tradier_init_log(
+                env=self.env,
+                base_url=base_url,
+                account_id_source=source,
+                account_alias=alias,
+            ),
+        )
 
     def headers(self) -> dict[str, str]:
         return {
