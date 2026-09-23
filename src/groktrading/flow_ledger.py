@@ -25,7 +25,12 @@ from typing import Any, Literal, Protocol, cast
 
 from groktrading.quote_gate import normalize_occ
 from groktrading.redaction import redact_mapping
-from groktrading.sit_match import SitMatchFreshness, evaluate_sit_match_freshness, parse_executed_at
+from groktrading.sit_match import (
+    SitMatchFreshness,
+    evaluate_sit_match_freshness,
+    parse_executed_at,
+    parse_execution_clock,
+)
 from groktrading.timeutil import UTC, as_utc
 
 FlowSource = Literal["option-trades", "flow-alerts"]
@@ -133,11 +138,15 @@ def extract_occ(payload: Mapping[str, Any]) -> str:
 
 
 def extract_execution_clock(payload: Mapping[str, Any]) -> datetime | None:
-    """Return parsed ``executed_at`` only. Never created_at / timestamp."""
+    """Return parsed ``executed_at`` only. Never created_at / timestamp.
+
+    ISO-8601 and the websocket epoch-millisecond form of this same field
+    both count. A row that only has ``created_at`` stays clock-less.
+    """
     raw = payload.get(EXECUTION_CLOCK_KEY)
     if raw in (None, ""):
         return None
-    return parse_executed_at(raw)
+    return parse_execution_clock(raw)
 
 
 def draft_from_uw_row(
@@ -154,7 +163,7 @@ def draft_from_uw_row(
     closed. Stale ``executed_at`` is allowed to store.
     """
     raw_clock = payload.get(EXECUTION_CLOCK_KEY)
-    if raw_clock not in (None, "") and parse_executed_at(raw_clock) is None:
+    if raw_clock not in (None, "") and parse_execution_clock(raw_clock) is None:
         raise FlowLedgerError("sit_match_missing_or_unparseable_executed_at")
     executed = extract_execution_clock(payload)
     ticker = _require_text(
@@ -311,8 +320,15 @@ class FlowLedger:
         limit: int = 100,
         since: datetime | None = None,
         source: FlowSource | None = None,
+        require_executed_at: bool = False,
     ) -> Iterator[FlowRow]:
-        """Newest ingested first. ``since`` filters ``ingested_at`` (inclusive)."""
+        """Newest ingested first. ``since`` filters ``ingested_at`` (inclusive).
+
+        ``require_executed_at`` drops clock-less rows (empty ``executed_at``).
+        Flow-alert inserts often have ``created_at`` and no execution clock;
+        they must not occupy a shortlist window that is supposed to carry
+        UW ``executed_at``.
+        """
         if limit < 1:
             raise FlowLedgerError("limit_must_be_positive")
         sql = "SELECT * FROM flow_rows"
@@ -324,6 +340,8 @@ class FlowLedger:
         if source is not None:
             clauses.append("source = ?")
             params.append(source)
+        if require_executed_at:
+            clauses.append("executed_at != ''")
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY ingested_at DESC, id DESC LIMIT ?"

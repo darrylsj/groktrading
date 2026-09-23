@@ -47,7 +47,7 @@ test coverage.
 
 1. **Tradier live/sandbox base-URL selection isn't visible in `tradier.py`.** The broker
    adapter (`brokers/tradier.py`) delegates 1:1 to `TradierClient` (`feeds/tradier.py`);
-   the live-vs-sandbox base URL + which account (6YB72238 live) is selected upstream in the
+   the live-vs-sandbox base URL + which account (6YB7**** live) is selected upstream in the
    client/env, not in the audited adapter. **Recommend:** a one-line assertion/log at client
    init that records which base URL + account alias is active, so an audit can confirm
    "live intends live, sandbox intends sandbox" from one place. (Currently must be traced

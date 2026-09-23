@@ -162,6 +162,15 @@ def test_created_at_and_timestamp_are_not_execution_clock() -> None:
         assert evaluate_row_sit_match(row, NOW).reason == REASON_MISSING
 
 
+def test_websocket_epoch_executed_at_is_stored() -> None:
+    stamp = NOW - timedelta(seconds=8)
+    ms = int(stamp.timestamp() * 1000)
+    payload: dict[str, object] = dict(_sample())
+    payload["executed_at"] = ms
+    row = draft_from_uw_row(payload, ingested_at=NOW)
+    assert row.executed_at == datetime.fromtimestamp(ms / 1000.0, tz=UTC)
+
+
 def test_unparseable_executed_at_still_fail_closed() -> None:
     with pytest.raises(FlowLedgerError, match="unparseable_executed_at"):
         draft_from_uw_row(_sample(executed_at="not-a-time"), ingested_at=NOW)

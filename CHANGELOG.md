@@ -7,6 +7,16 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ## [Unreleased]
 
+### Fixed
+
+- Helsinki shortlist ranker no longer drops the whole print pool as
+  `missing_executed_at`. The 200-row ledger window now keeps rows that
+  stored UW `executed_at` (ISO or websocket epoch milliseconds on that
+  field). `LIVE_TAPE_PATH` is read even when `FLOW_LEDGER_PATH` is set,
+  and a tape list that carries `executed_at` is preferred over an earlier
+  clock-less list. `created_at` / `timestamp` are still not substitutes.
+  `sit_match` stays off. No orders.
+
 ### Added
 
 - Aria source-audit yellows from **2026-09-21** (`docs/ARIA_SOURCE_AUDIT_20260921.md`), observability and docs only. Live defaults stay fail-closed (`live_explicitly_enabled` remains false; no live-order path change).

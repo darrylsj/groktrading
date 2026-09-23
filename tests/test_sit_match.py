@@ -21,6 +21,7 @@ from groktrading.sit_match import (
     evaluate_sit_match_payload,
     executed_at_iso,
     parse_executed_at,
+    parse_execution_clock,
     prepare_sit_match_outbound,
     print_age_contradicts,
     sit_match_max_age_sec,
@@ -84,6 +85,16 @@ def test_parse_executed_at_rejects_naive_and_junk() -> None:
     assert parse_executed_at(None) is None
     assert parse_executed_at(datetime(2026, 9, 9, 16, 29, 30)) is None
     assert parse_executed_at(1725890000) is None
+
+
+def test_execution_clock_accepts_websocket_epoch_not_created_at() -> None:
+    ms = int(NOW.timestamp() * 1000)
+    parsed = parse_execution_clock(ms)
+    assert parsed == datetime.fromtimestamp(ms / 1000.0, tz=UTC)
+    assert parse_execution_clock(str(ms)) == parsed
+    assert parse_executed_at(ms) is None
+    assert parse_execution_clock("not-a-timestamp") is None
+    assert parse_execution_clock(None) is None
 
 
 def test_accept_fresh_print() -> None:

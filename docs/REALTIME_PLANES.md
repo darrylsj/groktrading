@@ -115,8 +115,12 @@ Continuous Unusual Whales + Finnhub + Tradier → ledger / tape.
 - Companions keep `emit_sit_match=False`. Flow-alerts stay local JSONL.
 - `live_tape.json` shape is **host-owned and not specified in this repo**.
   The ranker accepts a JSON list of UW-like rows, a few obvious list keys
-  (`prints`, `option_trades`, `rows`, …), or `flow_ledger` rows. Unknown
-  shapes yield an empty shortlist — they are not invented.
+  (`prints`, `option_trades`, `rows`, …), or `flow_ledger` rows. When both
+  `FLOW_LEDGER_PATH` and `LIVE_TAPE_PATH` are set, **both** are inputs.
+  The ledger window is the 200 newest rows that stored `executed_at`
+  (ISO or websocket epoch ms on that field). Clock-less flow-alert rows
+  (`created_at` only) do not fill it. Unknown shapes yield an empty
+  shortlist — they are not invented. `created_at` is still not the clock.
 
 Finnhub ≠ option NBBO. WebSocket never places orders.
 

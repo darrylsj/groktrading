@@ -32,6 +32,7 @@ from groktrading.shortlist import (
     extract_prints,
     main,
     parse_shortlist_document,
+    prints_from_ledger,
     rank_prints,
     session_filters_from_mapping,
     shortlist_cadence_sec,
@@ -290,3 +291,119 @@ def test_ledger_input_without_network(tmp_path: Path) -> None:
     assert main(["--ledger", str(ledger_path), "--out", str(out), "--now", clock]) == 0
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert doc["candidates"][0]["occ"] == "QQQ260912P00717000"
+
+
+def _clockless_alert(n: int) -> dict[str, object]:
+    row = _print(occ="QQQ260912P00717000", ticker="QQQ", ask="1.06")
+    del row["executed_at"]
+    row["print"] = "1.06"
+    row["n"] = n
+    row["created_at"] = executed_at_iso(NOW - timedelta(seconds=3))
+    return row
+
+
+def test_clockless_ledger_window_does_not_hide_executed_at(tmp_path: Path) -> None:
+    """2026-09-22: newest 200 inserts were clock-less → missing_executed_at=200.
+
+    A print that stored ``executed_at`` must still reach the ranked shortlist.
+    ``created_at`` on the alerts is not copied onto that clock.
+    """
+    ledger_path = tmp_path / "uw_flow.sqlite"
+    ledger = FlowLedger(ledger_path)
+    spy = _print(occ="SPY260912P00580000", ticker="SPY", age_sec=8, ask="1.12")
+    spy["print"] = "1.12"
+    ledger.append_row(spy, source="option-trades", ingested_at=NOW - timedelta(minutes=2))
+    for n in range(200):
+        ledger.append_row(
+            _clockless_alert(n),
+            source="flow-alerts",
+            ingested_at=NOW - timedelta(seconds=n % 40),
+        )
+    blind = list(ledger.iter_recent(limit=200))
+    assert len(blind) == 200
+    assert all(row.executed_at is None for row in blind)
+
+    prints = prints_from_ledger(ledger_path)
+    assert len(prints) == 1
+    assert prints[0]["executed_at"]
+    doc = rank_prints(prints, NOW, max_age_sec=60)
+    assert doc.empty_reason is None
+    assert doc.skip_tally.get("missing_executed_at", 0) == 0
+    assert len(doc.candidates) == 1
+    assert doc.candidates[0].underlying == "SPY"
+    assert doc.candidates[0].executed_at == spy["executed_at"]
+
+
+def test_created_at_on_tape_is_still_not_executed_at() -> None:
+    row = _print()
+    del row["executed_at"]
+    row["created_at"] = executed_at_iso(NOW - timedelta(seconds=4))
+    row["match"] = True
+    candidate, reason = classify_print(row, NOW, max_age_sec=60)
+    assert candidate is None
+    assert reason == "missing_executed_at"
+
+
+def test_nested_websocket_executed_at_epoch_is_ranked() -> None:
+    stamp = NOW - timedelta(seconds=5)
+    ms = int(stamp.timestamp() * 1000)
+    row = {
+        "match": True,
+        "data": {
+            "executed_at": ms,
+            "underlying_symbol": "QQQ",
+            "option_chain_id": "QQQ260912C00480000",
+            "price": "1.20",
+            "nbbo_ask": "1.22",
+            "option_type": "call",
+        },
+    }
+    candidate, reason = classify_print(row, NOW, max_age_sec=60)
+    assert reason is None
+    assert candidate is not None
+    assert candidate.underlying == "QQQ"
+    assert candidate.option_type == "call"
+    assert candidate.executed_at.endswith("Z")
+    assert candidate.premium == "1.22"
+
+
+def test_extract_prints_prefers_list_that_carries_executed_at() -> None:
+    clockless = [_clockless_alert(n) for n in range(200)]
+    good = _print(occ="SPY260912P00580000", ticker="SPY", age_sec=6)
+    good["match"] = True
+    rows = extract_prints({"prints": clockless, "option_trades": [good]})
+    assert len(rows) == 1
+    assert rows[0]["executed_at"] == good["executed_at"]
+    doc = rank_prints(rows, NOW, max_age_sec=60)
+    assert doc.candidates[0].executed_at == good["executed_at"]
+    assert doc.skip_tally.get("missing_executed_at", 0) == 0
+
+
+def test_cli_reads_live_tape_when_ledger_env_is_set(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    ledger_path = tmp_path / "uw_flow.sqlite"
+    ledger = FlowLedger(ledger_path)
+    for n in range(200):
+        ledger.append_row(
+            _clockless_alert(n),
+            source="flow-alerts",
+            ingested_at=NOW - timedelta(seconds=1),
+        )
+    tape = tmp_path / "live_tape.json"
+    spy = _print(occ="SPY260912P00580000", ticker="SPY", age_sec=9, ask="1.15")
+    spy["match"] = True
+    tape.write_text(json.dumps({"prints": [spy]}), encoding="utf-8")
+    out = tmp_path / "shortlist.json"
+    monkeypatch.setenv("FLOW_LEDGER_PATH", str(ledger_path))  # type: ignore[attr-defined]
+    monkeypatch.setenv("LIVE_TAPE_PATH", str(tape))  # type: ignore[attr-defined]
+    monkeypatch.delenv("SHORTLIST_PATH", raising=False)  # type: ignore[attr-defined]
+    clock = executed_at_iso(NOW)
+    assert main(["--out", str(out), "--now", clock]) == 0
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["empty_reason"] is None
+    assert doc["emit_sit_match"] is False
+    assert len(doc["candidates"]) == 1
+    assert doc["candidates"][0]["executed_at"] == spy["executed_at"]
+    assert doc["candidates"][0]["underlying"] == "SPY"
+    assert doc["skip_tally"].get("missing_executed_at", 0) == 0
