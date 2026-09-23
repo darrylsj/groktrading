@@ -7,8 +7,8 @@ start these.** **Merge ≠ Helsinki restart.** `User=tradingdesk`.
 | File | Role |
 | --- | --- |
 | `groktrading-flow-ledger.service` | UW option-trades → hot ledger |
-| `groktrading-flow-alerts.service` | Local material JSONL only |
-| `groktrading-tide.service` | Tide companion |
+| `groktrading-flow-alerts.service` | Local material JSONL only. Default `FLOW_ALERTS_RTH_ONLY=1` sleeps outside RTH and does not HTTP. |
+| `groktrading-tide.service` | Tide companion. Default `TIDE_RTH_ONLY=1` sleeps outside RTH and does not HTTP. |
 | `groktrading-screener.service` | Screener snapshot |
 | `groktrading-quote-interest.service` | Quote interest |
 | `groktrading-replay-scorecard.service` / `.timer` | After-close replay counts |

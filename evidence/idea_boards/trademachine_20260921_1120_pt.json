@@ -1,0 +1,177 @@
+{
+  "schema": "idea_board.v0_1",
+  "source": "trademachine",
+  "as_of_pt": "2026-09-21 11:20:08 PT",
+  "source_url": "https://www.trademachine.com/",
+  "login_health": "AUTHENTICATED",
+  "mode": "n/a",
+  "board": "Today",
+  "ideas": [
+    {
+      "ticker": "BAC",
+      "strategy": "Credit the Sell-Off",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "credit_the_selloff",
+        "isActive": 0,
+        "triggeredToday": false,
+        "returnPercent": 78.4,
+        "winRate": 1,
+        "numWins": 3,
+        "numLosses": 0,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "PEP",
+      "strategy": "Credit the Sell-Off",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "credit_the_selloff",
+        "isActive": 0,
+        "triggeredToday": true,
+        "returnPercent": 31.5,
+        "winRate": 1,
+        "numWins": 3,
+        "numLosses": 0,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "SMH",
+      "strategy": "ETF Put Credit Spread",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "etf_14day_credit",
+        "isActive": 0,
+        "triggeredToday": false,
+        "returnPercent": 1091.3,
+        "winRate": 0.82352941176471,
+        "numWins": 42,
+        "numLosses": 9,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "SPY",
+      "strategy": "ETF Put Credit Spread",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "etf_14day_credit",
+        "isActive": 0,
+        "triggeredToday": false,
+        "returnPercent": 850.5,
+        "winRate": 0.83333333333333,
+        "numWins": 45,
+        "numLosses": 9,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "XLK",
+      "strategy": "ETF 2-Days-Up Diagonal",
+      "status": "Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "etf_2_days_up_diagonal",
+        "isActive": 1,
+        "triggeredToday": true,
+        "returnPercent": 364,
+        "winRate": 0.62068965517241,
+        "numWins": 18,
+        "numLosses": 11,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "BKR",
+      "strategy": "Fade the Dip Short Put Spread",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "fade_the_dip_short_putspread",
+        "isActive": 0,
+        "triggeredToday": false,
+        "returnPercent": 75.2,
+        "winRate": 1,
+        "numWins": 3,
+        "numLosses": 0,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    },
+    {
+      "ticker": "CMG",
+      "strategy": "SMA 200 Jumper",
+      "status": "Near Active",
+      "direction": null,
+      "legs": [],
+      "entry": {
+        "display": null,
+        "mid": null
+      },
+      "ui_fields": {
+        "templateType": "sma_200_jumper",
+        "isActive": 0,
+        "triggeredToday": false,
+        "returnPercent": 25.3,
+        "winRate": 0.66666666666667,
+        "numWins": 2,
+        "numLosses": 1,
+        "shareKey": "[REDACTED]",
+        "source_endpoint": "GET /wp-admin/admin-ajax.php?action=tm_get_today2_strategy_results"
+      }
+    }
+  ],
+  "counts": {
+    "ideas": 7,
+    "active": 1
+  },
+  "screenshots": [],
+  "notes": [
+    "Normalized from TradeMachine Today XHR (tm_get_today2_strategy_results).",
+    "Shadow/paper only \u2014 scraper does not place orders.",
+    "no_invented_prices: legs/entry left null unless attach_live_option_quotes payload is supplied separately.",
+    "Source HAR: evidence/idea_boards/har/trademachine_today_20260921_0910_pt_REDACTED.har"
+  ],
+  "no_invented_prices": true
+}

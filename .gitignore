@@ -1,8 +1,16 @@
+# HAR captures (cookies/tokens). Commit redacted JSON boards, not HAR files.
+*.har
+
 # Secrets and local env — never commit
 .env
 .env.*
 !.env.example
 !**/.env.example
+*.env
+credentials/
+
+# Runtime shadow pointers (not source)
+/state/
 *.pem
 *.key
 id_rsa*

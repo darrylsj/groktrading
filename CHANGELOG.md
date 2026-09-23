@@ -54,6 +54,55 @@ Package version is `0.1.0` in `pyproject.toml`. Dated sections are **America/Los
 
 ### Added
 
+- **2026-09-21 product-use landing:** [docs/IDEA_PRODUCT_USE.md](docs/IDEA_PRODUCT_USE.md)
+  (Options AI Compare metrics and Expected Move = 92.5% ATM straddle, not a
+  probability; Trade Machine Active-only, alerts/ProScan),
+  [docs/UNDERUSE_GAP_20260921.md](docs/UNDERUSE_GAP_20260921.md), and the
+  planning-only [$25k stack consult](docs/STACK_25K_YOLO_CONSULT_20260921.md).
+  README Idea Funnel B states the sandbox paper prove-it, the Friday
+  2026-09-25 PT prove/kill, and a Monday 2026-09-28 hard cancel if unproven.
+  No profitability claim.
+- `tools/tradier_paper/`: sandbox one-lots at `https://sandbox.tradier.com/v1`
+  only. Credentials stay in host env. Default dry-run; `--submit` is required
+  to POST. Near Active is not lifted. Options AI needs DOM max risk, max gain,
+  and PoP. Buy-to-open puts on IWM/SPY/QQQ stay refused.
+- `tools/idea_shadow_rank/`: shadow-only open slate. Active outranks Near
+  Active. Missing Compare metrics stay null.
+- Trade Machine normalize lists Active first and marks empty Near Active legs
+  as expected. Options AI DOM validation copies max risk / max gain / PoP when
+  present and does not invent them from chain data.
+- **2026-09-21 Astra fail-closed on the idea path:** `redact_har.py` and
+  `cdp_har_capture.js` scrub API-key headers, Referer/Location/redirectURL,
+  form bodies, `postData.params`, page titles, and base64 utf-8 bodies.
+  Unsupported encodings fail closed. Raw HAR names are refused, and no
+  `.har` is tracked.
+- Options AI HAR→ideas is disabled. DOM QuickStrike / Strategy Builder
+  boards only. Chain/quote XHR is not mapped. ClickOptions is rejected.
+- Trade Machine accepts only host + GET + exact action + HTTP 200, uses
+  the latest response, stamps source observation time, and refuses the
+  fixed default HAR plus stale captures. HTTP 401 is not AUTHENTICATED.
+  Open_ legs from `attach_live_option_quotes` are kept; closing marks are
+  not. `idea_card` mapping carries provenance. `--source both` merges one
+  board per product into the shadow pointer only after both succeed.
+- Paper one-lot stub (`tools/idea_board_scrape/paper_lift.py`) is
+  `https://sandbox.tradier.com/v1` only and does not submit. Shadow
+  metadata is not a live-order boundary.
+- **2026-09-21 desk sync** (Helsinki / Grok Bot box → this repo):
+  - `tools/idea_board_scrape/`: HAR capture helper, `redact_har.py`, and
+    `get_ideas.py` building `idea_board.v0_1` for Trade Machine and
+    Options AI. Shadow/paper only; does not submit.
+  - `tools/shared_intel/`: append closed trades to the Helsinki
+    shared-intel ledger (`SHARED_INTEL_LOCAL_TRADES` for offline use).
+    Live account id is not in git.
+  - `tools/live_order_gate`: `refuse_long_put_on_broad_etf` at BTO submit
+    for IWM/SPY/QQQ puts, and `emit_shared_intel_close` on an allowed
+    flatten (dry-run unless explicitly appended).
+  - Idea Funnel B + idea_card v0.1 docs
+    ([docs/IDEA_FUNNEL_B.md](docs/IDEA_FUNNEL_B.md),
+    [docs/IDEA_CARD_V0_1.md](docs/IDEA_CARD_V0_1.md)). UW idea-card
+    normalizer and schema file remain out of tree.
+  - Flow-alerts and tide companions skip HTTP outside RTH
+    (`FLOW_ALERTS_RTH_ONLY` / `TIDE_RTH_ONLY`, default on).
 - Helsinki **zero-LLM weekday RTH live-board refresh** (2026-09-15)
   [`scripts/live_board_refresh.py`](scripts/live_board_refresh.py) +
   `trading-desk-live-board-refresh.service` / `.timer`. Reads host

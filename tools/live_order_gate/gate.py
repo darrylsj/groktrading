@@ -108,6 +108,17 @@ ENTRY_STRATEGIES: frozenset[str] = frozenset(
 
 TAG_RE = re.compile(r"^[A-Za-z0-9]+$")
 CONTRACT_MULTIPLIER = Decimal("100")
+# Trade Reviewer 2026-09-21: BTO puts on IWM/SPY/QQQ are the wrong YOLO shape.
+# Enforce at submit. Exits stay allowed. Does not invent a loss cap.
+BROAD_ETF_LONG_PUT_UNDERLYINGS: frozenset[str] = frozenset({"IWM", "SPY", "QQQ"})
+REFUSE_LONG_PUT_ON_BROAD_ETF = True
+_OCC_CONTRACT = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
+_EXIT_SIDE_ALIASES: frozenset[str] = frozenset(
+    {"sell_to_close", "buy_to_close", "stc", "btc", "flatten", "flatten_credit"}
+)
+_EXIT_STRATEGY_ALIASES: frozenset[str] = EXIT_STRATEGIES | frozenset(
+    {"exit", "exit_flatten", "flatten", "take_gain"}
+)
 # Entry thesis must be same PT session and not older than this. Exits skip.
 DEFAULT_ENTRY_THESIS_MAX_AGE_SEC = 8 * 3600.0
 DEFAULT_QTY = 1
@@ -499,6 +510,221 @@ def _entry_thesis_stale(
     return None
 
 
+def _occ_parts(occ: str) -> tuple[str, str]:
+    match = _OCC_CONTRACT.match(normalize_occ(occ))
+    if match is None:
+        return "", ""
+    return match.group(1), match.group(3)
+
+
+def _mapping_leg(card: Mapping[str, Any]) -> Mapping[str, Any]:
+    legs = card.get("legs") or []
+    if legs and isinstance(legs[0], Mapping):
+        return legs[0]
+    return {}
+
+
+def _is_close_view(card: Thesis | Mapping[str, Any], form: Mapping[str, Any] | None) -> bool:
+    """True for STC/BTC and named exit strategies. Those are not new long puts."""
+    if isinstance(card, Thesis):
+        if card.intent == "exit" or is_exit_strategy(card.strategy) or card.side in EXIT_SIDES:
+            return True
+        strategy = card.strategy
+        side_summary = card.side
+    else:
+        strategy = str(card.get("strategy") or "")
+        side_summary = str(card.get("side_summary") or card.get("side") or "")
+        intent = str(card.get("intent") or "").strip().lower()
+        if intent == "exit":
+            return True
+        leg_side = str(_mapping_leg(card).get("side") or "").strip().lower()
+        if leg_side in _EXIT_SIDE_ALIASES:
+            return True
+    if _norm_strategy(strategy) in _EXIT_STRATEGY_ALIASES:
+        return True
+    if side_summary.strip().lower() in _EXIT_SIDE_ALIASES:
+        return True
+    if form is not None and str(form.get("side") or "").strip().lower() in _EXIT_SIDE_ALIASES:
+        return True
+    return False
+
+
+def _underlying_and_occ(
+    card: Thesis | Mapping[str, Any], form: Mapping[str, Any] | None
+) -> tuple[str, str]:
+    form = form or {}
+    if isinstance(card, Thesis):
+        underlying = card.underlying.strip().upper()
+        occ = normalize_occ(str(form.get("option_symbol") or card.option_symbol))
+    else:
+        leg = _mapping_leg(card)
+        underlying = str(card.get("underlying") or form.get("symbol") or "").strip().upper()
+        occ = normalize_occ(
+            str(
+                form.get("option_symbol")
+                or leg.get("occ")
+                or card.get("option_symbol")
+                or card.get("occ")
+                or ""
+            )
+        )
+    if not underlying:
+        underlying, _right = _occ_parts(occ)
+    return underlying, occ
+
+
+def refuse_long_put_on_broad_etf(
+    card: Thesis | Mapping[str, Any],
+    form: Mapping[str, Any] | None = None,
+) -> None:
+    """Abort buy-to-open puts on IWM/SPY/QQQ at submit.
+
+    Trade Reviewer 2026-09-21: a broad-ETF long put can clear mechanical gates
+    and still be the wrong YOLO shape. Exits are not blocked. Short-premium
+    stays on the existing credit/STO hold.
+    """
+    if not REFUSE_LONG_PUT_ON_BROAD_ETF:
+        return
+    if _is_close_view(card, form):
+        return
+    underlying, occ = _underlying_and_occ(card, form)
+    if underlying not in BROAD_ETF_LONG_PUT_UNDERLYINGS:
+        return
+    _root, right = _occ_parts(occ)
+    if right != "P":
+        return
+    form_side = str((form or {}).get("side") or "").strip().lower()
+    if not form_side:
+        if isinstance(card, Thesis):
+            form_side = card.side
+        else:
+            form_side = str(
+                _mapping_leg(card).get("side") or card.get("side") or ""
+            ).strip().lower()
+    if form_side in {"sell_to_open", "sto"}:
+        return
+    raise PolicyError(
+        "refuse_long_put_on_broad_etf",
+        "P0 REFUSE: refuse_long_put_on_broad_etf — buy-to-open put on "
+        f"{underlying} ({occ or 'no-occ'}) is wrong YOLO shape (IWM/SPY/QQQ). "
+        "Prefer short-premium.",
+    )
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        return float(value)
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _tod_bucket(pt_stamp: str | None) -> str:
+    """Map an HH:MM PT stamp to open|midday|power_hour."""
+    if not pt_stamp:
+        return "unknown"
+    try:
+        clock = pt_stamp.replace(" PT", "").split()[1]
+        hour, minute = clock.split(":")
+        mins = int(hour) * 60 + int(minute)
+    except (IndexError, ValueError):
+        return "unknown"
+    if mins < 8 * 60:
+        return "open"
+    if mins < 11 * 60:
+        return "midday"
+    return "power_hour"
+
+
+def emit_shared_intel_close(
+    *,
+    occ: str,
+    underlying: str,
+    exit_fill: object = None,
+    entry_fill: object = None,
+    qty: float = 1.0,
+    exit_reason: str = "flatten",
+    setup: str = "unknown",
+    opened_pt: str | None = None,
+    closed_pt: str | None = None,
+    thesis_id: str | None = None,
+    entry_signals: list[str] | None = None,
+    notes: str = "",
+    side: str = "long_call",
+    dry_run: bool = True,
+    append: Any = None,
+) -> dict[str, Any]:
+    """Build one closed-trade ledger row. Does not invent fills.
+
+    ``dry_run=True`` (the package default) returns the row and does not SSH.
+    A live host appends with ``dry_run=False`` after a confirmed flatten.
+    Missing entry or exit price returns ``missing_fills`` and does not write.
+    """
+    occ_u = normalize_occ(occ)
+    root, right = _occ_parts(occ_u)
+    und = (underlying or root or "").upper()
+    entry = _optional_float(entry_fill)
+    exit_px = _optional_float(exit_fill)
+    if entry is None or exit_px is None:
+        return {
+            "ok": False,
+            "error": "missing_fills",
+            "occ": occ_u,
+            "entry_fill": entry,
+            "exit_fill": exit_px,
+        }
+    qty_f = float(qty or 1.0)
+    pnl = round((exit_px - entry) * 100.0 * qty_f, 2)
+    if right == "P":
+        side_out = "long_put"
+    elif right == "C":
+        side_out = "long_call"
+    else:
+        side_out = side or "long_call"
+    closed = closed_pt or ""
+    try:
+        from tools.shared_intel.ledger import map_exit_reason
+
+        reason = map_exit_reason(exit_reason)
+    except ImportError:
+        reason = exit_reason or "flatten"
+    trade = {
+        "trade_id": f"{occ_u}-{closed.replace(' ', '').replace(':', '')}",
+        "ticker": und,
+        "instrument": "option",
+        "occ_symbol": occ_u,
+        "side": side_out,
+        "opened_pt": opened_pt,
+        "closed_pt": closed or None,
+        "entry_price": entry,
+        "exit_price": exit_px,
+        "size": qty_f,
+        "pnl_usd": pnl,
+        "exit_reason": reason,
+        "setup": setup,
+        "entry_signals": entry_signals or [],
+        "regime": "unknown",
+        "time_of_day_bucket": _tod_bucket(opened_pt),
+        "aria_tip": False,
+        "notes": notes or (f"thesis {thesis_id}" if thesis_id else ""),
+        "thesis_id": thesis_id,
+        "invented": False,
+        "secrets": False,
+    }
+    if dry_run:
+        return {"ok": True, "dry_run": True, "trade": trade}
+    writer = append
+    if writer is None:
+        try:
+            from tools.shared_intel.ledger import append_shared_trade as writer
+        except ImportError:
+            return {"ok": False, "error": "shared_intel_unavailable", "trade": trade}
+    return writer(trade)
+
+
 def evaluate_submit_policy(
     thesis: Thesis | Mapping[str, Any] | None,
     *,
@@ -522,6 +748,7 @@ def evaluate_submit_policy(
         if ticket.side not in ENTRY_SIDES:
             raise PolicyError("entry_side_must_be_bto")
         _assert_credit_ban(ticket)
+        refuse_long_put_on_broad_etf(ticket)
         stale = _entry_thesis_stale(ticket, now, max_age_sec=max_age_sec)
         if stale:
             raise PolicyError(stale)
@@ -646,8 +873,16 @@ def close_with_audit(
     form: Mapping[str, Any] | None = None,
     closed_signal_ids: frozenset[str] | set[str] | None = None,
     preview: bool = True,
+    entry_fill: Decimal | float | None = None,
+    exit_fill: Decimal | float | None = None,
+    shared_intel_dry_run: bool = True,
 ) -> dict[str, Any]:
-    """Build (or validate) an STC form from the exit thesis. Does not POST."""
+    """Build (or validate) an STC form from the exit thesis. Does not POST.
+
+    On an allowed flatten, also calls ``emit_shared_intel_close``. This module
+    does not SSH unless ``shared_intel_dry_run=False``. Limit price is not
+    treated as a fill.
+    """
     decision = evaluate_close_policy(
         thesis,
         now=now,
@@ -669,8 +904,20 @@ def close_with_audit(
         "thesis": decision.thesis.to_dict() if decision.thesis is not None else None,
         "now": _iso(now),
     }
-    if not decision.allowed:
+    if not decision.allowed or decision.thesis is None:
         raise PolicyError(decision.reasons[0] if decision.reasons else "close_refused")
+    ticket = decision.thesis
+    audit["shared_intel"] = emit_shared_intel_close(
+        occ=ticket.option_symbol,
+        underlying=ticket.underlying,
+        exit_fill=exit_fill,
+        entry_fill=entry_fill,
+        qty=float(ticket.quantity),
+        exit_reason=ticket.strategy,
+        setup="unknown",
+        thesis_id=ticket.signal_id,
+        dry_run=shared_intel_dry_run,
+    )
     return audit
 
 
