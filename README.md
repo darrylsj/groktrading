@@ -241,6 +241,22 @@ best bid and offer; **BTO/STC/STO** mean buy to open / sell to close / sell to o
 candidate gate. **I4** is the proposed defined-risk credit-spread experiment.
 **RTH** means regular trading hours; **PT/ET** mean US Pacific/Eastern time.
 
+## Fluid60 minute trading research
+
+[Fluid60](docs/FLUID60.md) adds a fluid/queue stock forecast, stock and option
+inventory optimization, and causal quote-based paper replay. It allows at most
+one buy and one sell across the research desk each minute, includes costs and a
+hold choice, and separates calibration, validation tuning, and test periods.
+
+```bash
+python -m pip install -e '.[fluid]'
+groktrading-fluid60 demo --out research-runs/fluid60-demo
+```
+
+The offline demo is synthetic and provides no evidence of profitability. Read-only
+Databento depth capture and Tradier quote snapshots support data integration.
+The module has no broker order path and does not change live or Opening15 behavior.
+
 ## License
 
 [MIT](LICENSE). No warranty or promised investment return.
